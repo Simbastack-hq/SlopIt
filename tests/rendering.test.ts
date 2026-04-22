@@ -280,6 +280,14 @@ describe('renderMarkdown — HTML stripping (v1 XSS defense)', () => {
     expect(out).toContain('&lt;script&gt;')
     expect(out).toContain('inside code')
   })
+
+  it('preserves HTML-like content inside ~~~ fenced code blocks', () => {
+    const out = renderMarkdown('~~~html\n<script>alert(1)</script>\n~~~')
+    // Content is preserved (entity-escaped by marked's code renderer), not stripped.
+    expect(out).toContain('&lt;script&gt;')
+    expect(out).toContain('alert(1)')
+    expect(out).toContain('&lt;/script&gt;')
+  })
 })
 
 describe('createRenderer — renderPost', () => {

@@ -18,10 +18,20 @@ import { marked } from 'marked'
 // imports marked; no other code path depends on marked's default behavior.
 
 // Strip <script>...</script>, <style>...</style>, <iframe>...</iframe>
-// (case-insensitive) — but only outside code fences and inline code. The
-// split regex captures code segments at odd indices so we can skip them.
+// (case-insensitive) — but only outside code contexts. The split regex
+// captures code segments at odd indices so we can skip them. We protect:
+//   - triple-backtick fenced blocks (```…```)
+//   - triple-tilde fenced blocks  (~~~…~~~)
+//   - inline code spans           (`…`)
+//
+// Indented (4-space / tab) code blocks are NOT explicitly protected — if
+// an author embeds dangerous HTML inside an indented code block, the
+// payload gets stripped. The failure mode is visible text loss, not XSS
+// (the marked `html` renderer override still drops the tags themselves).
+// We accept this trade-off for v1; authors who want HTML examples should
+// use fenced code blocks, which are the idiomatic form and preserved.
 function stripDangerousBlocks(md: string): string {
-  const parts = md.split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+  const parts = md.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g)
   for (let i = 0; i < parts.length; i += 2) {
     parts[i] = parts[i]
       .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')

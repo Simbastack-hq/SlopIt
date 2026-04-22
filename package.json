@@ -21,7 +21,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp -R src/db/migrations dist/db/migrations && cp -R src/themes dist/themes",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R src/db/migrations dist/db/migrations && cp -R src/themes dist/themes",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
