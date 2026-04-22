@@ -98,3 +98,33 @@ export function createApiKey(
 
   return { apiKey }
 }
+
+/**
+ * Fetch a blog by id, throwing SlopItError(BLOG_NOT_FOUND) if missing.
+ * Used by the renderer (for display name / theme) and by createPost's
+ * existence check. Not in the public barrel — callers must import from
+ * './blogs.js' directly.
+ *
+ * @internal
+ */
+export function getBlogInternal(store: Store, blogId: string): Blog {
+  const row = store.db
+    .prepare('SELECT id, name, theme, created_at FROM blogs WHERE id = ?')
+    .get(blogId) as {
+      id: string
+      name: string | null
+      theme: 'minimal'
+      created_at: string
+    } | undefined
+
+  if (row === undefined) {
+    throw new SlopItError('BLOG_NOT_FOUND', `Blog "${blogId}" does not exist`, { blogId })
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    theme: row.theme,
+    createdAt: row.created_at,
+  }
+}

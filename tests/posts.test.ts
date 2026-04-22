@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createStore, type Store } from '../src/db/store.js'
+import { createBlog } from '../src/blogs.js'
 import { PostInputSchema } from '../src/schema/index.js'
-import { isPostSlugConflict, autoExcerpt } from '../src/posts.js'
+import { isPostSlugConflict, autoExcerpt, listPublishedPostsForBlog } from '../src/posts.js'
 
 describe('PostInputSchema', () => {
   it('accepts the minimum well-formed input', () => {
@@ -151,5 +156,66 @@ describe('autoExcerpt', () => {
   it('handles empty or whitespace-only body gracefully', () => {
     expect(autoExcerpt('')).toBe('')
     expect(autoExcerpt('   ')).toBe('')
+  })
+})
+
+describe('listPublishedPostsForBlog', () => {
+  let dir: string
+  let store: Store
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('returns an empty array when the blog has no posts', () => {
+    const { blog } = createBlog(store, {})
+    expect(listPublishedPostsForBlog(store, blog.id)).toEqual([])
+  })
+
+  it('returns published posts newest-first', () => {
+    const { blog } = createBlog(store, { name: 'seed' })
+    const insert = store.db.prepare(
+      `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
+       VALUES (?, ?, ?, ?, ?, 'published', ?)`,
+    )
+    insert.run('p1', blog.id, 'first',  'First',  'body1', '2025-01-01T00:00:00Z')
+    insert.run('p2', blog.id, 'second', 'Second', 'body2', '2025-06-01T00:00:00Z')
+    insert.run('p3', blog.id, 'third',  'Third',  'body3', '2025-03-01T00:00:00Z')
+
+    const posts = listPublishedPostsForBlog(store, blog.id)
+    expect(posts.map((p) => p.slug)).toEqual(['second', 'third', 'first'])
+  })
+
+  it('excludes drafts', () => {
+    const { blog } = createBlog(store, { name: 'seed' })
+    const insert = store.db.prepare(
+      `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    insert.run('p1', blog.id, 'pub',   'Pub',   'b', 'published', '2025-01-01T00:00:00Z')
+    insert.run('p2', blog.id, 'draft', 'Draft', 'b', 'draft',     null)
+
+    const posts = listPublishedPostsForBlog(store, blog.id)
+    expect(posts.map((p) => p.slug)).toEqual(['pub'])
+  })
+
+  it('scopes by blog_id (does not leak posts from other blogs)', () => {
+    const { blog: a } = createBlog(store, { name: 'alpha' })
+    const { blog: b } = createBlog(store, { name: 'beta' })
+    const insert = store.db.prepare(
+      `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
+       VALUES (?, ?, ?, ?, ?, 'published', ?)`,
+    )
+    insert.run('p1', a.id, 'a-post', 'A', 'x', '2025-01-01T00:00:00Z')
+    insert.run('p2', b.id, 'b-post', 'B', 'x', '2025-02-01T00:00:00Z')
+
+    expect(listPublishedPostsForBlog(store, a.id).map((p) => p.slug)).toEqual(['a-post'])
+    expect(listPublishedPostsForBlog(store, b.id).map((p) => p.slug)).toEqual(['b-post'])
   })
 })

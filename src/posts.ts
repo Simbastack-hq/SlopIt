@@ -1,3 +1,6 @@
+import type { Store } from './db/store.js'
+import type { Post } from './schema/index.js'
+
 /**
  * Pure predicate: was this error SQLite's UNIQUE constraint failing on
  * posts.blog_id + posts.slug (the compound key)? Used inside createPost's
@@ -37,4 +40,57 @@ export function autoExcerpt(body: string): string {
 
   if (stripped.length <= 160) return stripped
   return stripped.slice(0, 160).trimEnd() + '…'
+}
+
+/**
+ * Returns published posts for a blog, newest-first by published_at.
+ * Drafts excluded. Used by the renderer to build the blog index.
+ *
+ * @internal
+ */
+export function listPublishedPostsForBlog(store: Store, blogId: string): Post[] {
+  const rows = store.db
+    .prepare(
+      `SELECT id, blog_id, slug, title, body, excerpt, tags, status,
+              seo_title, seo_description, author, cover_image,
+              published_at, created_at, updated_at
+         FROM posts
+        WHERE blog_id = ? AND status = 'published'
+        ORDER BY published_at DESC`,
+    )
+    .all(blogId) as {
+      id: string
+      blog_id: string
+      slug: string
+      title: string
+      body: string
+      excerpt: string | null
+      tags: string
+      status: 'published'
+      seo_title: string | null
+      seo_description: string | null
+      author: string | null
+      cover_image: string | null
+      published_at: string | null
+      created_at: string
+      updated_at: string
+    }[]
+
+  return rows.map((row) => ({
+    id: row.id,
+    blogId: row.blog_id,
+    slug: row.slug,
+    title: row.title,
+    body: row.body,
+    excerpt: row.excerpt ?? undefined,
+    tags: JSON.parse(row.tags) as string[],
+    status: row.status,
+    seoTitle: row.seo_title ?? undefined,
+    seoDescription: row.seo_description ?? undefined,
+    author: row.author ?? undefined,
+    coverImage: row.cover_image ?? undefined,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }))
 }
