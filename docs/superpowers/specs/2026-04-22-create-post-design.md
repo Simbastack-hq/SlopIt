@@ -27,7 +27,7 @@ Core remains single-blog-scoped: `createPost` takes an already-resolved `blogId`
 | 3 | Auto slug default, custom slug allowed, collisions throw `POST_SLUG_CONFLICT` with `details: { slug }`. | Strategy.md promises both modes. Fail-hard-fail-loud: silent `-2` suffixes hide state from agents. Returning the conflicting slug in `details` makes retry logic trivial. |
 | 4 | File-based theme system; ship `minimal` only; narrow theme enum from `['minimal','classic','zine']` to `['minimal']` now. | Aspirational three-theme list was a design vocabulary, not a product commitment. Shipping one real theme beats three placeholders. Classic/zine re-expand later when we design what makes them distinct. |
 | 5 | Sync end-to-end. `Renderer` interface is sync. | `better-sqlite3` and `renderMarkdown` are sync; `node:fs` has sync writers that work at our scale. Async adds microtask overhead for no benefit. |
-| 6 | Weakened atomicity invariant: "no durable DB state changed on failure." Orphan files are acceptable; committed rows with no files are not. | Temp-dir staging is overengineering at v1 scale. An orphan file from a partial render is harmless (not linked from the index). |
+| 6 | Weakened atomicity invariant: "`createPost` attempts compensation on render failure by DELETEing the inserted row; if that DELETE succeeds, no durable DB state change." If the compensation DELETE itself fails (extraordinarily rare — typically indicates DB corruption or I/O failure, a bigger problem than this one post), the inserted row persists and operator cleanup is needed. `createPost` always throws the original render error. Orphan files (post page without an index link, or a partially written pair where HTML succeeded but the subsequent render step failed) are acceptable; the expensive failure mode is committed rows that readers can discover via the blog index. | Temp-dir staging is overengineering at v1 scale. Being honest about double-failure is cheaper than pretending it can't happen. |
 | 7 | `ensureCss` always overwrites. Not on the public `Renderer` interface. | Copy-if-missing makes package upgrades never refresh CSS. Idempotent overwrite is cheap and correct. Asset copy is a renderer implementation detail. |
 | 8 | Renderer uses relative hrefs only (`../style.css`, `..`). `blog.name ?? blog.id` for display. | Templates must be routing-agnostic — same templates serve `{blog}.slopit.io/` and `slopit.io/b/:id/`. Unnamed blogs display their id rather than a generic "Untitled". |
 | 9 | All `{{{...}}}` raw fragments are built by helpers that call `escapeHtml(...)` on every user-derived field. | The raw escape hatch trusts the helper's output. Escaping at the helper boundary keeps the guarantee intact. |
@@ -42,9 +42,9 @@ Core remains single-blog-scoped: `createPost` takes an already-resolved `blogId`
 | File | New/Modified | Responsibility |
 |---|---|---|
 | `src/ids.ts` | NEW | Shared string-generation helpers: `generateShortId()` (promoted from `src/blogs.ts`) and `generateSlug(title)`. Neither has domain deps, so both can live in one tiny module and be imported by any layer. |
-| `src/posts.ts` | NEW | `createPost`, `isPostSlugConflict` predicate, internal `autoExcerpt`, `listPublishedPostsForBlog` (internal-only). |
+| `src/posts.ts` | NEW | `createPost`, `isPostSlugConflict` predicate, `autoExcerpt`, `listPublishedPostsForBlog`. All module-level exports; the latter four are marked `@internal` in JSDoc and NOT re-exported through `src/index.ts`. Tests and the renderer import them directly from `'./posts.js'`. |
 | `src/rendering/templates.ts` | NEW | `loadTheme`, `render(template, vars)` with `{{var}}` + `{{{var}}}`, `escapeHtml`. |
-| `src/rendering/generator.ts` | MODIFY | Sync Renderer interface; implement `renderPost` + `renderBlog`; private `ensureCss`, `renderPostList`, `renderTagList`, `renderPoweredBy`, `renderSeoMeta` helpers. |
+| `src/rendering/generator.ts` | MODIFY | Sync `Renderer` interface; implement `renderPost` + `renderBlog` via `createRenderer` factory. Module-level `@internal` exports: `ensureCss`, `renderPostList`, `renderTagList`, `renderPoweredBy`, `renderSeoMeta`, `formatDate`. `createRenderer` is in the public barrel; the helpers are not, but are importable from `'./rendering/generator.js'` for tests. |
 | `src/themes/minimal/post.html` | NEW | Post template (~20 lines). |
 | `src/themes/minimal/index.html` | NEW | Blog-index template (~15 lines). |
 | `src/themes/minimal/style.css` | NEW | ~70 lines, palette + typography from `DESIGN.md`. |
@@ -133,8 +133,8 @@ Both methods sync. `renderPost` writes `{outputDir}/{blogId}/{slug}/index.html` 
 
 1. `PostInputSchema.parse(input)` — Zod throws on invalid input (including superRefine failures).
 2. `SELECT 1 FROM blogs WHERE id = ?` — throw `SlopItError('BLOG_NOT_FOUND', ..., { blogId })` if missing.
-3. Resolve slug: `input.slug ?? generateSlug(input.title)`.
-4. Compute derived fields: `id = generateShortId()`, `excerpt = input.excerpt ?? autoExcerpt(body)`, `publishedAt = status === 'published' ? now() : null`.
+3. Resolve slug: `parsed.slug ?? generateSlug(parsed.title)`.
+4. Compute derived fields: `id = generateShortId()`, `excerpt = parsed.excerpt ?? autoExcerpt(parsed.body)`, `publishedAt = parsed.status === 'published' ? new Date().toISOString() : null`. (All references are to the Zod-parsed form, never the raw `input`.)
 5. **DB transaction** `db.transaction(() => { ... })`:
    - Preflight `SELECT 1 FROM posts WHERE blog_id = ? AND slug = ?` — throw `SlopItError('POST_SLUG_CONFLICT', ..., { slug })` if found.
    - `INSERT INTO posts (id, blog_id, slug, title, body, excerpt, tags, status, published_at, seo_title, seo_description, author, cover_image)`. On `isPostSlugConflict(e)`, throw `SlopItError('POST_SLUG_CONFLICT', ..., { slug })`. Other errors bubble raw.
@@ -303,10 +303,11 @@ Variables: `{{blogName}}`, `{{themeCssHref}}`, `{{{postList}}}`, `{{{poweredBy}}
 
 ## Fragment helpers (in `src/rendering/generator.ts`)
 
-All produce HTML strings injected via `{{{...}}}`. All escape user-derived fields.
+All module-level `@internal` exports. Produce HTML strings injected via `{{{...}}}`. All escape user-derived fields. Tests import them directly from `'../src/rendering/generator.js'`.
 
 ```ts
-function renderPostList(posts: Post[], postBaseHref: string): string {
+/** @internal */
+export function renderPostList(posts: Post[], postBaseHref: string): string {
   // Each post: <article class="post-item">
   //   <h2><a href="${escapeHtml(p.slug)}/">${escapeHtml(p.title)}</a></h2>
   //   <time datetime="${escapeHtml(p.publishedAt)}">${escapeHtml(formatDate(p.publishedAt))}</time>
@@ -314,17 +315,21 @@ function renderPostList(posts: Post[], postBaseHref: string): string {
   // </article>
 }
 
-function renderTagList(tags: string[]): string {
+/** @internal */
+export function renderTagList(tags: string[]): string {
   if (tags.length === 0) return ''
   // <div class="tags">${tags.map(t => `<span>#${escapeHtml(t)}</span>`).join('')}</div>
 }
 
-function renderPoweredBy(): string {
+/** @internal */
+export function renderPoweredBy(): string {
   // <a href="https://slopit.io">Powered by SlopIt</a>
   // Platform layer strips/replaces based on plan; core always emits it.
+  // Documented exception to ARCHITECTURE.md rule #5 (see collateral doc updates).
 }
 
-function renderSeoMeta(seoTitle: string | undefined, seoDescription: string | undefined): string {
+/** @internal */
+export function renderSeoMeta(seoTitle: string | undefined, seoDescription: string | undefined): string {
   // <meta name="description" content="${escapeHtml(seoDescription)}">
   // (Optionally og:title, og:description; keep minimal for v1.)
 }
@@ -388,7 +393,7 @@ export function createRenderer(config: RendererConfig): Renderer {
 }
 ```
 
-`getBlogInternal` and `listPublishedPostsForBlog` are un-exported helpers in `src/blogs.ts` and `src/posts.ts` respectively. The public `getBlog` / `listPosts` API lands in the REST+MCP feature.
+`getBlogInternal` and `listPublishedPostsForBlog` are module-level `@internal` exports in `src/blogs.ts` and `src/posts.ts` respectively. They are NOT in the public barrel (`src/index.ts`); the renderer imports them directly from `'../blogs.js'` and `'../posts.js'`, and tests do the same. The public `getBlog` / `listPosts` API lands in the REST+MCP feature.
 
 ---
 
@@ -456,7 +461,7 @@ export type { PostInput } from './schema/index.js'          // already re-export
 // SlopItError, SlopItErrorCode types unchanged in public surface
 ```
 
-`isPostSlugConflict`, `autoExcerpt`, `listPublishedPostsForBlog`, `getBlogInternal` all stay internal — imported by tests directly from their source files. `generateShortId` and `generateSlug` live in `src/ids.ts` and also stay out of the public barrel.
+`isPostSlugConflict`, `autoExcerpt`, `listPublishedPostsForBlog`, `getBlogInternal`, and all fragment helpers in `src/rendering/generator.ts` are module-level exports marked `@internal`. They are NOT re-exported through the public barrel (`src/index.ts`). Tests import them directly from source files; within the package, `src/rendering/generator.ts` imports `listPublishedPostsForBlog` from `'../posts.js'` and `getBlogInternal` from `'../blogs.js'`. `generateShortId` and `generateSlug` live in `src/ids.ts` with the same visibility: exported but not re-exported through the barrel.
 
 ---
 
