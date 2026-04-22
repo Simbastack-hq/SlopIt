@@ -16,9 +16,14 @@ function generateShortId(): string {
   return Array.from(bytes, (b) => ID_ALPHABET[b % 32]).join('')
 }
 
-// Pure predicate so the narrow match logic is testable without running the DB.
-// better-sqlite3 sets err.code for SQLite constraint violations; the column
-// name is only reliably available in err.message.
+/**
+ * Pure predicate so the narrow match logic is testable without running the DB.
+ * better-sqlite3 sets err.code for SQLite constraint violations; the column
+ * name is only reliably available in err.message.
+ *
+ * @internal — exported for unit testing only. Not part of the public API;
+ * deliberately omitted from `src/index.ts`. Consumers should not rely on it.
+ */
 export function isBlogNameConflict(err: unknown): boolean {
   return (
     err instanceof Error

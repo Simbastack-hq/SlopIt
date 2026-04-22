@@ -3,7 +3,7 @@ import type { Store } from '../db/store.js'
 export interface RendererConfig {
   store: Store
   outputDir: string   // where static files are written, per-blog subdirs
-  baseUrl: string     // e.g. "https://ai-thoughts.slopit.io" — used for feeds + SEO
+  baseUrl: string     // e.g. "https://blog.example.com" — used for feeds + SEO
 }
 
 export interface Renderer {
