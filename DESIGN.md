@@ -10,7 +10,7 @@ Warm paper, no chrome. Stone background, one coral accent, Satoshi for words, Je
 
 ## Palette
 
-Six tokens. That's all.
+Seven tokens. That's all.
 
 | Token | Hex | Where it's used |
 |---|---|---|
