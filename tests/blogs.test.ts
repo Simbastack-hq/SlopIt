@@ -32,3 +32,43 @@ describe('isBlogNameConflict', () => {
     expect(isBlogNameConflict({ code: 'SQLITE_CONSTRAINT_UNIQUE', message: 'blogs.name' })).toBe(false)
   })
 })
+
+import { CreateBlogInputSchema } from '../src/schema/index.js'
+
+describe('CreateBlogInputSchema', () => {
+  it('accepts empty input; name undefined, theme defaults to minimal', () => {
+    const parsed = CreateBlogInputSchema.parse({})
+    expect(parsed.name).toBeUndefined()
+    expect(parsed.theme).toBe('minimal')
+  })
+
+  it('accepts valid DNS-safe names', () => {
+    for (const name of ['ai', 'ai-thoughts', 'hot-takes-2026', 'abc', 'a2b', 'a'.repeat(63)]) {
+      expect(() => CreateBlogInputSchema.parse({ name })).not.toThrow()
+    }
+  })
+
+  it('accepts all three valid themes', () => {
+    for (const theme of ['minimal', 'classic', 'zine'] as const) {
+      expect(CreateBlogInputSchema.parse({ theme }).theme).toBe(theme)
+    }
+  })
+
+  it('rejects invalid theme', () => {
+    expect(() => CreateBlogInputSchema.parse({ theme: 'fancy' })).toThrow()
+  })
+
+  it.each([
+    ['too short (1 char)', 'a'],
+    ['leading hyphen', '-abc'],
+    ['trailing hyphen', 'abc-'],
+    ['uppercase', 'AiThoughts'],
+    ['underscore', 'ai_thoughts'],
+    ['space', 'ai thoughts'],
+    ['too long (64 chars)', 'a'.repeat(64)],
+    ['empty string', ''],
+    ['only hyphens', '---'],
+  ])('rejects name: %s', (_, name) => {
+    expect(() => CreateBlogInputSchema.parse({ name })).toThrow()
+  })
+})

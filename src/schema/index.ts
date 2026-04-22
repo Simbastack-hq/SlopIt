@@ -36,3 +36,18 @@ export const PostSchema = PostInputSchema.extend({
   updatedAt: z.string(),
 })
 export type Post = z.infer<typeof PostSchema>
+
+// Input for createBlog. `name` is DNS-subdomain-safe when provided:
+// lowercase alphanumerics + hyphens, no leading/trailing hyphen, 2–63 chars.
+// Same constraints whether the blog ends up on a subdomain or not, for
+// consistency and so unnamed blogs can claim a subdomain later.
+export const CreateBlogInputSchema = z.object({
+  name: z
+    .string()
+    .min(2)
+    .max(63)
+    .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/)
+    .optional(),
+  theme: z.enum(['minimal', 'classic', 'zine']).default('minimal'),
+})
+export type CreateBlogInput = z.infer<typeof CreateBlogInputSchema>
