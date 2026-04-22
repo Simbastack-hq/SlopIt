@@ -122,7 +122,7 @@ BEGIN
 COMMIT
 ```
 
-Wrapped in `db.transaction(() => { ... })`. The existence check prevents creating a key for a non-existent blog even under concurrent blog deletion (if/when delete lands).
+Wrapped in `db.transaction(() => { ... })`. The foreign key on `api_keys.blog_id` already prevents orphan key rows (the `INSERT` would fail with a `FOREIGN KEY constraint failed` error if `blogId` doesn't exist). The explicit `SELECT` is a UX choice: it lets us raise `SlopItError('BLOG_NOT_FOUND', ...)` with a clear message instead of bubbling a cryptic FK violation.
 
 ---
 
@@ -130,17 +130,25 @@ Wrapped in `db.transaction(() => { ... })`. The existence check prevents creatin
 
 - **Invalid input** → `CreateBlogInputSchema.parse(input)` throws a `ZodError`. Not rewrapped; consumers handle it and map to HTTP 400 themselves.
 
-- **Blog name conflict** (in `createBlog`) → SQLite throws with `code === 'SQLITE_CONSTRAINT_UNIQUE'` AND `message` containing `blogs.name`. Narrow check, because the migration has unique constraints on multiple columns (`blogs.id`, `blogs.name`, `api_keys.id`, `api_keys.key_hash`):
+- **Blog name conflict** (in `createBlog`) → SQLite throws with `code === 'SQLITE_CONSTRAINT_UNIQUE'` AND `message` containing `blogs.name`. The check is narrow because the migration has unique constraints on multiple columns (`blogs.id`, `blogs.name`, `api_keys.id`, `api_keys.key_hash`).
+
+  The matching logic is extracted as a pure predicate in `src/blogs.ts` so it can be unit-tested against synthetic errors without mocking the DB:
+
+  ```ts
+  export function isBlogNameConflict(err: unknown): boolean {
+    return err instanceof Error
+      && (err as NodeJS.ErrnoException).code === 'SQLITE_CONSTRAINT_UNIQUE'
+      && err.message.includes('blogs.name')
+  }
+  ```
+
+  Used inside `createBlog`:
 
   ```ts
   try {
     insertBlog.run(id, name, theme)
   } catch (e) {
-    if (
-      e instanceof Error
-      && (e as NodeJS.ErrnoException).code === 'SQLITE_CONSTRAINT_UNIQUE'
-      && e.message.includes('blogs.name')
-    ) {
+    if (isBlogNameConflict(e)) {
       throw new SlopItError('BLOG_NAME_CONFLICT', `Blog name "${name}" is already taken`)
     }
     throw e
@@ -195,7 +203,7 @@ New file: `tests/blogs.test.ts`. Tests:
 2. Creates a named blog; verifies `blog.name` persisted and `blog.id` still generated.
 3. Creates a blog with default theme (`minimal`) when `theme` is omitted.
 4. Throws `SlopItError` with `code === 'BLOG_NAME_CONFLICT'` when duplicate name is inserted.
-5. Does **not** mislabel other `SQLITE_CONSTRAINT_UNIQUE` errors — test by directly inserting a duplicate `blogs.id` via raw SQL and asserting the raised error is **not** `SlopItError('BLOG_NAME_CONFLICT')`.
+5. `isBlogNameConflict` returns `true` for a synthetic SQLite error matching `code === 'SQLITE_CONSTRAINT_UNIQUE'` with `message` containing `blogs.name`, and `false` for the same code with `blogs.id`, `api_keys.id`, or `api_keys.key_hash` in the message. Plus `false` for a plain `Error`, `null`, and `undefined`. This exercises the narrow-matching logic directly without having to force a real collision through `createBlog` (which would require mocking `randomBytes`).
 6. Zod rejects names with uppercase / invalid chars / too long / too short (1 char) / leading or trailing hyphen.
 
 ### `createApiKey`
