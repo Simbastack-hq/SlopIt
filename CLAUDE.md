@@ -128,10 +128,10 @@ A feature without tests isn't done. A feature with 400 lines of mocks is also no
 Side-project pace. Small scope.
 
 - `main` is the only long-lived branch.
-- Feature branches → PR → squash merge to `main`.
+- Every change lands via a feature branch + PR → squash merge to `main`. No exceptions, even for single-contributor work, even pre-public — keeps history clean and the review rhythm established before the repo grows.
+- Branch naming: `feat/<short-name>` for features, `fix/<short-name>` for bugs, `chore/<short-name>` for repo hygiene.
 - No `dev` branch, no release branch, no cherry-picking. When we need it, we'll add it.
-
-Never push directly to `main` once the repo is live and multi-contributor. Until then: don't rewrite shared history.
+- Never force-push `main`. Never rewrite shared history.
 
 ## Writing for Humans and Agents
 
