@@ -1,6 +1,6 @@
 # Design System — Core Themes
 
-The design spec for the three themes core ships: `minimal`, `classic`, `zine`. Everything here is concrete and in-use. If it's not listed, it's not a token.
+The design spec for core's v1 built-in theme: `minimal`. Additional themes (`classic`, `zine`, etc.) will land as separate follow-up features and will follow the same rules here. Everything here is concrete and in-use. If it's not listed, it's not a token.
 
 See `src/themes/README.md` for the binding rules on what goes on a post page (spoiler: title, date, body, tags, "Powered by SlopIt" — that's it). This doc is about *how* that content looks.
 

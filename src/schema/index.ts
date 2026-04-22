@@ -5,7 +5,7 @@ import { z } from 'zod'
 export const BlogSchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
-  theme: z.enum(['minimal', 'classic', 'zine']).default('minimal'),
+  theme: z.enum(['minimal']),
   createdAt: z.string(),
 })
 export type Blog = z.infer<typeof BlogSchema>
@@ -48,6 +48,6 @@ export const CreateBlogInputSchema = z.object({
     .max(63)
     .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/)
     .optional(),
-  theme: z.enum(['minimal', 'classic', 'zine']).default('minimal'),
+  theme: z.enum(['minimal']).default('minimal'),
 })
 export type CreateBlogInput = z.input<typeof CreateBlogInputSchema>

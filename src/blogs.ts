@@ -62,7 +62,7 @@ export function createBlog(
     .get(id) as {
       id: string
       name: string | null
-      theme: 'minimal' | 'classic' | 'zine'
+      theme: 'minimal'
       created_at: string
     }
 

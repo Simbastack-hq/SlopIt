@@ -1,6 +1,6 @@
 # Themes — Design Principles
 
-Core ships three themes (`minimal`, `classic`, `zine`). All three follow the rules here, not just `minimal`. If a theme is tempted to break one of these, we probably don't need that theme.
+Core ships one built-in theme in v1: `minimal`. The theme system is designed to accept more (`classic`, `zine`, etc.) as separate follow-up features; each will land as a new folder under `src/themes/` with its own `post.html`, `index.html`, `style.css`. Until then, the rules here apply to `minimal` — and to any theme added later.
 
 ## What a post page shows (v1)
 

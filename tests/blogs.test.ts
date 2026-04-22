@@ -53,10 +53,13 @@ describe('CreateBlogInputSchema', () => {
     }
   })
 
-  it('accepts all three valid themes', () => {
-    for (const theme of ['minimal', 'classic', 'zine'] as const) {
-      expect(CreateBlogInputSchema.parse({ theme }).theme).toBe(theme)
-    }
+  it('accepts the minimal theme', () => {
+    expect(CreateBlogInputSchema.parse({ theme: 'minimal' }).theme).toBe('minimal')
+  })
+
+  it('rejects classic and zine (narrowed to minimal-only in v1)', () => {
+    expect(() => CreateBlogInputSchema.parse({ theme: 'classic' })).toThrow()
+    expect(() => CreateBlogInputSchema.parse({ theme: 'zine' })).toThrow()
   })
 
   it('rejects invalid theme', () => {
@@ -113,8 +116,8 @@ describe('createBlog', () => {
   })
 
   it('creates a blog with an explicit theme', () => {
-    const { blog } = createBlog(store, { theme: 'zine' })
-    expect(blog.theme).toBe('zine')
+    const { blog } = createBlog(store, { theme: 'minimal' })
+    expect(blog.theme).toBe('minimal')
   })
 
   it('generates a different id on each call', () => {
