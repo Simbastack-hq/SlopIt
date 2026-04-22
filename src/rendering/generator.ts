@@ -1,8 +1,11 @@
-import { copyFileSync, mkdirSync } from 'node:fs'
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { getBlogInternal } from '../blogs.js'
 import type { Store } from '../db/store.js'
-import type { Post } from '../schema/index.js'
-import { escapeHtml } from './templates.js'
+import { listPublishedPostsForBlog } from '../posts.js'
+import type { Blog, Post } from '../schema/index.js'
+import { renderMarkdown } from './markdown.js'
+import { escapeHtml, loadTheme, render } from './templates.js'
 
 export interface RendererConfig {
   store: Store
@@ -120,15 +123,60 @@ export function ensureCss(cssSourcePath: string, blogOutputDir: string): void {
   copyFileSync(cssSourcePath, join(blogOutputDir, 'style.css'))
 }
 
-/**
- * Placeholder factory — Task 10 replaces this with the real renderer.
- * Leaving it as a throw so any accidental use before Task 10 lands
- * fails loudly.
- */
-export function createRenderer(_config: RendererConfig): Renderer {
+export function createRenderer(config: RendererConfig): Renderer {
+  const theme = loadTheme('minimal')
+
+  const displayName = (blog: Blog): string => blog.name ?? blog.id
+
+  const blogOutputDir = (blogId: string) => join(config.outputDir, blogId)
+
   return {
-    baseUrl: _config.baseUrl,
-    renderPost() { throw new Error('createRenderer: not implemented until Task 10') },
-    renderBlog() { throw new Error('createRenderer: not implemented until Task 10') },
+    baseUrl: config.baseUrl,
+
+    renderPost(blogId, post) {
+      const blog = getBlogInternal(config.store, blogId)
+      const blogDir = blogOutputDir(blogId)
+
+      // ensureCss BEFORE HTML write — see spec's Render sequencing section
+      ensureCss(theme.cssPath, blogDir)
+
+      const postDir = join(blogDir, post.slug)
+      mkdirSync(postDir, { recursive: true })
+
+      const html = render(theme.post, {
+        blogName: displayName(blog),
+        postTitle: post.title,
+        postPublishedAt: post.publishedAt ?? '',
+        postPublishedAtDisplay: formatDate(post.publishedAt),
+        themeCssHref: '../style.css',
+        blogHomeHref: '..',
+        canonicalUrl: config.baseUrl + '/' + post.slug + '/',
+        seoMeta: renderSeoMeta(post.seoTitle, post.seoDescription),
+        postBody: renderMarkdown(post.body),
+        tagList: renderTagList(post.tags),
+        poweredBy: renderPoweredBy(),
+      })
+
+      writeFileSync(join(postDir, 'index.html'), html, 'utf8')
+    },
+
+    renderBlog(blogId) {
+      const blog = getBlogInternal(config.store, blogId)
+      const blogDir = blogOutputDir(blogId)
+
+      ensureCss(theme.cssPath, blogDir)
+
+      const posts = listPublishedPostsForBlog(config.store, blogId)
+      mkdirSync(blogDir, { recursive: true })
+
+      const html = render(theme.index, {
+        blogName: displayName(blog),
+        themeCssHref: 'style.css',
+        postList: renderPostList(posts),
+        poweredBy: renderPoweredBy(),
+      })
+
+      writeFileSync(join(blogDir, 'index.html'), html, 'utf8')
+    },
   }
 }

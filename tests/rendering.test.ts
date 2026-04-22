@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { escapeHtml, render, loadTheme } from '../src/rendering/templates.js'
 import {
   formatDate,
@@ -6,8 +9,11 @@ import {
   renderTagList,
   renderPoweredBy,
   renderSeoMeta,
+  createRenderer,
 } from '../src/rendering/generator.js'
 import { renderMarkdown } from '../src/rendering/markdown.js'
+import { createStore, type Store } from '../src/db/store.js'
+import { createBlog } from '../src/blogs.js'
 import type { Post } from '../src/schema/index.js'
 
 describe('escapeHtml', () => {
@@ -273,5 +279,168 @@ describe('renderMarkdown — HTML stripping (v1 XSS defense)', () => {
     const out = renderMarkdown('```\n<script>inside code</script>\n```')
     expect(out).toContain('&lt;script&gt;')
     expect(out).toContain('inside code')
+  })
+})
+
+describe('createRenderer — renderPost', () => {
+  let dir: string
+  let store: Store
+  let outputDir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+    outputDir = join(dir, 'out')
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('writes post HTML + CSS to disk at the expected path', () => {
+    const { blog } = createBlog(store, { name: 'test-blog' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://test.example.com' })
+
+    const post = makePost({ blogId: blog.id, slug: 'hello', title: 'Hello!' })
+    renderer.renderPost(blog.id, post)
+
+    const postPath = join(outputDir, blog.id, 'hello', 'index.html')
+    const cssPath = join(outputDir, blog.id, 'style.css')
+    expect(existsSync(postPath)).toBe(true)
+    expect(existsSync(cssPath)).toBe(true)
+
+    const html = readFileSync(postPath, 'utf8')
+    expect(html).toContain('<title>Hello! — test-blog</title>')
+    expect(html).toContain('<h1>Hello!</h1>')
+  })
+
+  it('uses relative hrefs (../style.css and ..) so path-based and subdomain blogs both work', () => {
+    const { blog } = createBlog(store, {})
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://example.com/b/xxx' })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 's' }))
+
+    const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
+    expect(html).toContain('href="../style.css"')
+    expect(html).toContain('href=".."')
+  })
+
+  it('shows blog.id as blogName for unnamed blogs', () => {
+    const { blog } = createBlog(store, {})
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://ex.com' })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 's' }))
+
+    const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
+    expect(html).toContain(blog.id)
+  })
+
+  it('renders canonical URL as baseUrl + /slug/ (trailing slash matches directory layout)', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'my-slug' }))
+
+    const html = readFileSync(join(outputDir, blog.id, 'my-slug', 'index.html'), 'utf8')
+    expect(html).toContain('href="https://b.example.com/my-slug/"')
+  })
+
+  it('ensureCss always overwrites (picks up CSS changes on re-render)', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 's' }))
+
+    const cssPath = join(outputDir, blog.id, 'style.css')
+    const fresh = readFileSync(cssPath, 'utf8')
+
+    writeFileSync(cssPath, '/* STALE */', 'utf8')
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 't' }))
+    const restored = readFileSync(cssPath, 'utf8')
+    expect(restored).toBe(fresh)
+  })
+
+  it('renders the post body as HTML (markdown passes through renderMarkdown)', () => {
+    const { blog } = createBlog(store, {})
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://ex.com' })
+    renderer.renderPost(blog.id, makePost({
+      blogId: blog.id,
+      slug: 's',
+      body: '# Heading\n\nParagraph.',
+    }))
+
+    const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
+    expect(html).toContain('<h1>Heading</h1>')
+    expect(html).toContain('<p>Paragraph.</p>')
+  })
+})
+
+describe('createRenderer — renderBlog', () => {
+  let dir: string
+  let store: Store
+  let outputDir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+    outputDir = join(dir, 'out')
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('writes the blog index HTML + CSS to disk', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderBlog(blog.id)
+
+    expect(existsSync(join(outputDir, blog.id, 'index.html'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'style.css'))).toBe(true)
+  })
+
+  it('lists published posts newest-first in the index', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const insert = store.db.prepare(
+      `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
+       VALUES (?, ?, ?, ?, ?, 'published', ?)`,
+    )
+    insert.run('p1', blog.id, 'first',  'First',  'x', '2025-01-01T00:00:00Z')
+    insert.run('p2', blog.id, 'second', 'Second', 'x', '2025-02-01T00:00:00Z')
+
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderBlog(blog.id)
+
+    const html = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
+    const secondIdx = html.indexOf('>Second<')
+    const firstIdx = html.indexOf('>First<')
+    expect(secondIdx).toBeGreaterThan(-1)
+    expect(firstIdx).toBeGreaterThan(-1)
+    expect(secondIdx).toBeLessThan(firstIdx)
+  })
+
+  it('excludes drafts from the index', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const insert = store.db.prepare(
+      `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    insert.run('p1', blog.id, 'pub',   'Pub',   'x', 'published', '2025-01-01T00:00:00Z')
+    insert.run('p2', blog.id, 'draft', 'Draft', 'x', 'draft',     null)
+
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderBlog(blog.id)
+
+    const html = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
+    expect(html).toContain('>Pub<')
+    expect(html).not.toContain('>Draft<')
+  })
+
+  it('uses relative "style.css" href (not "../style.css") in the index', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderBlog(blog.id)
+
+    const html = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
+    expect(html).toContain('href="style.css"')
+    expect(html).not.toContain('href="../style.css"')
   })
 })
