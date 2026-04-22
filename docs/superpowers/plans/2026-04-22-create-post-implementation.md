@@ -8,7 +8,7 @@
 
 **Architecture:** Pure operations in `src/posts.ts` and helpers in `src/ids.ts` / `src/rendering/templates.ts` / `src/rendering/generator.ts`. `Renderer` interface becomes sync (`better-sqlite3` and `renderMarkdown` are sync; `node:fs` sync writers are fine at our scale). File-based `minimal` theme in `src/themes/minimal/`. `@internal` helpers are module-level exports but are NOT re-exported through `src/index.ts` — tests and cross-module callers import from source paths directly.
 
-**Tech Stack:** TypeScript strict ESM, Node >=22, `better-sqlite3`, Zod v4, Vitest, `marked`. No new dependencies.
+**Tech Stack:** TypeScript strict ESM, Node >=22, `better-sqlite3`, Zod v4, Vitest, `marked`. No new dependencies — XSS protection in Task 9.5 uses marked's built-in renderer override, not a sanitization library.
 
 ---
 
@@ -607,6 +607,12 @@ describe('PostInputSchema', () => {
     expect(parsed.tags).toEqual([])         // default
   })
 
+  it('trims leading/trailing whitespace from title and body', () => {
+    const parsed = PostInputSchema.parse({ title: '  Hello  ', body: '  body content  ' })
+    expect(parsed.title).toBe('Hello')
+    expect(parsed.body).toBe('body content')
+  })
+
   it('accepts all optional fields', () => {
     const parsed = PostInputSchema.parse({
       title: 'A post',
@@ -627,8 +633,10 @@ describe('PostInputSchema', () => {
 
   it.each([
     ['empty title', { title: '', body: 'x' }],
+    ['whitespace-only title', { title: '   ', body: 'x' }],
     ['title over 200 chars', { title: 'a'.repeat(201), body: 'x' }],
     ['empty body', { title: 'T', body: '' }],
+    ['whitespace-only body', { title: 'T', body: '   ' }],
     ['slug too short (1 char)', { title: 'T', body: 'x', slug: 'a' }],
     ['slug over 100 chars', { title: 'T', body: 'x', slug: 'a'.repeat(101) }],
     ['slug with uppercase', { title: 'T', body: 'x', slug: 'Not-Valid' }],
@@ -693,14 +701,14 @@ import { generateSlug } from '../ids.js'
 
 export const PostInputSchema = z
   .object({
-    title: z.string().min(1).max(200),
+    title: z.string().trim().min(1).max(200),
     slug: z
       .string()
       .min(2)
       .max(100)
       .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/)
       .optional(),
-    body: z.string().min(1),
+    body: z.string().trim().min(1),
     excerpt: z.string().max(300).optional(),
     tags: z.array(z.string()).default([]),
     status: z.enum(['draft', 'published']).default('published'),
@@ -1699,8 +1707,14 @@ function makePost(overrides: Partial<Post> = {}): Post {
 }
 
 describe('formatDate', () => {
-  it('formats an ISO string into a human-readable date', () => {
-    expect(formatDate('2025-01-15T12:00:00Z')).toMatch(/Jan(uary)? 15,? 2025/)
+  it('formats an ISO string into a human-readable date (UTC-pinned)', () => {
+    expect(formatDate('2025-01-15T12:00:00Z')).toBe('January 15, 2025')
+  })
+
+  it('is deterministic across host timezones (UTC, not local)', () => {
+    // Midnight UTC on Jan 1 would render as "December 31, 2024" in LAX
+    // under local-TZ formatting. We pin UTC, so it stays Jan 1 everywhere.
+    expect(formatDate('2025-01-01T00:00:00Z')).toBe('January 1, 2025')
   })
 
   it('returns empty string for null', () => {
@@ -1843,12 +1857,21 @@ export interface Renderer {
 /**
  * Format an ISO timestamp for human display. Returns '' on null/undefined.
  *
+ * Pinned to UTC so static output is deterministic regardless of host
+ * timezone — '2025-01-01T00:00:00Z' renders as 'January 1, 2025'
+ * everywhere, not 'December 31, 2024' on LAX deploys.
+ *
  * @internal
  */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return ''
   const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
 }
 
 /**
@@ -1983,6 +2006,160 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
+## Task 9.5: Sanitize markdown — strip raw HTML in `renderMarkdown`
+
+Purpose: the scaffold's `renderMarkdown` is `marked.parse()` with no sanitization, so a post body containing `<script>alert(1)</script>` becomes stored XSS in the rendered blog. Task 10 will inject `renderMarkdown(post.body)` into the raw `{{{postBody}}}` slot, so the defense MUST land before the renderer is wired up.
+
+**Design choice (no new deps):** override marked's `html` renderer to emit `''`. This strips both block and inline HTML tokens while leaving every legitimate markdown syntax intact (headings, emphasis, lists, links, code, blockquotes, images — all unaffected). Power users who want embeds can wait for v2, which will add proper DOM-level sanitization with an opt-in. For v1 the right default is strict — readers are untrusted recipients and the threat model assumes stored XSS from authored content matters.
+
+**Files:**
+- Modify: `src/rendering/markdown.ts`
+- Modify: `tests/rendering.test.ts` (append XSS-neutralization tests)
+
+- [ ] **Step 9.5.1: Write failing tests**
+
+Append to `tests/rendering.test.ts`. At the top of the file (with other imports), add:
+
+```ts
+import { renderMarkdown } from '../src/rendering/markdown.js'
+```
+
+At the bottom of the file, append:
+
+```ts
+describe('renderMarkdown — HTML stripping (v1 XSS defense)', () => {
+  it('strips <script> blocks entirely', () => {
+    const out = renderMarkdown('<script>alert(1)</script>')
+    expect(out).not.toContain('<script>')
+    expect(out).not.toContain('alert(1)')
+  })
+
+  it('strips inline HTML with event handlers', () => {
+    const out = renderMarkdown('Hello <img src=x onerror=alert(1)>')
+    expect(out).not.toContain('onerror')
+    expect(out).not.toContain('<img')
+  })
+
+  it('strips <iframe> and other embed attempts', () => {
+    const out = renderMarkdown('<iframe src="evil.com"></iframe>')
+    expect(out).not.toContain('<iframe')
+    expect(out).not.toContain('evil.com')
+  })
+
+  it('strips mixed HTML within legitimate markdown', () => {
+    const out = renderMarkdown('**bold text** <script>evil()</script> **more bold**')
+    expect(out).toContain('<strong>bold text</strong>')
+    expect(out).toContain('<strong>more bold</strong>')
+    expect(out).not.toContain('<script>')
+    expect(out).not.toContain('evil()')
+  })
+
+  it('preserves legitimate markdown → HTML conversions', () => {
+    expect(renderMarkdown('# Heading')).toContain('<h1>Heading</h1>')
+    expect(renderMarkdown('**bold**')).toContain('<strong>bold</strong>')
+    expect(renderMarkdown('*italic*')).toContain('<em>italic</em>')
+    expect(renderMarkdown('[text](https://example.com)')).toContain('<a href="https://example.com">text</a>')
+    expect(renderMarkdown('- item 1\n- item 2')).toContain('<li>item 1</li>')
+    expect(renderMarkdown('> quoted')).toContain('<blockquote>')
+    expect(renderMarkdown('`code`')).toContain('<code>code</code>')
+  })
+
+  it('escapes HTML-like content inside code blocks (not stripped, but entity-escaped)', () => {
+    const out = renderMarkdown('```\n<script>inside code</script>\n```')
+    // Inside a fenced code block, marked produces <pre><code> with content entity-escaped,
+    // NOT as an html token. So the literal '<script>' appears escaped, not stripped.
+    expect(out).toContain('&lt;script&gt;')
+    expect(out).toContain('inside code')   // the text is preserved, just escaped
+  })
+})
+```
+
+- [ ] **Step 9.5.2: Run tests to verify they fail**
+
+```bash
+pnpm test tests/rendering.test.ts
+```
+
+Expected: **FAIL** — the XSS neutralization tests all fail because current `renderMarkdown` passes raw HTML through.
+
+Example failure output (roughly):
+```
+FAIL  tests/rendering.test.ts > renderMarkdown — HTML stripping (v1 XSS defense) > strips <script> blocks entirely
+AssertionError: expected '<script>alert(1)</script>' not to contain '<script>'
+```
+
+- [ ] **Step 9.5.3: Update `src/rendering/markdown.ts`**
+
+Replace the full contents of `src/rendering/markdown.ts` with:
+
+```ts
+import { marked } from 'marked'
+
+// v1 XSS defense: strip all raw HTML tokens (block and inline) via a
+// renderer override. Agents author content on their own blog; readers
+// are untrusted recipients; until v2 adds proper DOM-level sanitization
+// with an opt-in, the safe default is to drop raw HTML entirely.
+// Legitimate markdown syntax (headings, emphasis, lists, links, code,
+// blockquotes, images) is unaffected — marked's token model treats
+// those as non-html tokens with their own renderers.
+//
+// Note: marked.use() modifies the shared default marked instance. This
+// is fine because src/rendering/markdown.ts is the only module in core
+// that imports marked; no other code path depends on marked's default
+// behavior.
+marked.use({
+  renderer: {
+    html() {
+      return ''
+    },
+  },
+})
+
+// Markdown → HTML. Synchronous because blog posts are short and we render
+// once at publish time; no reason to reach for async here.
+export function renderMarkdown(md: string): string {
+  return marked.parse(md, { async: false }) as string
+}
+```
+
+- [ ] **Step 9.5.4: Run tests to verify they pass**
+
+```bash
+pnpm typecheck
+pnpm test
+```
+
+Expected: all green. The 6 XSS-neutralization tests pass; all prior tests still pass (marked still converts headings/bold/italic/links/lists/etc. normally).
+
+- [ ] **Step 9.5.5: Commit**
+
+```bash
+git add src/rendering/markdown.ts tests/rendering.test.ts
+git commit -m "Strip raw HTML from renderMarkdown to prevent stored XSS
+
+Task 10 will inject renderMarkdown(post.body) into the {{{postBody}}}
+raw slot. Without this, a post body containing <script> or inline
+event handlers becomes XSS in the rendered blog.
+
+v1 defense: override marked's html renderer to emit ''. Strips both
+block-level HTML and inline HTML tokens. Legitimate markdown syntax
+(headings, emphasis, links, lists, code, blockquotes, images) is
+unaffected because marked treats those as non-html tokens with their
+own renderers. HTML inside fenced code blocks stays in code-token
+form and is entity-escaped, so it's visible but inert.
+
+Threat model: agents are authors of their own blog; readers are
+untrusted recipients. This is why we strip even 'trusted' author HTML.
+v2 can add proper DOM-level sanitization with an opt-in, at which
+point power users can embed iframes etc.
+
+No new deps — uses marked's built-in renderer override.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
 ## Task 10: Renderer implementation (`renderPost` + `renderBlog`)
 
 Purpose: replace the `createRenderer` stub with the real implementation. Both methods call `ensureCss` FIRST (before any HTML write), then render + write. Tests verify file contents, paths, and routing-agnostic relative hrefs.
@@ -2058,13 +2235,13 @@ describe('createRenderer — renderPost', () => {
     expect(html).toContain(blog.id)      // id shows up somewhere as the nav/title
   })
 
-  it('renders canonical URL as baseUrl + /slug', () => {
+  it('renders canonical URL as baseUrl + /slug/ (trailing slash matches directory layout)', () => {
     const { blog } = createBlog(store, { name: 'b' })
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
     renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'my-slug' }))
 
     const html = readFileSync(join(outputDir, blog.id, 'my-slug', 'index.html'), 'utf8')
-    expect(html).toContain('href="https://b.example.com/my-slug"')
+    expect(html).toContain('href="https://b.example.com/my-slug/"')
   })
 
   it('ensureCss always overwrites (picks up CSS changes on re-render)', () => {
@@ -2227,7 +2404,7 @@ export function createRenderer(config: RendererConfig): Renderer {
         postPublishedAtDisplay: formatDate(post.publishedAt),
         themeCssHref: '../style.css',
         blogHomeHref: '..',
-        canonicalUrl: config.baseUrl + '/' + post.slug,
+        canonicalUrl: config.baseUrl + '/' + post.slug + '/',   // trailing slash — matches directory layout
         seoMeta: renderSeoMeta(post.seoTitle, post.seoDescription),
         postBody: renderMarkdown(post.body),
         tagList: renderTagList(post.tags),
@@ -2351,7 +2528,7 @@ describe('createPost', () => {
     expect(post.slug).toBe('hello-world')
     expect(post.status).toBe('published')
     expect(post.publishedAt).not.toBeNull()
-    expect(postUrl).toBe('https://test.example.com/hello-world')
+    expect(postUrl).toBe('https://test.example.com/hello-world/')   // trailing slash
 
     expect(existsSync(join(outputDir, blog.id, 'hello-world', 'index.html'))).toBe(true)
     expect(existsSync(join(outputDir, blog.id, 'index.html'))).toBe(true)
@@ -2694,7 +2871,7 @@ export function createPost(
       } catch { /* best-effort; see spec's decision #6 */ }
       throw renderErr
     }
-    return { post, postUrl: renderer.baseUrl + '/' + post.slug }
+    return { post, postUrl: renderer.baseUrl + '/' + post.slug + '/' }   // trailing slash — matches directory layout
   }
 
   return { post }
