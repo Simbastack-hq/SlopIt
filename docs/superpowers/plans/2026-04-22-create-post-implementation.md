@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **For human execution:** Each task is bite-sized (2–5 min per step). Follow the steps in order within each task; tasks themselves can run in order 1 → 13. Every TDD task follows the same shape: write failing test → run to fail → implement → run to pass → commit. Copy-paste the code blocks verbatim; don't paraphrase.
+> **For human execution:** Each task is bite-sized (2–5 min per step). Follow the steps in order within each task; tasks themselves run in order `1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 9.5 → 10 → 11 → 12 → 13`. (Task 9.5 was inserted during the plan-review round for XSS defense; it sits between Task 9 and the renderer implementation in Task 10.) Every TDD task follows the same shape: write failing test → run to fail → implement → run to pass → commit. Copy-paste the code blocks verbatim; don't paraphrase.
 
 **Goal:** Implement `createPost(store, renderer, blogId, input)` end-to-end — Zod-validated input → slug preflight + narrow-match race guard → transactional INSERT → sync render of post page + blog index + CSS refresh on publish → DELETE compensation on render failure → return `{ post, postUrl? }`. Plus collateral: narrow theme enum to `['minimal']`, promote ID helpers to `src/ids.ts`, add optional `details` field to `SlopItError`.
 
@@ -19,9 +19,9 @@
 ## Pre-flight
 
 - Working directory: `/Users/nj/Workspace/SlopIt/code/slopit`.
-- Branch: `feat/create-post`, currently at commit `3110320` (spec + 2 revisions). Already branched from `main`.
+- Branch: `feat/create-post`. Baseline is whatever the latest commit on this branch is at execution time — `main` + 6 docs-only commits (spec + 2 spec revisions + plan + plan revision + spec/plan-sync). Already branched from `main`. `git log main..HEAD` shows the full list.
 - Baseline: `pnpm typecheck` passes; `pnpm test` shows 35 tests passing across 4 files. Every task must keep them green.
-- Do NOT push after each task. The plan will be pushed once at the end (Task 13) as a single branch push, then a PR is opened. No direct-to-main.
+- Branch already pushed to `origin/feat/create-post` with PR #1 open. As implementation commits land, push incrementally so the PR reflects progress (`git push` after each task is fine; the branch is single-author for the duration of implementation).
 - Do NOT add dependencies. Everything uses what's already installed.
 
 ## File Structure (this plan's full inventory)

@@ -1,6 +1,6 @@
 # createPost — Design Spec
 
-**Status:** Design approved 2026-04-22 (through three rounds of review). Spec pending user review.
+**Status:** Design approved 2026-04-22 (through four rounds of review — three in brainstorming + one after plan review added Task 9.5 for XSS defense, trailing-slash canonical URLs, UTC-pinned dates, and `.trim()` on title/body). Spec now matches the revised plan.
 **Scope:** `@slopit/core`, second feature pass. First "publish" primitive — the product.
 **Branch:** `feat/create-post` (from `main @ 1d205a4`).
 
@@ -11,8 +11,8 @@
 `createPost` is the publish primitive. An agent provides a title + markdown body and gets back a live URL — strategy.md's one-call-to-live-URL loop. It composes three concerns:
 
 1. **Persistence.** Insert a row into `posts` with full schema (title, slug, body, excerpt, tags, status, seo, author, coverImage).
-2. **Rendering.** For `status: 'published'`, markdown → HTML via the existing `renderMarkdown`, wrapped in the `minimal` theme's `post.html`, written to disk. Blog index (`{outputDir}/{blogId}/index.html`) is re-rendered to include the new post. CSS is copied/refreshed.
-3. **Return.** `{ post, postUrl? }` — `postUrl` computed from `renderer.baseUrl + '/' + post.slug`, only for published.
+2. **Rendering.** For `status: 'published'`, markdown → HTML via `renderMarkdown` (which strips all raw HTML tokens as v1 XSS defense — see decision #13), wrapped in the `minimal` theme's `post.html`, written to disk. Blog index (`{outputDir}/{blogId}/index.html`) is re-rendered to include the new post. CSS is copied/refreshed.
+3. **Return.** `{ post, postUrl? }` — `postUrl` computed from `renderer.baseUrl + '/' + post.slug + '/'` (trailing slash matches the directory-style layout on disk), only for published.
 
 Core remains single-blog-scoped: `createPost` takes an already-resolved `blogId`. Multi-tenant routing + auth live in `slopit-platform`.
 
@@ -34,6 +34,10 @@ Core remains single-blog-scoped: `createPost` takes an already-resolved `blogId`
 | 10 | Narrow-match at INSERT as well as preflight. Both paths throw the same `POST_SLUG_CONFLICT`. | Preflight is fast-path UX; INSERT-time match handles races. Both converge on one contract. |
 | 11 | Use the existing `PostInputSchema`, enhance it — don't add a near-duplicate `CreatePostInputSchema`. | Scaffold already has it; deduplicate. |
 | 12 | Promote `generateShortId` to `src/ids.ts`. | Second real call site. Shared helper, one module. |
+| 13 | `renderMarkdown` strips all raw HTML tokens (block + inline) via a `marked` renderer override. No opt-in in v1. | Threat model: readers of a blog are untrusted recipients. Authored HTML — even from a trusted agent — becomes stored XSS the moment any reader lands on the post. Stripping everything is the safe default. Legitimate markdown (headings, emphasis, links, lists, code, blockquotes, images) passes through because `marked` treats those as non-`html` tokens. Zero new deps (uses `marked`'s built-in `renderer.html` override). v2 can add proper DOM-level sanitization with an opt-in for power users who want embeds. |
+| 14 | `title` and `body` are `.trim().min(1)`. | Whitespace-only strings pass `.min(1)` by length but aren't meaningful input. Trim at the schema boundary so `'   '` fails validation and stored values have no leading/trailing whitespace. |
+| 15 | `formatDate` is pinned to `timeZone: 'UTC'`. | Static HTML output must be deterministic regardless of where it was rendered. A body written on Jan 1 UTC must read "January 1, 2025" on every deploy, not "December 31, 2024" on LAX. |
+| 16 | Canonical URL and `postUrl` include a trailing slash. | Files land in directory-style paths (`{slug}/index.html`) and index links use `href="slug/"`. Canonical + `postUrl` use the same form to avoid duplicate URLs for the same content. |
 
 ---
 
@@ -82,14 +86,14 @@ export function createPost(
 ```ts
 export const PostInputSchema = z
   .object({
-    title: z.string().min(1).max(200),
+    title: z.string().trim().min(1).max(200),
     slug: z
       .string()
       .min(2)
       .max(100)
       .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/)
       .optional(),
-    body: z.string().min(1),
+    body: z.string().trim().min(1),
     excerpt: z.string().max(300).optional(),
     tags: z.array(z.string()).default([]),
     status: z.enum(['draft', 'published']).default('published'),
@@ -125,7 +129,7 @@ export interface Renderer {
 }
 ```
 
-Both methods sync. `renderPost` writes `{outputDir}/{blogId}/{slug}/index.html` + ensures CSS. `renderBlog` re-renders `{outputDir}/{blogId}/index.html` + ensures CSS. Neither returns the URL — that's `createPost`'s responsibility via `renderer.baseUrl + '/' + post.slug`.
+Both methods sync. `renderPost` writes `{outputDir}/{blogId}/{slug}/index.html` + ensures CSS. `renderBlog` re-renders `{outputDir}/{blogId}/index.html` + ensures CSS. Neither returns the URL — that's `createPost`'s responsibility via `renderer.baseUrl + '/' + post.slug + '/'` (trailing slash matches the directory layout).
 
 ---
 
@@ -148,7 +152,7 @@ Both methods sync. `renderPost` writes `{outputDir}/{blogId}/{slug}/index.html` 
      throw renderErr
    }
    ```
-7. Return `{ post, postUrl: renderer.baseUrl + '/' + post.slug }`.
+7. Return `{ post, postUrl: renderer.baseUrl + '/' + post.slug + '/' }` (trailing slash — matches directory layout).
 
 **Draft path:** steps 1–5 only. Return `{ post }` (no `postUrl`). `published_at` is null.
 
