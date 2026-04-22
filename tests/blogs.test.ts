@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createStore, type Store } from '../src/db/store.js'
+import { createBlog } from '../src/blogs.js'
 import { isBlogNameConflict } from '../src/blogs.js'
+import { SlopItError } from '../src/errors.js'
 import { CreateBlogInputSchema } from '../src/schema/index.js'
 
 function sqliteUniqueError(constraint: string): Error {
@@ -69,5 +75,69 @@ describe('CreateBlogInputSchema', () => {
     ['only hyphens', '---'],
   ])('rejects name: %s', (_, name) => {
     expect(() => CreateBlogInputSchema.parse({ name })).toThrow()
+  })
+})
+
+describe('createBlog', () => {
+  let dir: string
+  let store: Store
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('creates an unnamed blog; id matches the 32-char alphabet, 8 chars long', () => {
+    const { blog } = createBlog(store, {})
+    expect(blog.id).toMatch(/^[abcdefghijkmnpqrstuvwxyz23456789]{8}$/)
+    expect(blog.name).toBeNull()
+    expect(blog.theme).toBe('minimal')
+    expect(typeof blog.createdAt).toBe('string')
+  })
+
+  it('creates a named blog and persists the name', () => {
+    const { blog } = createBlog(store, { name: 'ai-thoughts' })
+    expect(blog.name).toBe('ai-thoughts')
+
+    const row = store.db
+      .prepare('SELECT id, name, theme FROM blogs WHERE id = ?')
+      .get(blog.id) as { id: string; name: string; theme: string }
+    expect(row.id).toBe(blog.id)
+    expect(row.name).toBe('ai-thoughts')
+    expect(row.theme).toBe('minimal')
+  })
+
+  it('creates a blog with an explicit theme', () => {
+    const { blog } = createBlog(store, { theme: 'zine' })
+    expect(blog.theme).toBe('zine')
+  })
+
+  it('generates a different id on each call', () => {
+    const a = createBlog(store, {})
+    const b = createBlog(store, {})
+    expect(a.blog.id).not.toBe(b.blog.id)
+  })
+
+  it('throws SlopItError(BLOG_NAME_CONFLICT) when the name is reused', () => {
+    createBlog(store, { name: 'taken' })
+    let caught: unknown
+    try {
+      createBlog(store, { name: 'taken' })
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(SlopItError)
+    expect((caught as SlopItError).code).toBe('BLOG_NAME_CONFLICT')
+    expect((caught as SlopItError).message).toContain('taken')
+  })
+
+  it('rejects invalid input via Zod (bad name, too short)', () => {
+    expect(() => createBlog(store, { name: 'BadName' })).toThrow()
+    expect(() => createBlog(store, { name: 'a' })).toThrow()
   })
 })

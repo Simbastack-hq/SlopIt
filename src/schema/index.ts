@@ -50,4 +50,4 @@ export const CreateBlogInputSchema = z.object({
     .optional(),
   theme: z.enum(['minimal', 'classic', 'zine']).default('minimal'),
 })
-export type CreateBlogInput = z.infer<typeof CreateBlogInputSchema>
+export type CreateBlogInput = z.input<typeof CreateBlogInputSchema>
