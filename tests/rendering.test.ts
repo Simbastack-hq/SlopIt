@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { escapeHtml, render, loadTheme } from '../src/rendering/templates.js'
+import {
+  formatDate,
+  renderPostList,
+  renderTagList,
+  renderPoweredBy,
+  renderSeoMeta,
+} from '../src/rendering/generator.js'
+import type { Post } from '../src/schema/index.js'
 
 describe('escapeHtml', () => {
   it('escapes the five canonical HTML entities', () => {
@@ -86,5 +94,139 @@ describe('loadTheme', () => {
     expect(theme.index).toContain('{{blogName}}')
     expect(theme.index).toContain('{{{postList}}}')
     expect(theme.index).toContain('{{themeCssHref}}')
+  })
+})
+
+function makePost(overrides: Partial<Post> = {}): Post {
+  return {
+    id: 'p1',
+    blogId: 'b1',
+    slug: 'hello',
+    title: 'Hello',
+    body: 'body',
+    excerpt: undefined,
+    tags: [],
+    status: 'published',
+    seoTitle: undefined,
+    seoDescription: undefined,
+    author: undefined,
+    coverImage: undefined,
+    publishedAt: '2025-01-15T12:00:00Z',
+    createdAt: '2025-01-15T12:00:00Z',
+    updatedAt: '2025-01-15T12:00:00Z',
+    ...overrides,
+  }
+}
+
+describe('formatDate', () => {
+  it('formats an ISO string into a human-readable date (UTC-pinned)', () => {
+    expect(formatDate('2025-01-15T12:00:00Z')).toBe('January 15, 2025')
+  })
+
+  it('is deterministic across host timezones (UTC, not local)', () => {
+    expect(formatDate('2025-01-01T00:00:00Z')).toBe('January 1, 2025')
+  })
+
+  it('returns empty string for null', () => {
+    expect(formatDate(null)).toBe('')
+  })
+
+  it('returns empty string for undefined', () => {
+    expect(formatDate(undefined)).toBe('')
+  })
+})
+
+describe('renderPostList', () => {
+  it('returns an empty string when given no posts', () => {
+    expect(renderPostList([])).toBe('')
+  })
+
+  it('builds a post-item per post', () => {
+    const out = renderPostList([
+      makePost({ slug: 'first',  title: 'First',  publishedAt: '2025-01-01T00:00:00Z' }),
+      makePost({ slug: 'second', title: 'Second', publishedAt: '2025-02-01T00:00:00Z' }),
+    ])
+    expect(out).toContain('<article class="post-item">')
+    expect(out).toContain('href="first/"')
+    expect(out).toContain('href="second/"')
+    expect(out).toContain('>First<')
+    expect(out).toContain('>Second<')
+  })
+
+  it('escapes post titles, excerpts, and slugs', () => {
+    const evil = makePost({
+      slug: 'evil',
+      title: '<script>alert(1)</script>',
+      excerpt: '"onerror=alert(1)"',
+    })
+    const out = renderPostList([evil])
+    expect(out).not.toContain('<script>alert(1)</script>')
+    expect(out).toContain('&lt;script&gt;')
+    expect(out).toContain('&quot;onerror')
+  })
+
+  it('omits excerpt paragraph when excerpt is absent', () => {
+    const p = makePost({ excerpt: undefined })
+    const out = renderPostList([p])
+    expect(out).not.toMatch(/<p[^>]*>undefined<\/p>/)
+    const postItems = out.match(/<article class="post-item">[\s\S]*?<\/article>/g)
+    expect(postItems).toHaveLength(1)
+    expect(postItems![0]).not.toContain('<p>')
+  })
+
+  it('renders excerpt paragraph when present', () => {
+    const p = makePost({ excerpt: 'A short summary.' })
+    const out = renderPostList([p])
+    expect(out).toContain('<p>A short summary.</p>')
+  })
+})
+
+describe('renderTagList', () => {
+  it('returns empty string for no tags', () => {
+    expect(renderTagList([])).toBe('')
+  })
+
+  it('wraps tags in a div and span-pills with # prefix', () => {
+    const out = renderTagList(['ai', 'content'])
+    expect(out).toContain('<div class="tags">')
+    expect(out).toContain('<span>#ai</span>')
+    expect(out).toContain('<span>#content</span>')
+  })
+
+  it('escapes tag text', () => {
+    const out = renderTagList(['<script>'])
+    expect(out).not.toContain('<script>')
+    expect(out).toContain('#&lt;script&gt;')
+  })
+})
+
+describe('renderPoweredBy', () => {
+  it('returns a link to slopit.io', () => {
+    const out = renderPoweredBy()
+    expect(out).toContain('https://slopit.io')
+    expect(out).toContain('Powered by')
+  })
+})
+
+describe('renderSeoMeta', () => {
+  it('returns empty string when both seoTitle and seoDescription are absent', () => {
+    expect(renderSeoMeta(undefined, undefined)).toBe('')
+  })
+
+  it('emits a description meta when seoDescription is present', () => {
+    const out = renderSeoMeta(undefined, 'A description')
+    expect(out).toContain('<meta name="description"')
+    expect(out).toContain('content="A description"')
+  })
+
+  it('escapes user-derived content', () => {
+    const out = renderSeoMeta(undefined, '<script>alert(1)</script>')
+    expect(out).not.toContain('<script>alert(1)</script>')
+    expect(out).toContain('&lt;script&gt;')
+  })
+
+  it('emits a title meta (og:title) when seoTitle is present', () => {
+    const out = renderSeoMeta('My Title', undefined)
+    expect(out).toContain('My Title')
   })
 })
