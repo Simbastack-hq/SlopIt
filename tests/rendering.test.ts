@@ -7,6 +7,7 @@ import {
   renderPoweredBy,
   renderSeoMeta,
 } from '../src/rendering/generator.js'
+import { renderMarkdown } from '../src/rendering/markdown.js'
 import type { Post } from '../src/schema/index.js'
 
 describe('escapeHtml', () => {
@@ -228,5 +229,49 @@ describe('renderSeoMeta', () => {
   it('emits a title meta (og:title) when seoTitle is present', () => {
     const out = renderSeoMeta('My Title', undefined)
     expect(out).toContain('My Title')
+  })
+})
+
+describe('renderMarkdown — HTML stripping (v1 XSS defense)', () => {
+  it('strips <script> blocks entirely', () => {
+    const out = renderMarkdown('<script>alert(1)</script>')
+    expect(out).not.toContain('<script>')
+    expect(out).not.toContain('alert(1)')
+  })
+
+  it('strips inline HTML with event handlers', () => {
+    const out = renderMarkdown('Hello <img src=x onerror=alert(1)>')
+    expect(out).not.toContain('onerror')
+    expect(out).not.toContain('<img')
+  })
+
+  it('strips <iframe> and other embed attempts', () => {
+    const out = renderMarkdown('<iframe src="evil.com"></iframe>')
+    expect(out).not.toContain('<iframe')
+    expect(out).not.toContain('evil.com')
+  })
+
+  it('strips mixed HTML within legitimate markdown', () => {
+    const out = renderMarkdown('**bold text** <script>evil()</script> **more bold**')
+    expect(out).toContain('<strong>bold text</strong>')
+    expect(out).toContain('<strong>more bold</strong>')
+    expect(out).not.toContain('<script>')
+    expect(out).not.toContain('evil()')
+  })
+
+  it('preserves legitimate markdown → HTML conversions', () => {
+    expect(renderMarkdown('# Heading')).toContain('<h1>Heading</h1>')
+    expect(renderMarkdown('**bold**')).toContain('<strong>bold</strong>')
+    expect(renderMarkdown('*italic*')).toContain('<em>italic</em>')
+    expect(renderMarkdown('[text](https://example.com)')).toContain('<a href="https://example.com">text</a>')
+    expect(renderMarkdown('- item 1\n- item 2')).toContain('<li>item 1</li>')
+    expect(renderMarkdown('> quoted')).toContain('<blockquote>')
+    expect(renderMarkdown('`code`')).toContain('<code>code</code>')
+  })
+
+  it('escapes HTML-like content inside code blocks (not stripped, but entity-escaped)', () => {
+    const out = renderMarkdown('```\n<script>inside code</script>\n```')
+    expect(out).toContain('&lt;script&gt;')
+    expect(out).toContain('inside code')
   })
 })
