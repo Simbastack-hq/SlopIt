@@ -1,23 +1,24 @@
-# REST Routes + MCP Tools — Design Spec
+# REST Routes — Design Spec
 
-**Status:** Design draft (2026-04-23). Awaiting review.
-**Scope:** `@slopit/core`, third feature pass. Wires REST + MCP on top of the primitives shipped in `feat/create-post`. After this feature, an agent can sign up, publish, read, update, and delete posts end-to-end.
-**Branch:** `feat/rest-routes-mcp` (from `dev @ 8886a84`).
-**Follows:** `2026-04-22-create-post-design.md`.
+**Status:** Design draft v2 (2026-04-23). P1 review fixes applied.
+**Scope:** `@slopit/core`, third feature pass. Wires REST on top of the primitives shipped in `feat/create-post`. After this feature, an agent can sign up, publish, read, update, and delete posts end-to-end over HTTP.
+**Branch:** `feat/rest-routes-mcp` (from `dev @ 8886a84`). Branch name keeps `-mcp` suffix for continuity with the handoff doc; MCP lands in a follow-up.
+**Follows:** `2026-04-22-create-post-design.md`. MCP is deferred to `feat/mcp-tools` (separate spec).
 
 ---
 
 ## Context
 
-`createApiRouter` is a stub serving `/health`. `createMcpServer` throws "not implemented". The core primitives (`createBlog`, `createApiKey`, `createPost`, `createRenderer`) already exist and compose cleanly. This feature is almost entirely wiring — plus two new mutation primitives (`updatePost`, `deletePost`), three read primitives (`getBlog`, `getPost`, `listPosts`), one auth helper (`verifyApiKey`), two pure generators (`generateOnboardingBlock`, `generateSkillFile`), and one new table (`idempotency_keys`). Note: `listBlogs` is deliberately NOT added — see decision #15.
+`createApiRouter` is a stub serving `/health`. The core primitives (`createBlog`, `createApiKey`, `createPost`, `createRenderer`) already exist and compose cleanly. This feature is almost entirely wiring — plus two new mutation primitives (`updatePost`, `deletePost`), three read primitives (`getBlog`, `getPost`, `listPosts`), one auth helper (`verifyApiKey`), two pure generators (`generateOnboardingBlock`, `generateSkillFile`), and one new table (`idempotency_keys`). Note: `listBlogs` is deliberately NOT added — see decision #15.
 
 Design inputs folded in up front:
 
-- **strategy.md** (slopit-platform) — MCP tool list and signup response shape.
+- **strategy.md** (slopit-platform) — signup response shape and the REST endpoint list.
 - **Proof SDK `AGENT_CONTRACT.md`** — imperative onboarding block, `_links` HATEOAS, `Content-Type: text/markdown` alternate, `Idempotency-Key` header, `auth_mode` enum.
 - **`feat-rest-routes-mcp` handoff** on dev — which parts of Proof to adopt and which to deliberately skip.
+- **P1 review feedback** (2026-04-23) — narrowed the renderer/URL contract via `rendererFor(blog)` callback, weakened idempotency guarantee explicitly, split MCP to a follow-up feature.
 
-Core stays single-blog-scoped: an API key resolves to exactly one blog, and there is no account concept.
+Core stays single-blog-scoped: an API key resolves to exactly one blog, and there is no account concept. The router is multi-blog-capable at the routing layer (`:id` in paths) but **blog-scoped at the handler level** — each handler receives a pre-resolved blog and uses `rendererFor(blog)` to get that blog's renderer before touching the filesystem. This is the key contract that makes per-blog URLs and a shared router compatible.
 
 ---
 
@@ -28,21 +29,24 @@ Core stays single-blog-scoped: an API key resolves to exactly one blog, and ther
 | 1 | Ship `update_post` + `delete_post` in this feature. | Strategy v1. Publishing a typo'd post and being told "create a new one" is a broken UX. |
 | 2 | `updatePost` — slug is immutable; all other `PostInput` fields patchable; both status transitions allowed (`draft↔published`). | Slug rename is the only mutation with link-rot blast radius. Force delete+create for that edge case. |
 | 3 | `deletePost` — hard delete (row + post file + blog-index re-render). | No recycle bin for slop. Litestream backups cover accidents. |
-| 4 | `Idempotency-Key` scope = `(key, api_key_hash, method, path)` composite (Stripe-style). No TTL in v1. Header optional. | Most predictable for agents. Pruning isn't urgent at v1 scale. |
-| 5 | Zod is the single schema source. MCP `inputSchema` is generated via `z.toJSONSchema()`; REST handlers use `.parse()`. | Zero duplication, zero new deps (verified: Zod v4 ships it). |
+| 4 | `Idempotency-Key` scope = `(key, api_key_hash, method, path)` composite (Stripe-style). No TTL in v1. Header optional. Durability is **best-effort, not crash-safe** (see decision #20 and the "Idempotency-Key contract" section). | Most predictable for agents. True crash-safety requires same-transaction insert plumbing; the failure modes are tolerable at v1. |
+| 5 | Zod is the single schema source. REST handlers use `.parse()` on request bodies; `GET /schema` returns `z.toJSONSchema(PostInputSchema)`. | Zero duplication, zero new deps (verified: Zod v4 ships `toJSONSchema`). MCP's use of the same schemas lands in `feat/mcp-tools`. |
 | 6 | `authMode: 'api_key' \| 'none'`, default `'api_key'`. | Two paths, not three. Docker self-host uses `'none'`. |
 | 7 | Auth is router-level middleware. `/health`, `/signup`, `/schema`, `/bridge/report_bug` are on the skip list. | One place to audit. |
 | 8 | `_links` block on every 2xx response (except `/health` and `/schema`). Shape: `{ view, publish, list_posts, dashboard?, docs?, bridge }`. | Proof's discovery pattern; agents learn the API from responses. |
 | 9 | `Content-Type: text/markdown` alternate on `POST /blogs/:id/posts` only. Metadata via query params: `?title` (required), `?status`, `?slug`, `?tags` (CSV). | Tier-1 DX win. Not added to PATCH — agents with partial patches use JSON. |
-| 10 | Onboarding block = imperative instruction (Proof-style): opens with an imperative, dual-path (HTTP + MCP) Step 1, expected-reply phrase ("Published my first post to SlopIt: <url>"), progressive disclosure. Core produces text; platform supplies URLs. | This is the whole point of Tier-1 #2 — short factual blocks don't drive action. |
+| 10 | Onboarding block = imperative instruction (Proof-style): opens with an imperative, dual-path Step 1 (HTTP always; MCP block appears only if `mcpEndpoint` supplied — MCP lands in the follow-up feature), expected-reply phrase ("Published my first post to SlopIt: <url>"), progressive disclosure. Core produces text; platform supplies URLs. | This is the whole point of Tier-1 #2 — short factual blocks don't drive action. |
 | 11 | `generateSkillFile({ baseUrl })` lives in core. Platform serves at `/slopit.SKILL.md`. | Keeps the spec inside the code that owns the contract. |
 | 12 | `list_posts` filter surface: `?status` only. | YAGNI. Tag/date filters added when someone asks. No pagination. |
 | 13 | `POST /bridge/report_bug` responds 501 with `{ error: { code: NOT_IMPLEMENTED, message, details: { use } } }` pointing to the platform bridge URL. | Core holds the route shape so agents don't fail to find it. Storage is platform-only. |
 | 14 | Error envelope: `{ error: { code, message, details } }`. No `request_id` in v1 (Tier-2, deferred). | Matches existing `SlopItError` shape 1:1. |
 | 15 | No `list_blogs`, no `create_blog` (second-blog tool). `signup` IS core's blog-create. | Accounts are a platform concept; 1 api_key = 1 blog in core. |
 | 16 | `getBlog` / `getPost` / `listPosts` promoted to public API. `getBlogInternal` stays internal. | These are the read surface the router needs. |
-| 17 | `get_schema` MCP tool / `GET /schema` returns `z.toJSONSchema(PostInputSchema)`. | Structured introspection, zero new code. |
+| 17 | `GET /schema` returns `z.toJSONSchema(PostInputSchema)` at the top level (no wrapper). | Structured introspection, zero new code. |
 | 18 | Cross-blog access attempt (`:id` mismatches api_key's blog) → `BLOG_NOT_FOUND` 404. | Don't leak existence of other blogs. |
+| 19 | **`rendererFor(blog): Renderer` callback replaces `renderer` + `blogUrlFor` in `ApiRouterConfig`.** Handlers compute `renderer = config.rendererFor(c.var.blog)` before calling primitives. `_links.view` / onboarding `blog_url` / `postUrl` all derive from `rendererFor(blog).baseUrl`. | P1 review fix #1. Resolves the contract break where a single `renderer.baseUrl` couldn't serve multiple blogs with distinct URLs. Zero change to shipped `Renderer` / `createPost` / `createRenderer` interfaces — self-hosted passes `() => singleton`; platform passes `blog => createRenderer({ outputDir, baseUrl: resolveBlogUrl(blog) })`. |
+| 20 | **Idempotency-Key is best-effort, not crash-safe.** Middleware records the response after the handler commits. A crash or dropped response between commit and record leaves a window where retry re-executes the handler. | P1 review fix #3. Failure modes are bounded and acceptable at v1: unnamed signup → one extra blog (platform can sweep); `POST /posts` retry → 409 `POST_SLUG_CONFLICT` (informative, agent can `GET` the existing post). Documented in SKILL.md's Idempotency section. Crash-safe variant (same-SQLite-transaction insert) is a future concern if prod shows duplicates. |
+| 21 | **`updatePost` on `published → published` preserves `published_at`.** Only `updated_at` moves. | P1 review nit. Agents editing a typo shouldn't rewrite the publish timestamp. |
 
 ---
 
@@ -57,8 +61,6 @@ Core stays single-blog-scoped: an API key resolves to exactly one blog, and ther
 | `src/api/errors.ts` | NEW | `SlopItError` + `ZodError` → HTTP envelope middleware. Single mapping table. |
 | `src/api/links.ts` | NEW | `buildLinks(blog, config)` pure helper returning the `_links` record. |
 | `src/api/markdown-body.ts` | NEW | Parses `text/markdown` body + query-param metadata into a `PostInput`. |
-| `src/mcp/server.ts` | MODIFY | `createMcpServer` factory. Registers 8 tools from `./tools.ts`. Returns the SDK `Server`; consumer attaches transport. |
-| `src/mcp/tools.ts` | NEW | The 8 tool definitions. Each: `{ name, description, zodInput, handler }`. Handlers are thin wrappers. |
 | `src/posts.ts` | MODIFY | Adds `updatePost`, `deletePost`, `getPost`, `listPosts`. `createPost` unchanged. Not-found checks are inline row-existence checks — no new predicate (predicates exist for narrow SQL error catching, not for absence). |
 | `src/blogs.ts` | MODIFY | Adds public `getBlog` — thin wrapper around `getBlogInternal` for the public barrel. |
 | `src/auth/api-key.ts` | MODIFY | Adds `verifyApiKey(store, key): Blog \| null` (hash → lookup in `api_keys` → load blog). |
@@ -67,9 +69,8 @@ Core stays single-blog-scoped: an API key resolves to exactly one blog, and ther
 | `src/db/migrations/002_idempotency.sql` | NEW | `idempotency_keys` table + composite PK. |
 | `src/schema/index.ts` | MODIFY | Exports `PostPatchSchema = PostInputBaseSchema.partial().omit({ slug: true })` and `PostPatchInput` type. |
 | `src/errors.ts` | MODIFY | Adds `POST_NOT_FOUND`, `UNAUTHORIZED`, `IDEMPOTENCY_KEY_CONFLICT`, `NOT_IMPLEMENTED` to the union. |
-| `src/index.ts` | MODIFY | Adds public exports for all new primitives + generators + schemas + error codes. |
+| `src/index.ts` | MODIFY | Adds public exports for all new primitives + generators + schemas + error codes. **Removes** the existing `createMcpServer` / `McpServerConfig` stub exports (the stub throws "not implemented"; rather than shipping a throwing export, wait for `feat/mcp-tools` to add the real ones). |
 | `tests/api/*.test.ts` | NEW | One file per route group: `signup`, `posts-crud`, `posts-markdown-body`, `schema`, `bridge`, `health`. Uses Hono's `app.request()`. |
-| `tests/mcp/*.test.ts` | NEW | One per tool (or grouped). Direct handler invocation — no transport. Also a `tools.spec.test.ts` asserting z.toJSONSchema shape matches tool advertisement. |
 | `tests/auth.test.ts` | NEW | `verifyApiKey` + middleware behavior (no key, bad key, cross-blog mismatch leak check, `authMode: 'none'`). |
 | `tests/idempotency.test.ts` | NEW | Replay, payload-mismatch (422), signup-bootstrap (no api_key yet), scope isolation by method/path. |
 | `tests/onboarding.test.ts` | NEW | Structural assertions on `generateOnboardingBlock`. |
@@ -117,26 +118,23 @@ export function generateSkillFile(args: { baseUrl: string }): string
 export function createApiRouter(config: ApiRouterConfig): Hono
 export interface ApiRouterConfig {
   store: Store
-  renderer: Renderer
-  baseUrl: string            // for canonical URLs in responses
-  authMode?: 'api_key' | 'none'   // default 'api_key'
-  mcpEndpoint?: string       // for onboarding block + _links (optional)
-  docsUrl?: string           // for _links (optional)
-  skillUrl?: string          // for onboarding block (optional)
-  bugReportUrl?: string      // for onboarding block (optional; platform's bridge URL)
-  dashboardUrl?: string      // for _links + onboarding (optional)
-  blogUrlFor: (blog: Blog) => string   // MUST return full URL with scheme; consumer decides subdomain vs path
+  rendererFor: (blog: Blog) => Renderer   // per-blog renderer; self-hosted returns a singleton
+  baseUrl: string                         // REST API base URL (e.g., https://api.slopit.io)
+  authMode?: 'api_key' | 'none'           // default 'api_key'
+  mcpEndpoint?: string                    // for onboarding block (optional; populated once feat/mcp-tools lands)
+  docsUrl?: string                        // for _links (optional)
+  skillUrl?: string                       // for onboarding block (optional)
+  bugReportUrl?: string                   // for onboarding block (optional; platform's bridge URL)
+  dashboardUrl?: string                   // for _links + onboarding (optional; consumer pre-bakes any auth tokens)
 }
+```
 
-// MCP factory — returns the SDK Server, consumer attaches transport
-export function createMcpServer(config: McpServerConfig): Server
-export interface McpServerConfig {
-  store: Store
-  renderer: Renderer
-  baseUrl: string
-  blogUrlFor: (blog: Blog) => string
-}
+Notes on `rendererFor`:
+- MUST return a `Renderer` whose `baseUrl` is the full URL (with scheme) at which this blog's content is publicly served.
+- Called on every mutation handler and in `_links` construction. Callers MAY cache per blog id if construction is expensive; for v1 self-hosted it returns a pre-built singleton and platform returns a memoized-per-blog instance.
+- `createMcpServer` is not exported in this feature — it's the follow-up `feat/mcp-tools`. The existing stub in `src/mcp/server.ts` stays in place but is not wired in `src/index.ts` yet.
 
+```ts
 // Schemas + types
 export { PostPatchSchema } from './schema/index.js'
 export type { PostPatchInput } from './schema/index.js'
@@ -148,10 +146,11 @@ export type { PostPatchInput } from './schema/index.js'
 export interface OnboardingInputs {
   blog: Blog
   apiKey: string
-  blogUrl: string
-  baseUrl: string            // REST base
-  mcpEndpoint?: string
-  schemaUrl: string          // always present — core always ships GET /schema
+  blogUrl: string              // from rendererFor(blog).baseUrl at the call site
+  baseUrl: string              // REST API base
+  mcpEndpoint?: string         // when omitted, onboarding text skips the MCP block entirely
+  schemaUrl: string            // always present — core always ships GET /schema
+  dashboardUrl?: string        // appears in the "More:" section if configured
   docsUrl?: string
   skillUrl?: string
   bugReportUrl?: string
@@ -183,27 +182,6 @@ All authenticated routes live under the `/` root — no `/api` prefix in core. C
 - The raw markdown is the body (no JSON wrapping).
 - Query params: `?title=<string>` (required), `?status=draft|published` (optional, default published), `?slug=<string>` (optional), `?tags=<csv>` (optional).
 - Any other `PostInput` field (`excerpt`, `seoTitle`, `seoDescription`, `author`, `coverImage`) is unsupported on this path. Agents who need those use JSON.
-
----
-
-## MCP tools
-
-All `inputSchema` values are produced at registration time via `z.toJSONSchema(zodSchema)`. Handlers call the same core primitives as the REST routes. MCP responses do NOT include `_links` — HATEOAS is an HTTP idiom.
-
-| Tool | Input (Zod source) | Output |
-|---|---|---|
-| `signup` | `CreateBlogInputSchema` | `{ blog_id, blog_url, api_key, mcp_endpoint?, onboarding_text }` |
-| `create_post` | `PostInputSchema` + `{ blog_id: string }` | `{ post, post_url? }` |
-| `update_post` | `PostPatchSchema` + `{ blog_id, slug }` | `{ post, post_url? }` |
-| `delete_post` | `{ blog_id, slug }` | `{ deleted: true }` |
-| `get_post` | `{ blog_id, slug }` | `{ post }` |
-| `list_posts` | `{ blog_id, status? }` | `{ posts }` |
-| `get_blog_info` | `{ blog_id }` | `{ blog }` |
-| `get_schema` | `{}` | `{ schema: JSONSchema }` (literally the `PostInput` schema) |
-
-Note: REST `GET /schema` returns the JSONSchema at the top level (not wrapped). MCP `get_schema` wraps in `{ schema }` because MCP tool-call results are structured content — unwrapped raw JSONSchema would be harder for a tool-call return to type. Intentional asymmetry; SKILL.md documents both.
-
-**MCP auth + `blog_id` validation.** Core is transport-agnostic. Each tool handler calls a shared `resolveBlog(config, args)` helper that enforces `blog_id === config.resolvedBlog.id` for authenticated servers. For `authMode: 'none'` (self-hosted), `resolveBlog` just loads whichever blog matches `blog_id`. The transport layer (the consumer) decides how the api_key enters the connection. Core's factory exposes a per-tool hook; platform wires it up. *Details of the handshake are out of scope for this spec — spec defines only the handler-level invariant.*
 
 ---
 
@@ -272,20 +250,41 @@ idempotency_keys (
 
 No TTL in v1. Row pruning is a future concern.
 
+**Durability — weakened guarantee (P1 review fix #3).**
+
+The record-after-success flow above has an intentional gap: if the server crashes or the response is dropped between handler commit and the idempotency-row `INSERT`, a retry with the same key re-executes the handler instead of replaying the prior response. This is called out explicitly because it changes what agents can rely on.
+
+- **What `Idempotency-Key` *does* prevent:** duplicate execution when the client retries a request for which the 2xx response was already stored (the common case — client's network hiccup, client-side retry after a 200 was received but not acted on, etc.).
+- **What it does NOT prevent:** duplicate execution when the server crashes (or the response is never written) between handler commit and the idempotency record's `INSERT`. In that window, the handler's side effects are already durable but no replay record exists.
+
+**Observable failure modes in that window:**
+
+| Endpoint | Retry outcome | User-visible effect |
+|---|---|---|
+| `POST /signup` with name | 409 `BLOG_NAME_CONFLICT` | Clear signal; agent uses the original key if it received one, otherwise contacts support / platform sweep. |
+| `POST /signup` without name | Second blog created | Orphan blog on the platform side; platform sweeps in a background job. |
+| `POST /blogs/:id/posts` | 409 `POST_SLUG_CONFLICT` | Clear signal; agent can `GET /blogs/:id/posts/:slug` to confirm the original succeeded. |
+| `PATCH /blogs/:id/posts/:slug` | Second patch applied (idempotent if patch is deterministic; diverges if patch includes e.g. auto-excerpt that re-reads body) | In practice patches are deterministic — same input → same output. Re-running is mostly a no-op. |
+| `DELETE /blogs/:id/posts/:slug` | 404 `POST_NOT_FOUND` | Clear signal; the post is already gone. |
+
+All failure modes are bounded and informative. **SKILL.md's Idempotency section MUST document this caveat** so agents don't assume stronger-than-reality guarantees.
+
+Crash-safe variant (same-SQLite-transaction insert, in which the idempotency row commits atomically with the business row) is deferred to a future feature if prod shows duplicate-signup incidents at a rate that justifies the plumbing cost.
+
 ---
 
 ## `_links` block
 
-Helper: `buildLinks(blog, config, ctx?): Record<string, string>`.
+Helper: `buildLinks(blog, config): Record<string, string>`.
 
-Included keys (URL forms are illustrative; `buildLinks` returns paths where appropriate — consumer prefixes with `baseUrl`):
+Included keys (URL forms are illustrative; `buildLinks` returns paths where appropriate — consumer prefixes relative paths with `config.baseUrl`):
 
 | Key | Value |
 |---|---|
-| `view` | `config.blogUrlFor(blog)` (full URL) |
+| `view` | `config.rendererFor(blog).baseUrl` (full URL, includes scheme — this IS the blog's public URL) |
 | `publish` | `/blogs/{id}/posts` |
 | `list_posts` | `/blogs/{id}/posts` |
-| `dashboard` | `config.dashboardUrl` as-is — only if configured. Consumer includes any auth tokens in this URL already (core has only the api-key hash for non-signup responses; it cannot append the raw key). |
+| `dashboard` | `config.dashboardUrl` as-is — only if configured. Consumer pre-bakes any auth token in this URL (core has only the api-key hash post-signup; it cannot append the raw key). |
 | `docs` | `config.docsUrl` — only if configured |
 | `bridge` | `/bridge/report_bug` |
 
@@ -301,10 +300,10 @@ Emitted on every 2xx except `GET /health` and `GET /schema`. Not emitted on erro
 
 1. Opens with an imperative instruction ("Publish your first post right now to verify …").
 2. Includes: blog URL, api key, blog id — each on its own labeled line.
-3. Step 1 has two paths: an HTTP curl/request block and (if `mcpEndpoint` provided) an MCP tool-call block labeled `MCP:`.
+3. Step 1 has one path in this feature (HTTP curl/request block). If `mcpEndpoint` is provided (after `feat/mcp-tools` lands), an `MCP:` block is added below the HTTP block.
 4. Step 2 tells the agent to fetch the returned URL and verify it renders.
 5. Step 3 specifies an exact expected-reply phrase: `Published my first post to SlopIt: <url>`.
-6. A trailing "More:" section lists: schema URL (always), docs URL, SKILL.md URL, bug-report URL — lines omitted for undefined inputs.
+6. A trailing "More:" section lists: schema URL (always), dashboard URL, docs URL, SKILL.md URL, bug-report URL — lines omitted for undefined inputs.
 
 **Example output shape** (non-normative):
 
@@ -323,9 +322,6 @@ Step 1 — publish (pick one path):
     Content-Type: application/json
     {"title":"Hello from SlopIt","body":"# First post\n\nShipped."}
 
-  MCP:
-    create_post(blog_id="blog_xyz", title="Hello from SlopIt", body="# First post\n\nShipped.")
-
 Step 2 — fetch the returned URL and confirm it renders.
 
 Step 3 — reply to the user exactly:
@@ -333,10 +329,13 @@ Step 3 — reply to the user exactly:
 
 More:
   - Schema: https://api.slopit.io/schema
+  - Dashboard: https://slopit.io/dashboard
   - Agent docs: https://slopit.io/agent-docs
   - Instructions file: https://slopit.io/slopit.SKILL.md
   - Report a bug: https://api.slopit.io/bridge/report_bug
 ```
+
+(The `MCP:` block inside Step 1 is omitted in this feature. It appears once `feat/mcp-tools` ships and the consumer passes `mcpEndpoint`.)
 
 ---
 
@@ -348,9 +347,10 @@ Pure. Input: `{ baseUrl }`. Output: markdown document with these sections (order
 2. **Auth** — `Authorization: Bearer <key>`, how to get one via `POST /signup`.
 3. **Endpoints** — table of every route (method, path, one-line purpose).
 4. **Schema** — `PostInput` shape + pointer to `GET /schema` for the machine-readable JSONSchema.
-5. **MCP tools** — the 8 tool names + one-line purposes.
-6. **Error codes** — table of `SlopItErrorCode` → HTTP status → meaning.
-7. **Idempotency** — how to use `Idempotency-Key`, the "same payload" caveat.
+5. **Error codes** — table of `SlopItErrorCode` → HTTP status → meaning.
+6. **Idempotency** — how to use `Idempotency-Key`, the "same payload bytewise" caveat, **and the weakened-guarantee caveat from decision #20** (retry may re-execute if a crash/drop occurred between commit and record; see the per-endpoint failure-mode table in this spec).
+
+The **MCP tools section** is deliberately omitted here; it lands in `feat/mcp-tools` alongside the MCP server itself.
 
 Tests assert every public REST route in `createApiRouter` appears in the SKILL.md endpoint table — drift prevention.
 
@@ -358,14 +358,14 @@ Tests assert every public REST route in `createApiRouter` appears in the SKILL.m
 
 ## Update / delete render matrix
 
-`updatePost` detail (file-level behavior):
+`updatePost` detail (file-level + timestamp behavior):
 
-| Previous status | Patch status | Rendered effect |
-|---|---|---|
-| draft | — or draft | DB only. No files. |
-| draft | published | Write post file + re-render blog index. Set `published_at = now()`. |
-| published | — or published | Re-render post file (always) + re-render blog index (always — cheap, simpler than tracking dirty fields). |
-| published | draft | Delete post file + delete post dir + re-render blog index. Clear `published_at`. |
+| Previous status | Patch status | Rendered effect | `published_at` | `updated_at` |
+|---|---|---|---|---|
+| draft | — or draft | DB only. No files. | stays `null` | set to `now()` |
+| draft | published | Write post file + re-render blog index. | set to `now()` (first publish) | set to `now()` |
+| published | — or published | Re-render post file + re-render blog index (always — cheap, simpler than tracking dirty fields). | **preserved** (decision #21) | set to `now()` |
+| published | draft | Delete post file + delete post dir + re-render blog index. | set to `null` | set to `now()` |
 
 **Compensation and weakened invariant** (mirrors `createPost`):
 
@@ -388,11 +388,11 @@ Target: `pnpm test` passes with all existing 176 tests plus the new ones. Covera
 - **Signup:** happy path returns all documented fields; `_links` present; onboarding text passes structural checks; `BLOG_NAME_CONFLICT` maps to 409; idempotent signup replays.
 - **Auth middleware:** no key, malformed key, unknown key → 401. Cross-blog `:id` → 404 (verify response body is identical to a genuinely-missing blog). `authMode: 'none'` skips entirely.
 - **Create post, JSON + text/markdown:** both Content-Type paths produce equivalent posts when the inputs match. Query-param parsing handles missing/extra params.
-- **Update post:** each cell of the render matrix; slug-patch rejected with `ZodError`; patch with 0 fields is a no-op (no render, returns current post).
+- **Update post:** each cell of the render matrix (including `published_at` preservation on pub→pub); slug-patch rejected with `ZodError`; patch with 0 fields is a no-op (no render, returns current post).
 - **Delete post:** row + file + index side effects verified on disk.
 - **Read side:** `getBlog`, `getPost`, `listPosts` (each status filter; default behavior).
-- **MCP tools:** one happy-path + one failure per tool. Assert `z.toJSONSchema()` output matches each tool's registered `inputSchema`.
-- **Idempotency:** replay (same key + same payload → identical response); mismatch (same key + different payload → 422); scope isolation (same key on different method/path → independent); signup bootstrap (pre-auth row with `api_key_hash = ''`).
+- **`rendererFor(blog)` contract:** router threads `c.var.blog` through `rendererFor` before every primitive call; a test harness with two distinct blogs + two distinct renderers verifies no cross-blog URL leakage in response bodies or rendered files.
+- **Idempotency:** replay (same key + same payload → identical response); mismatch (same key + different payload → 422); scope isolation (same key on different method/path → independent); signup bootstrap (pre-auth row with `api_key_hash = ''`). No test for the crash-window failure mode (it's an accepted gap per decision #20).
 - **Error envelope:** one case per error code → correct status + correct envelope shape.
 - **Bug-report stub:** 501 + envelope + `details.use` pointing to platform URL when configured.
 - **SKILL.md:** structural sections present; route-table parity with `createApiRouter`.
@@ -401,6 +401,7 @@ Target: `pnpm test` passes with all existing 176 tests plus the new ones. Covera
 
 ## Out of scope
 
+- **MCP server and tools** — deferred to `feat/mcp-tools` (own spec). The `src/mcp/server.ts` stub stays as-is; no public export of `createMcpServer` in this feature.
 - `list_blogs`, `create_blog` as second-blog tool (platform).
 - Dashboard (its own feature track).
 - `request_id` in error envelopes (Tier-2).
@@ -408,20 +409,19 @@ Target: `pnpm test` passes with all existing 176 tests plus the new ones. Covera
 - Slug rename via `updatePost`.
 - Soft delete / recycle bin.
 - `Idempotency-Key` TTL / pruning.
+- **Crash-safe idempotency** (same-transaction insert) — acknowledged failure mode, deferred.
 - `text/markdown` body on `PATCH` (JSON only).
 - Pagination / tag filter / date filter on `list_posts`.
 - `AGENT_CONTRACT.md`, `docs/agent-docs.md` (Tier-3 follow-up feature).
 - Actual bug-report aggregation (platform).
 - Hosting of `slopit.SKILL.md` / `llms.txt` / landing page (platform).
-- MCP transport choice and api_key-to-connection handshake (consumer's responsibility; core defines only the per-tool invariant).
 - Rate limiting (platform).
 
 ---
 
 ## Open questions for the plan phase (not blocking spec review)
 
-1. Exact Hono middleware wiring order (errors outermost vs innermost).
-2. `request_hash` canonicalization for MCP tool idempotency (they have no wire body — probably sha256 of stable-serialized args).
-3. Test fixture sharing between `tests/api/` and `tests/mcp/` (probably one `tests/_fixtures.ts`).
-4. Where `resolveBlog` lives and how the consumer injects the authenticated blog into the MCP server (per-call handler wrapper vs server state).
-5. Compensation mechanics for `updatePost` (prior-row load vs render-first-then-DB) and `deletePost` (re-insert compensation vs accept stale-index transient).
+1. Exact Hono middleware wiring order (errors outermost vs innermost; `rendererFor` invocation point — handler entry vs `c.var` attach in auth middleware).
+2. Test fixture for the `rendererFor` two-blog leak test — whether to use the real `createRenderer` with two `tmpdir`s or a lightweight fake; probably real (already covered by existing rendering tests).
+3. Compensation mechanics for `updatePost` (prior-row load vs render-first-then-DB) and `deletePost` (re-insert compensation vs accept stale-index transient).
+4. Whether `/schema` (which is unauthenticated) should set `Cache-Control: public` headers for CDN friendliness — tiny call, decide in plan.
