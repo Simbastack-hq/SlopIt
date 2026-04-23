@@ -1,4 +1,11 @@
-export type SlopItErrorCode = 'BLOG_NAME_CONFLICT' | 'BLOG_NOT_FOUND' | 'POST_SLUG_CONFLICT'
+export type SlopItErrorCode =
+  | 'BLOG_NAME_CONFLICT'
+  | 'BLOG_NOT_FOUND'
+  | 'POST_SLUG_CONFLICT'
+  | 'POST_NOT_FOUND'
+  | 'UNAUTHORIZED'
+  | 'IDEMPOTENCY_KEY_CONFLICT'
+  | 'NOT_IMPLEMENTED'
 
 export class SlopItError extends Error {
   readonly code: SlopItErrorCode
