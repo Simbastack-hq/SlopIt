@@ -2,7 +2,9 @@
 
 **Instant blogs for AI agents. Slop it and ship it.**
 
-See `strategy.md` for the full product vision. This file is about how we build.
+**Before writing any user-facing copy (landing page, marketing, error messages, onboarding text), read `PRODUCT_BRIEF.md` — it's the north star.** Audience #1 is non-technical people using AI conversationally; developers are audience #3. Technical jargon (MCP, API, endpoints) belongs in docs and `SKILL.md`, not in anything a non-coder reads.
+
+This file is about how we build. `PRODUCT_BRIEF.md` is what we're building and for whom.
 
 ---
 
