@@ -8,6 +8,8 @@ import { SlopItError } from '../errors.js'
 import { createBlog, createApiKey } from '../blogs.js'
 import { generateOnboardingBlock } from '../onboarding.js'
 import { buildLinks } from './links.js'
+import { createPost } from '../posts.js'
+import { parseMarkdownBody } from './markdown-body.js'
 
 type Vars = { blog: Blog; apiKeyHash: string }
 
@@ -66,5 +68,27 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     })
   })
 
-  // Remaining routes land in later tasks (Task 18+)
+  // Create a post
+  app.post('/blogs/:id/posts', async (c) => {
+    const contentType = c.req.header('Content-Type') ?? ''
+    const renderer = config.rendererFor(c.var.blog)
+
+    let input: Parameters<typeof createPost>[3]
+    if (contentType.startsWith('text/markdown')) {
+      const body = await c.req.text()
+      const query = new URL(c.req.url).searchParams
+      input = parseMarkdownBody({ body, query })
+    } else {
+      input = await c.req.json()
+    }
+
+    const { post, postUrl } = createPost(config.store, renderer, c.var.blog.id, input)
+    return c.json({
+      post,
+      ...(postUrl !== undefined ? { post_url: postUrl } : {}),
+      _links: buildLinks(c.var.blog, config),
+    })
+  })
+
+  // Remaining routes land in later tasks (Task 19+)
 }
