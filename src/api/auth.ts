@@ -1,4 +1,4 @@
-import type { MiddlewareHandler } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 import type { Store } from '../db/store.js'
 import type { Blog } from '../schema/index.js'
 import { SlopItError } from '../errors.js'
@@ -10,9 +10,32 @@ export interface AuthMiddlewareConfig {
   authMode: 'api_key' | 'none'
 }
 
-const SKIP_PATHS = new Set(['/health', '/signup', '/schema', '/bridge/report_bug'])
+// Skip list keyed by route path relative to this subapp, NOT the full
+// URL. Using a relative path means the router still behaves correctly
+// when mounted under a prefix (e.g. app.route('/api', createApiRouter(...))).
+const SKIP_RELATIVE_PATHS = new Set(['/health', '/signup', '/schema', '/bridge/report_bug'])
 
 type AuthVars = { blog: Blog; apiKeyHash: string }
+
+/**
+ * Derive this subapp's mount prefix from the middleware's own matched
+ * routePath. When registered via `app.use('*', ...)`, Hono sets
+ * `c.req.routePath` to `'/*'` at root mount, `/api/*` when mounted at
+ * `/api`, etc. Stripping the trailing `/*` gives us the prefix.
+ *
+ * Everything downstream of this file (skip list, :id extraction) works
+ * on the *relative* path so mounting is transparent.
+ */
+function relativePath(c: Context): string {
+  const rp = c.req.routePath
+  const mount = rp.endsWith('/*') ? rp.slice(0, -2) : ''
+  return mount && c.req.path.startsWith(mount) ? c.req.path.slice(mount.length) : c.req.path
+}
+
+function extractIdFromRelPath(relPath: string): string | undefined {
+  const m = relPath.match(/^\/(?:blogs|b)\/([^/?]+)/)
+  return m ? m[1] : undefined
+}
 
 /**
  * Resolves the authenticated blog and attaches it (plus the api-key hash
@@ -23,25 +46,22 @@ type AuthVars = { blog: Blog; apiKeyHash: string }
  * verifyApiKey. On null → UNAUTHORIZED 401.
  *
  * For authMode='none' (self-hosted): loads blog from the :id route
- * param. No token required. apiKeyHash is the empty string (also used
- * by the idempotency middleware's signup-bootstrap case).
+ * param. No token required. apiKeyHash is the empty string.
  *
  * Cross-blog guard: if :id doesn't match the resolved blog's id →
  * BLOG_NOT_FOUND (spec decision #18 — don't leak existence).
+ *
+ * Mount-safety: skip-list matching and :id extraction both operate on
+ * the path relative to this subapp, so the router works identically
+ * whether it is served at root or mounted under a prefix.
  */
-/** Extract :id from /blogs/:id[/...] or /b/:id[/...] path segments. */
-function extractIdFromPath(path: string): string | undefined {
-  const m = path.match(/^\/(?:blogs|b)\/([^/?]+)/)
-  return m ? m[1] : undefined
-}
-
 export function authMiddleware(config: Pick<AuthMiddlewareConfig, 'store' | 'authMode'>): MiddlewareHandler<{ Variables: AuthVars }> {
   return async (c, next) => {
-    if (c.req.method === 'OPTIONS' || SKIP_PATHS.has(c.req.path)) {
-      return next()
-    }
-    // c.req.param('id') is undefined in global middleware; extract from path.
-    const idParam = c.req.param('id') ?? extractIdFromPath(c.req.path)
+    if (c.req.method === 'OPTIONS') return next()
+    const relPath = relativePath(c)
+    if (SKIP_RELATIVE_PATHS.has(relPath)) return next()
+
+    const idParam = extractIdFromRelPath(relPath)
 
     if (config.authMode === 'none') {
       if (idParam === undefined) return next()

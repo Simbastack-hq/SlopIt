@@ -64,14 +64,21 @@ describe('POST /signup', () => {
     expect(body.error.code).toBe('BLOG_NAME_CONFLICT')
   })
 
-  it('Idempotency-Key replays the same signup', async () => {
+  it('Idempotency-Key does NOT replay /signup (pre-auth scope would leak api_key across callers)', async () => {
+    // Security: signup has no caller identity yet, so the idempotency
+    // middleware intentionally skips storage/replay for it — a second
+    // caller submitting the same Idempotency-Key must NOT receive the
+    // first caller's api_key. See src/api/idempotency.ts for the
+    // apiKeyHash === '' early-return. Retries collide on the name
+    // (409), which is correct: the first call created the blog.
     const app = makeApp()
     const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': 'signup-k1' }
     const r1 = await app.request('/signup', { method: 'POST', headers, body: JSON.stringify({ name: 'idem' }) })
     const r2 = await app.request('/signup', { method: 'POST', headers, body: JSON.stringify({ name: 'idem' }) })
     expect(r1.status).toBe(200)
-    expect(r2.status).toBe(200)
-    const b1 = await r1.json(); const b2 = await r2.json()
-    expect(b1).toEqual(b2)
+    expect(r2.status).toBe(409)
+    const b1 = await r1.json() as { api_key: string }
+    const raw2 = await r2.text()
+    expect(raw2).not.toContain(b1.api_key)
   })
 })

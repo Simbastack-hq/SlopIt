@@ -18,15 +18,18 @@ type StoredRow = {
 
 /**
  * Idempotency-Key middleware. Applies to POST/PATCH/DELETE requests
- * carrying an Idempotency-Key header. Replays the stored response on
- * match; 422 on mismatched payload; pass-through with record-on-2xx
- * otherwise. Weakened guarantee per spec decision #20 — recording
- * happens after the handler commits, so a crash window exists. See the
- * spec's per-endpoint failure-mode table and SKILL.md.
+ * carrying an Idempotency-Key header from an AUTHENTICATED caller. Replays
+ * the stored response on match; 422 on mismatched payload; pass-through
+ * with record-on-2xx otherwise. Weakened guarantee per spec decision #20
+ * — recording happens after the handler commits, so a crash window
+ * exists. See the spec's per-endpoint failure-mode table and SKILL.md.
  *
- * Scope = (key, api_key_hash, method, path). Depends on the auth
- * middleware (or a test stand-in) having set c.var.apiKeyHash. For
- * /signup the hash is '' (pre-auth bootstrap).
+ * Scope = (key, api_key_hash, method, path). Requires c.var.apiKeyHash to
+ * be a non-empty, caller-bound value. Unauthenticated mutations (e.g.
+ * /signup) have no pre-auth identity, so sharing a scope across callers
+ * would let a second caller replay the first caller's response — which
+ * in /signup's case includes the api_key. Such requests pass through
+ * without storage or replay; retrying /signup creates a fresh blog.
  */
 export function idempotencyMiddleware(config: IdempotencyMiddlewareConfig): MiddlewareHandler<{ Variables: { apiKeyHash: string } }> {
   return async (c, next) => {
@@ -34,7 +37,10 @@ export function idempotencyMiddleware(config: IdempotencyMiddlewareConfig): Midd
     const key = c.req.header('Idempotency-Key')
     if (!key) return next()
 
+    // No caller identity → skip idempotency entirely (see doc block above).
     const apiKeyHash = c.var.apiKeyHash ?? ''
+    if (!apiKeyHash) return next()
+
     const method = c.req.method
     const path = c.req.path
     const contentType = c.req.header('Content-Type') ?? ''

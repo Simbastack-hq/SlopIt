@@ -46,6 +46,19 @@ export function respondError(c: Context, err: unknown): Response {
     }
     return c.json(body, 400)
   }
+  if (err instanceof SyntaxError) {
+    // Malformed JSON body. Hono's c.req.json() / Request#json() throw
+    // SyntaxError when the body is not valid JSON. Map to 400 so callers
+    // can distinguish a protocol-level parse failure from a schema one.
+    const body: ErrorBody = {
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'Malformed JSON body',
+        details: { message: err.message },
+      },
+    }
+    return c.json(body, 400)
+  }
   if (err instanceof SlopItError) {
     const status: ContentfulStatusCode = CODE_TO_STATUS[err.code] ?? 500
     const body: ErrorBody = {
