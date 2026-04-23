@@ -8,8 +8,10 @@ import { SlopItError } from '../errors.js'
 import { createBlog, createApiKey } from '../blogs.js'
 import { generateOnboardingBlock } from '../onboarding.js'
 import { buildLinks } from './links.js'
-import { createPost } from '../posts.js'
+import { createPost, getPost, listPosts } from '../posts.js'
 import { parseMarkdownBody } from './markdown-body.js'
+
+const StatusQuerySchema = z.enum(['draft', 'published']).optional()
 
 type Vars = { blog: Blog; apiKeyHash: string }
 
@@ -90,5 +92,18 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     })
   })
 
-  // Remaining routes land in later tasks (Task 19+)
+  // List posts
+  app.get('/blogs/:id/posts', (c) => {
+    const status = StatusQuerySchema.parse(c.req.query('status'))
+    const posts = listPosts(config.store, c.var.blog.id, status !== undefined ? { status } : undefined)
+    return c.json({ posts, _links: buildLinks(c.var.blog, config) })
+  })
+
+  // Single post
+  app.get('/blogs/:id/posts/:slug', (c) => {
+    const post = getPost(config.store, c.var.blog.id, c.req.param('slug'))
+    return c.json({ post, _links: buildLinks(c.var.blog, config) })
+  })
+
+  // Remaining routes land in later tasks (Task 20+)
 }
