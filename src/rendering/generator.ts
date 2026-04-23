@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getBlogInternal } from '../blogs.js'
 import type { Store } from '../db/store.js'
@@ -17,6 +17,24 @@ export interface Renderer {
   readonly baseUrl: string
   renderPost(blogId: string, post: Post): void
   renderBlog(blogId: string): void
+}
+
+/**
+ * Renderer contract for the mutation primitives (updatePost, deletePost).
+ * Extends Renderer with the file-cleanup hook they require to preserve
+ * the spec's success invariant (rendered files match post-call state).
+ * Shipped `createRenderer` returns MutationRenderer. Consumers who
+ * implement a custom Renderer (e.g., object-storage instead of disk)
+ * must extend it to MutationRenderer before passing to update/delete.
+ */
+export interface MutationRenderer extends Renderer {
+  /**
+   * Remove the post directory for (blogId, slug). ENOENT-tolerant —
+   * a missing directory is the desired end state and should not throw.
+   * Hard I/O failures (EACCES, EIO) SHOULD throw so callers can apply
+   * compensation.
+   */
+  removePostFiles(blogId: string, slug: string): void
 }
 
 /**
@@ -121,7 +139,7 @@ export function ensureCss(cssSourcePath: string, blogOutputDir: string): void {
   copyFileSync(cssSourcePath, join(blogOutputDir, 'style.css'))
 }
 
-export function createRenderer(config: RendererConfig): Renderer {
+export function createRenderer(config: RendererConfig): MutationRenderer {
   const theme = loadTheme('minimal')
 
   const displayName = (blog: Blog): string => blog.name ?? blog.id
@@ -175,6 +193,10 @@ export function createRenderer(config: RendererConfig): Renderer {
       })
 
       writeFileSync(join(blogDir, 'index.html'), html, 'utf8')
+    },
+
+    removePostFiles(blogId, slug) {
+      rmSync(join(config.outputDir, blogId, slug), { recursive: true, force: true })
     },
   }
 }

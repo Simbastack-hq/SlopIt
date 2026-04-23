@@ -2,8 +2,9 @@ import { getBlogInternal } from './blogs.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId, generateSlug } from './ids.js'
-import type { Renderer } from './rendering/generator.js'
+import type { Renderer, MutationRenderer } from './rendering/generator.js'
 import { PostInputSchema, type Post, type PostInput } from './schema/index.js'
+import { PostPatchSchema, type PostPatchInput } from './schema/index.js'
 
 /**
  * Pure predicate: was this error SQLite's UNIQUE constraint failing on
@@ -345,4 +346,151 @@ export function createPost(
   }
 
   return { post }
+}
+
+/**
+ * Patch-update an existing post. Slug is immutable (enforced at the Zod
+ * boundary via PostPatchSchema.strict()). Render side effects follow
+ * the matrix in the spec (decision #2, #21):
+ *
+ *   draft→draft      : DB only
+ *   draft→published  : write files + index; set published_at=now
+ *   published→published : re-render files + index; keep published_at, bump updated_at
+ *   published→draft  : delete files; re-render index; clear published_at
+ *
+ * Compensation mirrors createPost: on render failure the prior row is
+ * restored via a reverse UPDATE and the original render error bubbles.
+ * See spec's weakened invariant.
+ */
+export function updatePost(
+  store: Store,
+  renderer: MutationRenderer,
+  blogId: string,
+  slug: string,
+  patch: PostPatchInput,
+): { post: Post; postUrl?: string } {
+  const parsed = PostPatchSchema.parse(patch)
+
+  // Ensure blog exists (throws BLOG_NOT_FOUND)
+  getBlogInternal(store, blogId)
+
+  // Load prior row — throws POST_NOT_FOUND if missing
+  const prior = getPost(store, blogId, slug)
+
+  // Empty patch → no-op fast path
+  const patchKeys = Object.keys(parsed)
+  if (patchKeys.length === 0) {
+    return prior.status === 'published'
+      ? { post: prior, postUrl: renderer.baseUrl + '/' + prior.slug + '/' }
+      : { post: prior }
+  }
+
+  // Merge patched fields into prior row
+  const merged = {
+    title: parsed.title ?? prior.title,
+    body: parsed.body ?? prior.body,
+    excerpt: 'excerpt' in parsed ? parsed.excerpt : prior.excerpt,
+    tags: parsed.tags ?? prior.tags,
+    status: parsed.status ?? prior.status,
+    seoTitle: 'seoTitle' in parsed ? parsed.seoTitle : prior.seoTitle,
+    seoDescription: 'seoDescription' in parsed ? parsed.seoDescription : prior.seoDescription,
+    author: 'author' in parsed ? parsed.author : prior.author,
+    coverImage: 'coverImage' in parsed ? parsed.coverImage : prior.coverImage,
+  }
+
+  // Determine published_at by transition (decision #21 preserves on pub→pub)
+  const oldStatus = prior.status
+  const newStatus = merged.status
+  let publishedAt: string | null
+  if (oldStatus === 'draft' && newStatus === 'published') {
+    publishedAt = new Date().toISOString()
+  } else if (oldStatus === 'published' && newStatus === 'draft') {
+    publishedAt = null
+  } else {
+    publishedAt = prior.publishedAt
+  }
+
+  // Apply DB UPDATE (updated_at bumps automatically? No — set explicitly)
+  const nowIso = new Date().toISOString()
+  const tagsJson = JSON.stringify(merged.tags)
+  store.db
+    .prepare(
+      `UPDATE posts
+          SET title = ?, body = ?, excerpt = ?, tags = ?, status = ?,
+              seo_title = ?, seo_description = ?, author = ?, cover_image = ?,
+              published_at = ?, updated_at = ?
+        WHERE blog_id = ? AND slug = ?`,
+    )
+    .run(
+      merged.title,
+      merged.body,
+      merged.excerpt ?? null,
+      tagsJson,
+      merged.status,
+      merged.seoTitle ?? null,
+      merged.seoDescription ?? null,
+      merged.author ?? null,
+      merged.coverImage ?? null,
+      publishedAt,
+      nowIso,
+      blogId,
+      slug,
+    )
+
+  // Hydrate the updated row
+  const updated = getPost(store, blogId, slug)
+
+  // Render side effects per matrix, with compensation
+  const compensate = () => {
+    // Reverse UPDATE back to prior state
+    store.db
+      .prepare(
+        `UPDATE posts
+            SET title = ?, body = ?, excerpt = ?, tags = ?, status = ?,
+                seo_title = ?, seo_description = ?, author = ?, cover_image = ?,
+                published_at = ?, updated_at = ?
+          WHERE blog_id = ? AND slug = ?`,
+      )
+      .run(
+        prior.title,
+        prior.body,
+        prior.excerpt ?? null,
+        JSON.stringify(prior.tags),
+        prior.status,
+        prior.seoTitle ?? null,
+        prior.seoDescription ?? null,
+        prior.author ?? null,
+        prior.coverImage ?? null,
+        prior.publishedAt,
+        prior.updatedAt,
+        blogId,
+        slug,
+      )
+  }
+
+  try {
+    if (oldStatus === 'draft' && newStatus === 'draft') {
+      // no file ops
+    } else if (newStatus === 'published') {
+      renderer.renderPost(blogId, updated)
+      renderer.renderBlog(blogId)
+    } else if (oldStatus === 'published' && newStatus === 'draft') {
+      // IMPORTANT ordering (P1 fix): renderBlog FIRST. It reads the DB
+      // where status is now 'draft', so the post is excluded from the
+      // index. Then delete the post files. If renderBlog fails, the
+      // catch compensates (DB back to 'published') and files still
+      // exist → consistent pre-call state. If file deletion fails after
+      // a successful renderBlog, the orphan file is tolerable per spec
+      // (it 404s on the direct URL but isn't in the index).
+      renderer.renderBlog(blogId)
+      renderer.removePostFiles(blogId, slug)
+    }
+  } catch (renderErr) {
+    try { compensate() } catch { /* best-effort; weakened invariant */ }
+    throw renderErr
+  }
+
+  return newStatus === 'published'
+    ? { post: updated, postUrl: renderer.baseUrl + '/' + updated.slug + '/' }
+    : { post: updated }
 }

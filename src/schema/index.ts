@@ -45,10 +45,21 @@ export type PostInput = z.input<typeof PostInputSchema>
 // Patch schema for updatePost — all PostInput fields become optional,
 // slug is explicitly rejected (use delete+recreate for URL changes; see
 // spec decision #2). No superRefine needed: an empty patch is valid.
-export const PostPatchSchema = PostInputBaseSchema
-  .omit({ slug: true })
-  .partial()
-  .strict()
+// NOTE: we rebuild without defaults so absent fields stay undefined —
+// the implementation uses Object.keys(parsed) to detect a no-op patch
+// and `parsed.field ?? prior.field` to merge; inherited defaults would
+// corrupt both checks.
+export const PostPatchSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  body: z.string().trim().min(1).optional(),
+  excerpt: z.string().max(300).optional(),
+  tags: z.array(z.string()).optional(),
+  status: z.enum(['draft', 'published']).optional(),
+  seoTitle: z.string().max(200).optional(),
+  seoDescription: z.string().max(300).optional(),
+  author: z.string().max(100).optional(),
+  coverImage: z.url().optional(),
+}).strict()
 export type PostPatchInput = z.input<typeof PostPatchSchema>
 
 // Post — what core stores and returns.
