@@ -36,13 +36,13 @@ export function render(template: string, vars: Record<string, string>): string {
     if (!(name in vars)) {
       throw new Error(`Missing template variable: ${name}`)
     }
-    return vars[name]!
+    return vars[name]
   })
   out = out.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, name: string) => {
     if (!(name in vars)) {
       throw new Error(`Missing template variable: ${name}`)
     }
-    return escapeHtml(vars[name]!)
+    return escapeHtml(vars[name])
   })
   return out
 }

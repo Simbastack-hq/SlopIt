@@ -2,19 +2,25 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap');
 
 :root {
-  --background: #FAFAF9;
-  --surface: #F0EFEB;
-  --border: #E5E5E2;
-  --text: #1A1A1A;
-  --text-muted: #6B6B6B;
-  --accent: #FF4F00;
-  --accent-dark: #D34000;
+  --background: #fafaf9;
+  --surface: #f0efeb;
+  --border: #e5e5e2;
+  --text: #1a1a1a;
+  --text-muted: #6b6b6b;
+  --accent: #ff4f00;
+  --accent-dark: #d34000;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
-  font-family: Satoshi, system-ui, -apple-system, sans-serif;
+  font-family:
+    Satoshi,
+    system-ui,
+    -apple-system,
+    sans-serif;
   max-width: 720px;
   margin: 0 auto;
   padding: 32px 24px;
@@ -24,9 +30,18 @@ body {
   font-size: 16px;
 }
 
-nav { font-size: 16px; margin-bottom: 48px; }
-nav a { color: var(--text); text-decoration: none; font-weight: 700; }
-nav a:hover { color: var(--accent); }
+nav {
+  font-size: 16px;
+  margin-bottom: 48px;
+}
+nav a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+}
+nav a:hover {
+  color: var(--accent);
+}
 
 article header h1 {
   font-size: 32px;
@@ -35,16 +50,42 @@ article header h1 {
   line-height: 1.2;
   margin: 0 0 8px;
 }
-article header time { font-size: 14px; color: var(--text-muted); }
+article header time {
+  font-size: 14px;
+  color: var(--text-muted);
+}
 
-article { margin-bottom: 64px; }
-article p { font-size: 18px; margin: 16px 0; }
-article h2 { font-size: 24px; font-weight: 700; margin-top: 32px; letter-spacing: -0.01em; }
-article h3 { font-size: 20px; font-weight: 500; margin-top: 24px; }
-article a { color: var(--accent); }
-article a:hover { color: var(--accent-dark); }
-article ul, article ol { padding-left: 24px; }
-article li { margin: 8px 0; }
+article {
+  margin-bottom: 64px;
+}
+article p {
+  font-size: 18px;
+  margin: 16px 0;
+}
+article h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: 32px;
+  letter-spacing: -0.01em;
+}
+article h3 {
+  font-size: 20px;
+  font-weight: 500;
+  margin-top: 24px;
+}
+article a {
+  color: var(--accent);
+}
+article a:hover {
+  color: var(--accent-dark);
+}
+article ul,
+article ol {
+  padding-left: 24px;
+}
+article li {
+  margin: 8px 0;
+}
 article blockquote {
   border-left: 4px solid var(--accent);
   padding-left: 16px;
@@ -65,9 +106,14 @@ article pre {
   padding: 16px;
   overflow-x: auto;
 }
-article pre code { background: transparent; padding: 0; }
+article pre code {
+  background: transparent;
+  padding: 0;
+}
 
-.tags { margin-top: 32px; }
+.tags {
+  margin-top: 32px;
+}
 .tags span {
   display: inline-block;
   background: var(--surface);
@@ -78,14 +124,44 @@ article pre code { background: transparent; padding: 0; }
   margin-right: 4px;
 }
 
-main .post-item { border-bottom: 1px solid var(--border); padding: 24px 0; }
-main .post-item:last-child { border-bottom: none; }
-main .post-item h2 { font-size: 20px; margin: 0 0 8px; font-weight: 500; }
-main .post-item h2 a { color: var(--text); text-decoration: none; }
-main .post-item h2 a:hover { color: var(--accent); }
-main .post-item time { font-size: 14px; color: var(--text-muted); }
-main .post-item p { color: var(--text-muted); margin: 8px 0 0; font-size: 16px; }
+main .post-item {
+  border-bottom: 1px solid var(--border);
+  padding: 24px 0;
+}
+main .post-item:last-child {
+  border-bottom: none;
+}
+main .post-item h2 {
+  font-size: 20px;
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+main .post-item h2 a {
+  color: var(--text);
+  text-decoration: none;
+}
+main .post-item h2 a:hover {
+  color: var(--accent);
+}
+main .post-item time {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+main .post-item p {
+  color: var(--text-muted);
+  margin: 8px 0 0;
+  font-size: 16px;
+}
 
-footer { margin-top: 64px; font-size: 14px; color: var(--text-muted); text-align: center; }
-footer a { color: var(--text-muted); }
-footer a:hover { color: var(--text); }
+footer {
+  margin-top: 64px;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+}
+footer a {
+  color: var(--text-muted);
+}
+footer a:hover {
+  color: var(--text);
+}

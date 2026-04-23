@@ -46,7 +46,7 @@ describe('createPost — narrow error mapping through the function', () => {
       body: 'x',
       slug: 'first-slug',
     })
-    expect(first.post.id).toMatch(/^a{8}$/)   // sanity: mock took effect
+    expect(first.post.id).toMatch(/^a{8}$/) // sanity: mock took effect
 
     // Second createPost uses a DIFFERENT slug (so preflight passes) but
     // generates the same id via the mock → posts.id PK violation at INSERT.
@@ -62,7 +62,7 @@ describe('createPost — narrow error mapping through the function', () => {
     }
 
     expect(caught).toBeInstanceOf(Error)
-    expect(caught).not.toBeInstanceOf(SlopItError)   // NOT wrapped
+    expect(caught).not.toBeInstanceOf(SlopItError) // NOT wrapped
     expect((caught as Error).message).toContain('posts.id')
     expect((caught as NodeJS.ErrnoException).code).toBe('SQLITE_CONSTRAINT_PRIMARYKEY')
   })

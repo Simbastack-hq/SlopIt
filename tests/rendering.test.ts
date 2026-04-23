@@ -150,7 +150,7 @@ describe('renderPostList', () => {
 
   it('builds a post-item per post', () => {
     const out = renderPostList([
-      makePost({ slug: 'first',  title: 'First',  publishedAt: '2025-01-01T00:00:00Z' }),
+      makePost({ slug: 'first', title: 'First', publishedAt: '2025-01-01T00:00:00Z' }),
       makePost({ slug: 'second', title: 'Second', publishedAt: '2025-02-01T00:00:00Z' }),
     ])
     expect(out).toContain('<article class="post-item">')
@@ -269,7 +269,9 @@ describe('renderMarkdown — HTML stripping (v1 XSS defense)', () => {
     expect(renderMarkdown('# Heading')).toContain('<h1>Heading</h1>')
     expect(renderMarkdown('**bold**')).toContain('<strong>bold</strong>')
     expect(renderMarkdown('*italic*')).toContain('<em>italic</em>')
-    expect(renderMarkdown('[text](https://example.com)')).toContain('<a href="https://example.com">text</a>')
+    expect(renderMarkdown('[text](https://example.com)')).toContain(
+      '<a href="https://example.com">text</a>',
+    )
     expect(renderMarkdown('- item 1\n- item 2')).toContain('<li>item 1</li>')
     expect(renderMarkdown('> quoted')).toContain('<blockquote>')
     expect(renderMarkdown('`code`')).toContain('<code>code</code>')
@@ -315,7 +317,7 @@ describe('renderMarkdown — URL scheme allowlist (v1 XSS defense, part 2)', () 
   it('blocks javascript: in markdown link hrefs', () => {
     const out = renderMarkdown('[click me](javascript:alert(1))')
     expect(out).not.toContain('javascript:')
-    expect(out).not.toContain('<a')   // no anchor at all
+    expect(out).not.toContain('<a') // no anchor at all
     expect(out).toContain('click me') // visible text preserved
   })
 
@@ -491,11 +493,14 @@ describe('createRenderer — renderPost', () => {
   it('renders the post body as HTML (markdown passes through renderMarkdown)', () => {
     const { blog } = createBlog(store, {})
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://ex.com' })
-    renderer.renderPost(blog.id, makePost({
-      blogId: blog.id,
-      slug: 's',
-      body: '# Heading\n\nParagraph.',
-    }))
+    renderer.renderPost(
+      blog.id,
+      makePost({
+        blogId: blog.id,
+        slug: 's',
+        body: '# Heading\n\nParagraph.',
+      }),
+    )
 
     const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
     expect(html).toContain('<h1>Heading</h1>')
@@ -534,7 +539,7 @@ describe('createRenderer — renderBlog', () => {
       `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
        VALUES (?, ?, ?, ?, ?, 'published', ?)`,
     )
-    insert.run('p1', blog.id, 'first',  'First',  'x', '2025-01-01T00:00:00Z')
+    insert.run('p1', blog.id, 'first', 'First', 'x', '2025-01-01T00:00:00Z')
     insert.run('p2', blog.id, 'second', 'Second', 'x', '2025-02-01T00:00:00Z')
 
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
@@ -554,8 +559,8 @@ describe('createRenderer — renderBlog', () => {
       `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    insert.run('p1', blog.id, 'pub',   'Pub',   'x', 'published', '2025-01-01T00:00:00Z')
-    insert.run('p2', blog.id, 'draft', 'Draft', 'x', 'draft',     null)
+    insert.run('p1', blog.id, 'pub', 'Pub', 'x', 'published', '2025-01-01T00:00:00Z')
+    insert.run('p2', blog.id, 'draft', 'Draft', 'x', 'draft', null)
 
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
     renderer.renderBlog(blog.id)

@@ -79,18 +79,22 @@ describe('PostInputSchema', () => {
     })
 
     it('accepts titles with no slug-compatible chars when caller supplies an explicit slug', () => {
-      expect(() => PostInputSchema.parse({
-        title: '日本語のタイトル',
-        body: 'x',
-        slug: 'ja-title',
-      })).not.toThrow()
+      expect(() =>
+        PostInputSchema.parse({
+          title: '日本語のタイトル',
+          body: 'x',
+          slug: 'ja-title',
+        }),
+      ).not.toThrow()
     })
 
     it('accepts a valid title without explicit slug', () => {
-      expect(() => PostInputSchema.parse({
-        title: 'Valid Title',
-        body: 'x',
-      })).not.toThrow()
+      expect(() =>
+        PostInputSchema.parse({
+          title: 'Valid Title',
+          body: 'x',
+        }),
+      ).not.toThrow()
     })
   })
 })
@@ -119,15 +123,19 @@ describe('isPostSlugConflict', () => {
     fkErr.code = 'SQLITE_CONSTRAINT_FOREIGNKEY'
     expect(isPostSlugConflict(fkErr)).toBe(false)
 
-    expect(isPostSlugConflict(new Error('UNIQUE constraint failed: posts.blog_id, posts.slug'))).toBe(false)
+    expect(
+      isPostSlugConflict(new Error('UNIQUE constraint failed: posts.blog_id, posts.slug')),
+    ).toBe(false)
 
     expect(isPostSlugConflict(null)).toBe(false)
     expect(isPostSlugConflict(undefined)).toBe(false)
     expect(isPostSlugConflict('not an error')).toBe(false)
-    expect(isPostSlugConflict({
-      code: 'SQLITE_CONSTRAINT_UNIQUE',
-      message: 'posts.blog_id, posts.slug',
-    })).toBe(false)
+    expect(
+      isPostSlugConflict({
+        code: 'SQLITE_CONSTRAINT_UNIQUE',
+        message: 'posts.blog_id, posts.slug',
+      }),
+    ).toBe(false)
   })
 })
 
@@ -191,9 +199,9 @@ describe('listPublishedPostsForBlog', () => {
       `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
        VALUES (?, ?, ?, ?, ?, 'published', ?)`,
     )
-    insert.run('p1', blog.id, 'first',  'First',  'body1', '2025-01-01T00:00:00Z')
+    insert.run('p1', blog.id, 'first', 'First', 'body1', '2025-01-01T00:00:00Z')
     insert.run('p2', blog.id, 'second', 'Second', 'body2', '2025-06-01T00:00:00Z')
-    insert.run('p3', blog.id, 'third',  'Third',  'body3', '2025-03-01T00:00:00Z')
+    insert.run('p3', blog.id, 'third', 'Third', 'body3', '2025-03-01T00:00:00Z')
 
     const posts = listPublishedPostsForBlog(store, blog.id)
     expect(posts.map((p) => p.slug)).toEqual(['second', 'third', 'first'])
@@ -205,8 +213,8 @@ describe('listPublishedPostsForBlog', () => {
       `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    insert.run('p1', blog.id, 'pub',   'Pub',   'b', 'published', '2025-01-01T00:00:00Z')
-    insert.run('p2', blog.id, 'draft', 'Draft', 'b', 'draft',     null)
+    insert.run('p1', blog.id, 'pub', 'Pub', 'b', 'published', '2025-01-01T00:00:00Z')
+    insert.run('p2', blog.id, 'draft', 'Draft', 'b', 'draft', null)
 
     const posts = listPublishedPostsForBlog(store, blog.id)
     expect(posts.map((p) => p.slug)).toEqual(['pub'])
@@ -309,7 +317,9 @@ describe('createPost', () => {
 
     expect(post.tags).toEqual(['ai', 'content', 'weekly'])
 
-    const row = store.db.prepare('SELECT tags FROM posts WHERE id = ?').get(post.id) as { tags: string }
+    const row = store.db.prepare('SELECT tags FROM posts WHERE id = ?').get(post.id) as {
+      tags: string
+    }
     expect(JSON.parse(row.tags)).toEqual(['ai', 'content', 'weekly'])
   })
 
@@ -345,7 +355,9 @@ describe('createPost', () => {
     let caught: unknown
     try {
       createPost(store, r, 'nonexistent', { title: 'T', body: 'x' })
-    } catch (e) { caught = e }
+    } catch (e) {
+      caught = e
+    }
 
     expect(caught).toBeInstanceOf(SlopItError)
     expect((caught as SlopItError).code).toBe('BLOG_NOT_FOUND')
@@ -360,7 +372,9 @@ describe('createPost', () => {
     let caught: unknown
     try {
       createPost(store, r, blog.id, { title: 'Second', body: 'y', slug: 'taken' })
-    } catch (e) { caught = e }
+    } catch (e) {
+      caught = e
+    }
 
     expect(caught).toBeInstanceOf(SlopItError)
     expect((caught as SlopItError).code).toBe('POST_SLUG_CONFLICT')
@@ -399,7 +413,9 @@ describe('createPost', () => {
     let caught: unknown
     try {
       createPost(store, r, blog.id, { title: 'T', body: 'x' })
-    } catch (e) { caught = e }
+    } catch (e) {
+      caught = e
+    }
 
     // Must be the original OS error, not a wrapped SlopItError — spec
     // decision #6: createPost always throws the original render error.
@@ -413,7 +429,9 @@ describe('createPost', () => {
     expect(code === 'ENOTDIR' || code === 'EEXIST').toBe(true)
 
     // Compensation ran: no post row remains.
-    const count = store.db.prepare('SELECT COUNT(*) AS n FROM posts WHERE blog_id = ?').get(blog.id) as { n: number }
+    const count = store.db
+      .prepare('SELECT COUNT(*) AS n FROM posts WHERE blog_id = ?')
+      .get(blog.id) as { n: number }
     expect(count.n).toBe(0)
   })
 
@@ -512,7 +530,9 @@ describe('createPost — INSERT-time narrow-match branch', () => {
     let caught: unknown
     try {
       createPost(store, r, blog.id, { title: 'Second', body: 'y', slug: 'race' })
-    } catch (e) { caught = e }
+    } catch (e) {
+      caught = e
+    }
 
     expect(caught).toBeInstanceOf(SlopItError)
     expect((caught as SlopItError).code).toBe('POST_SLUG_CONFLICT')
@@ -546,17 +566,19 @@ describe('createPost — compensation DELETE best-effort', () => {
 
     // Stub the DELETE prepare to throw. Other queries are unaffected.
     const realPrepare = store.db.prepare.bind(store.db)
-    vi.spyOn(store.db, 'prepare').mockImplementation(((sql: string) => {
+    vi.spyOn(store.db, 'prepare').mockImplementation((sql: string) => {
       if (/DELETE FROM posts WHERE id = \?/.test(sql)) {
         throw new Error('simulated DELETE failure')
       }
       return realPrepare(sql)
-    }) as any)
+    })
 
     let caught: unknown
     try {
       createPost(store, r, blog.id, { title: 'T', body: 'x' })
-    } catch (e) { caught = e }
+    } catch (e) {
+      caught = e
+    }
 
     // Original render error bubbles, not the DELETE failure.
     expect(caught).toBeInstanceOf(Error)

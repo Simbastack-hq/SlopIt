@@ -30,7 +30,7 @@ export function generateShortId(): string {
 export function generateSlug(title: string): string {
   return title
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')   // strip combining marks
+    .replace(/[\u0300-\u036f]/g, '') // strip combining marks
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')

@@ -93,6 +93,14 @@ SlopIt ships as two repos. See `ARCHITECTURE.md` for the full layout and decisio
 - `interface` for object shapes, `type` for unions/aliases.
 - Validate external input (HTTP bodies, MCP tool args) with Zod at the boundary. Internal code trusts its types.
 
+## Scripts
+
+One command covers everything before a commit: `pnpm check` (= `typecheck` + `lint` + `format:check` + `test`).
+
+- `pnpm lint` / `pnpm lint:fix` — ESLint (typescript-eslint recommended-type-checked). Tests relax `no-unsafe-*` / `no-explicit-any` because mocks legitimately need them; source code does not.
+- `pnpm format` / `pnpm format:check` — Prettier. Config is minimal and matches the existing style. Don't hand-fight it.
+- Agents: if you introduce a new loose rule for yourself, prefer fixing the code over widening the config.
+
 ## Testing
 
 Tests matter, but don't theater them.
@@ -104,13 +112,25 @@ Tests matter, but don't theater them.
 
 A feature without tests isn't done. A feature with 400 lines of mocks is also not done.
 
+## Compound Memory — `docs/solutions/`
+
+When you solve something non-obvious, write it down in `docs/solutions/` so the next agent doesn't re-learn it. This is the one place in the repo that's *supposed* to grow over time.
+
+- One short file per learning, with YAML frontmatter (`tags`, `severity`, `applies-to`). See `docs/solutions/README.md`.
+- Capture: surprising bugs, invariants not enforced in code, workarounds for external constraints, decisions with rejected alternatives.
+- Don't capture: things obvious from the code, ephemeral task notes, re-statements of `CLAUDE.md`.
+- Before starting non-trivial work, skim the directory (or let `ce-learnings-researcher` do it). Tags are the retrieval key.
+
+CLAUDE.md stays lean and principled. Specifics live in `docs/solutions/` where they're searchable and don't bloat every prompt.
+
 ## Before You Ship
 
 1. Is it simpler than the last version you considered?
 2. Did you delete anything?
 3. Would a new developer understand this in 5 minutes?
-4. Does `pnpm typecheck` pass?
+4. Does `pnpm check` pass (typecheck + lint + format + test)?
 5. Does the happy path still produce `content → live URL` in one call?
+6. If you learned something non-obvious, did you drop it in `docs/solutions/`?
 
 ## Red Flags — Stop and Reconsider
 

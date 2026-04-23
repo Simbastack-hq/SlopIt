@@ -36,7 +36,9 @@ describe('isBlogNameConflict', () => {
     expect(isBlogNameConflict(null)).toBe(false)
     expect(isBlogNameConflict(undefined)).toBe(false)
     expect(isBlogNameConflict('not an error')).toBe(false)
-    expect(isBlogNameConflict({ code: 'SQLITE_CONSTRAINT_UNIQUE', message: 'blogs.name' })).toBe(false)
+    expect(isBlogNameConflict({ code: 'SQLITE_CONSTRAINT_UNIQUE', message: 'blogs.name' })).toBe(
+      false,
+    )
   })
 })
 
@@ -107,9 +109,11 @@ describe('createBlog', () => {
     const { blog } = createBlog(store, { name: 'ai-thoughts' })
     expect(blog.name).toBe('ai-thoughts')
 
-    const row = store.db
-      .prepare('SELECT id, name, theme FROM blogs WHERE id = ?')
-      .get(blog.id) as { id: string; name: string; theme: string }
+    const row = store.db.prepare('SELECT id, name, theme FROM blogs WHERE id = ?').get(blog.id) as {
+      id: string
+      name: string
+      theme: string
+    }
     expect(row.id).toBe(blog.id)
     expect(row.name).toBe('ai-thoughts')
     expect(row.theme).toBe('minimal')
@@ -176,9 +180,7 @@ describe('createApiKey', () => {
     expect(row.key_hash).toBe(hash)
 
     // No row where key_hash == plaintext (defense check)
-    const plaintextRows = store.db
-      .prepare('SELECT 1 FROM api_keys WHERE key_hash = ?')
-      .all(apiKey)
+    const plaintextRows = store.db.prepare('SELECT 1 FROM api_keys WHERE key_hash = ?').all(apiKey)
     expect(plaintextRows).toHaveLength(0)
   })
 
@@ -206,10 +208,12 @@ describe('createApiKey', () => {
   })
 
   it('leaves no api_keys row behind when the blog does not exist', () => {
-    try { createApiKey(store, 'nonexistent') } catch { /* expected */ }
-    const count = store.db
-      .prepare('SELECT COUNT(*) AS n FROM api_keys')
-      .get() as { n: number }
+    try {
+      createApiKey(store, 'nonexistent')
+    } catch {
+      /* expected */
+    }
+    const count = store.db.prepare('SELECT COUNT(*) AS n FROM api_keys').get() as { n: number }
     expect(count.n).toBe(0)
   })
 })

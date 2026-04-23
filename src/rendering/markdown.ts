@@ -61,7 +61,7 @@ function isSafeHref(href: string | null | undefined): boolean {
   // Scheme present? Must be in the allowlist.
   const schemeMatch = trimmed.match(/^([a-z][a-z0-9+.-]*):/i)
   if (schemeMatch) {
-    const scheme = schemeMatch[1]!.toLowerCase()
+    const scheme = schemeMatch[1].toLowerCase()
     return scheme === 'http' || scheme === 'https' || scheme === 'mailto'
   }
   // No scheme match at all — treat as relative, safe.
@@ -111,5 +111,5 @@ marked.use({
 // Markdown → HTML. Synchronous because blog posts are short and we render
 // once at publish time; no reason to reach for async here.
 export function renderMarkdown(md: string): string {
-  return marked.parse(md, { async: false }) as string
+  return marked.parse(md, { async: false })
 }

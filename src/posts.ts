@@ -15,9 +15,9 @@ import { PostInputSchema, type Post, type PostInput } from './schema/index.js'
  */
 export function isPostSlugConflict(err: unknown): boolean {
   return (
-    err instanceof Error
-    && (err as NodeJS.ErrnoException).code === 'SQLITE_CONSTRAINT_UNIQUE'
-    && err.message.includes('posts.blog_id, posts.slug')
+    err instanceof Error &&
+    (err as NodeJS.ErrnoException).code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+    err.message.includes('posts.blog_id, posts.slug')
   )
 }
 
@@ -63,22 +63,22 @@ export function listPublishedPostsForBlog(store: Store, blogId: string): Post[] 
         ORDER BY published_at DESC`,
     )
     .all(blogId) as {
-      id: string
-      blog_id: string
-      slug: string
-      title: string
-      body: string
-      excerpt: string | null
-      tags: string
-      status: 'published'
-      seo_title: string | null
-      seo_description: string | null
-      author: string | null
-      cover_image: string | null
-      published_at: string | null
-      created_at: string
-      updated_at: string
-    }[]
+    id: string
+    blog_id: string
+    slug: string
+    title: string
+    body: string
+    excerpt: string | null
+    tags: string
+    status: 'published'
+    seo_title: string | null
+    seo_description: string | null
+    author: string | null
+    cover_image: string | null
+    published_at: string | null
+    created_at: string
+    updated_at: string
+  }[]
 
   return rows.map((row) => ({
     id: row.id,
@@ -137,11 +137,9 @@ export function createPost(
       .prepare('SELECT 1 FROM posts WHERE blog_id = ? AND slug = ?')
       .get(blogId, slug)
     if (exists) {
-      throw new SlopItError(
-        'POST_SLUG_CONFLICT',
-        `Slug "${slug}" is already taken in this blog`,
-        { slug },
-      )
+      throw new SlopItError('POST_SLUG_CONFLICT', `Slug "${slug}" is already taken in this blog`, {
+        slug,
+      })
     }
     try {
       store.db
@@ -188,23 +186,23 @@ export function createPost(
          FROM posts WHERE id = ?`,
     )
     .get(id) as {
-      id: string
-      blog_id: string
-      slug: string
-      title: string
-      body: string
-      // createPost always writes a non-null excerpt (explicit or auto).
-      excerpt: string
-      tags: string
-      status: 'draft' | 'published'
-      seo_title: string | null
-      seo_description: string | null
-      author: string | null
-      cover_image: string | null
-      published_at: string | null
-      created_at: string
-      updated_at: string
-    }
+    id: string
+    blog_id: string
+    slug: string
+    title: string
+    body: string
+    // createPost always writes a non-null excerpt (explicit or auto).
+    excerpt: string
+    tags: string
+    status: 'draft' | 'published'
+    seo_title: string | null
+    seo_description: string | null
+    author: string | null
+    cover_image: string | null
+    published_at: string | null
+    created_at: string
+    updated_at: string
+  }
 
   const post: Post = {
     id: row.id,
@@ -232,7 +230,9 @@ export function createPost(
     } catch (renderErr) {
       try {
         store.db.prepare('DELETE FROM posts WHERE id = ?').run(id)
-      } catch { /* best-effort; see spec decision #6 */ }
+      } catch {
+        /* best-effort; see spec decision #6 */
+      }
       throw renderErr
     }
     return { post, postUrl: renderer.baseUrl + '/' + post.slug + '/' }

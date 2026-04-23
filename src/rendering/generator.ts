@@ -52,11 +52,11 @@ export function renderPostList(posts: Post[]): string {
     .map((p) => {
       const excerpt = p.excerpt ? `<p>${escapeHtml(p.excerpt)}</p>` : ''
       return (
-        `<article class="post-item">`
-        + `<h2><a href="${escapeHtml(p.slug)}/">${escapeHtml(p.title)}</a></h2>`
-        + `<time datetime="${escapeHtml(p.publishedAt ?? '')}">${escapeHtml(formatDate(p.publishedAt))}</time>`
-        + excerpt
-        + `</article>`
+        `<article class="post-item">` +
+        `<h2><a href="${escapeHtml(p.slug)}/">${escapeHtml(p.title)}</a></h2>` +
+        `<time datetime="${escapeHtml(p.publishedAt ?? '')}">${escapeHtml(formatDate(p.publishedAt))}</time>` +
+        excerpt +
+        `</article>`
       )
     })
     .join('')
@@ -70,9 +70,7 @@ export function renderPostList(posts: Post[]): string {
 export function renderTagList(tags: string[]): string {
   if (tags.length === 0) return ''
   return (
-    `<div class="tags">`
-    + tags.map((t) => `<span>#${escapeHtml(t)}</span>`).join('')
-    + `</div>`
+    `<div class="tags">` + tags.map((t) => `<span>#${escapeHtml(t)}</span>`).join('') + `</div>`
   )
 }
 

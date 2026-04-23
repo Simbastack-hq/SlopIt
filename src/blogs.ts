@@ -2,11 +2,7 @@ import { generateApiKey, hashApiKey } from './auth/api-key.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId } from './ids.js'
-import {
-  CreateBlogInputSchema,
-  type Blog,
-  type CreateBlogInput,
-} from './schema/index.js'
+import { CreateBlogInputSchema, type Blog, type CreateBlogInput } from './schema/index.js'
 
 /**
  * Pure predicate so the narrow match logic is testable without running the DB.
@@ -18,33 +14,25 @@ import {
  */
 export function isBlogNameConflict(err: unknown): boolean {
   return (
-    err instanceof Error
-    && (err as NodeJS.ErrnoException).code === 'SQLITE_CONSTRAINT_UNIQUE'
-    && err.message.includes('blogs.name')
+    err instanceof Error &&
+    (err as NodeJS.ErrnoException).code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+    err.message.includes('blogs.name')
   )
 }
 
-export function createBlog(
-  store: Store,
-  input: CreateBlogInput,
-): { blog: Blog } {
+export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog } {
   const parsed = CreateBlogInputSchema.parse(input)
   const id = generateShortId()
   const name = parsed.name ?? null
   const theme = parsed.theme
 
-  const insert = store.db.prepare(
-    'INSERT INTO blogs (id, name, theme) VALUES (?, ?, ?)',
-  )
+  const insert = store.db.prepare('INSERT INTO blogs (id, name, theme) VALUES (?, ?, ?)')
 
   try {
     insert.run(id, name, theme)
   } catch (e) {
     if (isBlogNameConflict(e)) {
-      throw new SlopItError(
-        'BLOG_NAME_CONFLICT',
-        `Blog name "${name}" is already taken`,
-      )
+      throw new SlopItError('BLOG_NAME_CONFLICT', `Blog name "${name}" is already taken`)
     }
     throw e
   }
@@ -52,11 +40,11 @@ export function createBlog(
   const row = store.db
     .prepare('SELECT id, name, theme, created_at FROM blogs WHERE id = ?')
     .get(id) as {
-      id: string
-      name: string | null
-      theme: 'minimal'
-      created_at: string
-    }
+    id: string
+    name: string | null
+    theme: 'minimal'
+    created_at: string
+  }
 
   const blog: Blog = {
     id: row.id,
@@ -68,10 +56,7 @@ export function createBlog(
   return { blog }
 }
 
-export function createApiKey(
-  store: Store,
-  blogId: string,
-): { apiKey: string } {
+export function createApiKey(store: Store, blogId: string): { apiKey: string } {
   const apiKey = generateApiKey()
   const keyHash = hashApiKey(apiKey)
   const id = generateShortId()
@@ -80,14 +65,9 @@ export function createApiKey(
   // explicit existence check so the caller gets SlopItError(BLOG_NOT_FOUND)
   // instead of a cryptic FOREIGN KEY constraint error.
   const tx = store.db.transaction(() => {
-    const found = store.db
-      .prepare('SELECT 1 FROM blogs WHERE id = ?')
-      .get(blogId)
+    const found = store.db.prepare('SELECT 1 FROM blogs WHERE id = ?').get(blogId)
     if (!found) {
-      throw new SlopItError(
-        'BLOG_NOT_FOUND',
-        `Blog "${blogId}" does not exist`,
-      )
+      throw new SlopItError('BLOG_NOT_FOUND', `Blog "${blogId}" does not exist`)
     }
     store.db
       .prepare('INSERT INTO api_keys (id, blog_id, key_hash) VALUES (?, ?, ?)')
@@ -110,12 +90,14 @@ export function createApiKey(
 export function getBlogInternal(store: Store, blogId: string): Blog {
   const row = store.db
     .prepare('SELECT id, name, theme, created_at FROM blogs WHERE id = ?')
-    .get(blogId) as {
-      id: string
-      name: string | null
-      theme: 'minimal'
-      created_at: string
-    } | undefined
+    .get(blogId) as
+    | {
+        id: string
+        name: string | null
+        theme: 'minimal'
+        created_at: string
+      }
+    | undefined
 
   if (row === undefined) {
     throw new SlopItError('BLOG_NOT_FOUND', `Blog "${blogId}" does not exist`, { blogId })
