@@ -1456,7 +1456,7 @@ Implements spec tool #1. First of the 8 — establishes the test-harness pattern
 - Modify: `src/mcp/tools.ts`
 - Create: `tests/mcp/signup.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/mcp/signup.test.ts`:
 
@@ -1579,12 +1579,12 @@ describe('MCP tool: signup', () => {
 })
 ```
 
-- [ ] **Step 2: Run — fails because `signup` tool isn't registered**
+- [x] **Step 2: Run — fails because `signup` tool isn't registered**
 
 Run: `pnpm test -- tests/mcp/signup.test.ts`
 Expected: tool not found / or callTool rejects. 4 failures.
 
-- [ ] **Step 3: Add `signup` to `src/mcp/tools.ts`**
+- [x] **Step 3: Add `signup` to `src/mcp/tools.ts`**
 
 Replace `src/mcp/tools.ts` with:
 
@@ -1641,17 +1641,17 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
 }
 ```
 
-- [ ] **Step 4: Run the signup tests**
+- [x] **Step 4: Run the signup tests**
 
 Run: `pnpm test -- tests/mcp/signup.test.ts`
 Expected: 4 passed.
 
-- [ ] **Step 5: Run `pnpm check`**
+- [x] **Step 5: Run `pnpm check`**
 
 Run: `pnpm check`
 Expected: 341 + 4 = 345 tests pass; green typecheck/lint/prettier.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/mcp/tools.ts tests/mcp/signup.test.ts
@@ -1678,7 +1678,7 @@ Implements spec tool #2. Reuses `PostInputBaseSchema` + `slugTitleRefinement` fr
 - Modify: `src/mcp/tools.ts`
 - Create: `tests/mcp/posts-create.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/mcp/posts-create.test.ts`:
 
@@ -1816,7 +1816,7 @@ describe('MCP tool: create_post', () => {
 })
 ```
 
-- [ ] **Step 2: Create `tests/mcp/helpers.ts`**
+- [x] **Step 2: Create `tests/mcp/helpers.ts`**
 
 ```ts
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -1848,7 +1848,7 @@ export async function callTool(
 }
 ```
 
-- [ ] **Step 3: Add `create_post` to `src/mcp/tools.ts`**
+- [x] **Step 3: Add `create_post` to `src/mcp/tools.ts`**
 
 Append inside `registerTools`:
 
@@ -1893,12 +1893,12 @@ import { PostInputBaseSchema, slugTitleRefinement } from '../schema/post-input-b
 import { createPost } from '../posts.js'
 ```
 
-- [ ] **Step 4: Run create_post tests**
+- [x] **Step 4: Run create_post tests**
 
 Run: `pnpm test -- tests/mcp/posts-create.test.ts`
 Expected: 6 passed.
 
-- [ ] **Step 5: Full check + commit**
+- [x] **Step 5: Full check + commit**
 
 Run: `pnpm check`
 Expected: 345 + 6 = 351 tests pass.
@@ -1927,7 +1927,7 @@ Implements spec tool #3. Wraps `PostPatchSchema` in a `patch` field. Each row of
 - Modify: `src/mcp/tools.ts`
 - Create: `tests/mcp/posts-update.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/mcp/posts-update.test.ts`:
 
@@ -2041,12 +2041,12 @@ describe('MCP tool: update_post', () => {
 })
 ```
 
-- [ ] **Step 2: Run — fails (tool not registered)**
+- [x] **Step 2: Run — fails (tool not registered)**
 
 Run: `pnpm test -- tests/mcp/posts-update.test.ts`
 Expected: failures on tool-not-found. The test uses `getPost` from the store directly (no `get_post` MCP tool dependency), so Task 11 is not a prerequisite.
 
-- [ ] **Step 3: Add `update_post` registration to `src/mcp/tools.ts`**
+- [x] **Step 3: Add `update_post` registration to `src/mcp/tools.ts`**
 
 Append inside `registerTools` (after `create_post`):
 
@@ -2097,12 +2097,12 @@ import { PostPatchSchema } from '../schema/index.js'
 import { updatePost } from '../posts.js'
 ```
 
-- [ ] **Step 4: Run the update_post tests**
+- [x] **Step 4: Run the update_post tests**
 
 Run: `pnpm test -- tests/mcp/posts-update.test.ts`
 Expected: 4 passed.
 
-- [ ] **Step 5: `pnpm check` + commit**
+- [x] **Step 5: `pnpm check` + commit**
 
 Run: `pnpm check`
 Expected: 351 + 4 = 355 tests pass.
@@ -2130,7 +2130,7 @@ Implements spec tool #4. Tests cover same-key replay vs no-key `POST_NOT_FOUND` 
 - Modify: `src/mcp/tools.ts`
 - Create: `tests/mcp/posts-delete.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/mcp/posts-delete.test.ts`:
 
@@ -2234,12 +2234,12 @@ describe('MCP tool: delete_post', () => {
 })
 ```
 
-- [ ] **Step 2: Run — fails**
+- [x] **Step 2: Run — fails**
 
 Run: `pnpm test -- tests/mcp/posts-delete.test.ts`
 Expected: 4 failures (tool not registered).
 
-- [ ] **Step 3: Add `delete_post` to `src/mcp/tools.ts`**
+- [x] **Step 3: Add `delete_post` to `src/mcp/tools.ts`**
 
 Append inside `registerTools`:
 
@@ -2277,12 +2277,12 @@ Add import:
 import { deletePost } from '../posts.js'
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pnpm test -- tests/mcp/posts-delete.test.ts`
 Expected: 4 passed.
 
-- [ ] **Step 5: `pnpm check` + commit**
+- [x] **Step 5: `pnpm check` + commit**
 
 Run: `pnpm check`
 Expected: 355 + 4 = 359 tests.
@@ -2310,7 +2310,7 @@ Implements spec tools #5, #6, #7. Read-only; no idempotency; authenticated + cro
 - Modify: `src/mcp/tools.ts`
 - Create: `tests/mcp/posts-read.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/mcp/posts-read.test.ts`:
 
@@ -2417,12 +2417,12 @@ describe('MCP read tools', () => {
 })
 ```
 
-- [ ] **Step 2: Run — all fail (tools not registered)**
+- [x] **Step 2: Run — all fail (tools not registered)**
 
 Run: `pnpm test -- tests/mcp/posts-read.test.ts`
 Expected: 5 failures.
 
-- [ ] **Step 3: Add three read tools to `src/mcp/tools.ts`**
+- [x] **Step 3: Add three read tools to `src/mcp/tools.ts`**
 
 Append inside `registerTools`:
 
@@ -2493,12 +2493,12 @@ Add imports:
 import { getPost, listPosts } from '../posts.js'
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pnpm test -- tests/mcp/posts-read.test.ts`
 Expected: 5 passed.
 
-- [ ] **Step 5: `pnpm check` + commit**
+- [x] **Step 5: `pnpm check` + commit**
 
 Run: `pnpm check`
 Expected: 359 + 5 = 364 tests pass.
@@ -2526,7 +2526,7 @@ Implements spec tool #8. Always errors with `NOT_IMPLEMENTED` + `details.use` po
 - Modify: `src/mcp/tools.ts`
 - Create: `tests/mcp/bridge.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/mcp/bridge.test.ts`:
 
@@ -2611,12 +2611,12 @@ describe('MCP tool: report_bug', () => {
 })
 ```
 
-- [ ] **Step 2: Run — fails**
+- [x] **Step 2: Run — fails**
 
 Run: `pnpm test -- tests/mcp/bridge.test.ts`
 Expected: 2 failures.
 
-- [ ] **Step 3: Add `report_bug` to `src/mcp/tools.ts`**
+- [x] **Step 3: Add `report_bug` to `src/mcp/tools.ts`**
 
 Append inside `registerTools`:
 
@@ -2647,12 +2647,12 @@ Add imports:
 import { SlopItError } from '../errors.js'
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pnpm test -- tests/mcp/bridge.test.ts`
 Expected: 2 passed.
 
-- [ ] **Step 5: `pnpm check` + commit**
+- [x] **Step 5: `pnpm check` + commit**
 
 Run: `pnpm check`
 Expected: 364 + 2 = 366 tests pass. All 8 tools registered.
@@ -2679,7 +2679,7 @@ Implements spec decision #10. Structural assertions on all 8 descriptions: lengt
 **Files:**
 - Create: `tests/mcp/tool-descriptions.test.ts`
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 Create `tests/mcp/tool-descriptions.test.ts`:
 
@@ -2759,12 +2759,12 @@ describe('MCP tool descriptions', () => {
 })
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `pnpm test -- tests/mcp/tool-descriptions.test.ts`
 Expected: 1 passed. If any description fails, fix the offending description in `src/mcp/tools.ts` and re-run.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/mcp/tool-descriptions.test.ts
