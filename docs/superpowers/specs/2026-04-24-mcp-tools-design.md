@@ -51,7 +51,7 @@ MCP is configured through the same shape as REST: `createMcpServer(config)` take
 |---|---|---|
 | `src/mcp/server.ts` | MODIFY | `createMcpServer(config)` factory. Constructs an SDK `McpServer`, calls `registerTools(server, config)`, returns the server. No transport attached. |
 | `src/mcp/tools.ts` | NEW | `registerTools(server, config): void`. The 8 tool registrations + their business handlers. |
-| `src/mcp/wrap-tool.ts` | NEW | `wrapTool(name, opts, business): ToolCallback`. Auth + cross-blog + idempotency + error-envelope pipeline in one place. |
+| `src/mcp/wrap-tool.ts` | NEW | `wrapTool(config, name, opts, business): ToolCallback`. Auth + cross-blog + idempotency + error-envelope pipeline in one place. |
 | `src/mcp/auth.ts` | NEW | `resolveBearer(extra, config): string \| null`. Tries `extra.authInfo?.token` first (transport-native — set by `InMemoryTransport.send({ authInfo })` or OAuth middleware), then `extra.requestInfo?.headers` case-insensitively (the SDK's `IsomorphicHeaders` is a plain record, not a `Headers` instance); `null` under `authMode: 'none'`. |
 | `src/idempotency-store.ts` | NEW | Transport-agnostic. `lookupIdempotencyRecord(store, scope): { status: 'miss' } \| { status: 'hit-match', body: string, responseStatus: number } \| { status: 'hit-mismatch' }` + `recordIdempotencyResponse(store, scope, body, responseStatus): void`. Shared `idempotency_keys` table. |
 | `src/envelope.ts` | NEW | `mapErrorToEnvelope(err): Envelope` where `Envelope = { code, message, details, statusHint }`. Deterministic but has one side effect — `console.error` on unhandled errors so a single log line fires regardless of transport. |
@@ -124,6 +124,7 @@ interface ToolCtx {
 type ToolBusiness<A> = (args: A, ctx: ToolCtx) => unknown | Promise<unknown>
 
 export function wrapTool<A>(
+  config: McpServerConfig,
   name: string,
   opts: WrapToolOpts,
   business: ToolBusiness<A>,
