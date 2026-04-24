@@ -26,20 +26,22 @@ MCP is configured through the same shape as REST: `createMcpServer(config)` take
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| 1 | **Per-connection bearer auth.** `authMode: 'api_key'` reads `Authorization: Bearer <key>` from `extra.requestInfo.headers.authorization`. Stdio transport uses `authMode: 'none'` (single-tenant self-host). Per-call `apiKey` tool argument is NOT supported. | Real MCP clients (Claude Desktop, agent sandboxes) configure one bearer per connection. Per-call `apiKey` clutters every tool's schema shown to the LLM. Stdio is self-host territory where `authMode: 'none'` is the natural choice. |
+| 1 | **Per-connection bearer auth.** `authMode: 'api_key'` reads `Authorization: Bearer <key>` from `extra.requestInfo.headers` via case-insensitive lookup (`IsomorphicHeaders` is a plain record — see `resolveBearer` impl notes). Stdio transport uses `authMode: 'none'` (single-tenant self-host). Per-call `apiKey` tool argument is NOT supported. | Real MCP clients (Claude Desktop, agent sandboxes) configure one bearer per connection. Per-call `apiKey` clutters every tool's schema shown to the LLM. Stdio is self-host territory where `authMode: 'none'` is the natural choice. |
 | 2 | **Error envelope = `content` text + `structuredContent`.** Every error returns `{ isError: true, content: [{ type: 'text', text: '${code}: ${message}' }], structuredContent: { error: { code, message, details } } }`. | Text content keeps older MCP clients rendering a readable message; `structuredContent` matches REST's envelope 1:1 so agents can dispatch on `code`. |
 | 3 | **Extract a shared idempotency helper** (`src/idempotency-store.ts`) called by both REST's Hono middleware and MCP's `wrapTool`. Same `idempotency_keys` table, same scope-tuple semantics, same weakened-durability guarantee (decision #20 from REST spec). | Two callers with identical invariants (scope tuple, hash, same DB table) is exactly the threshold where extraction beats duplication. Idempotency semantics are the one thing that must not diverge silently between transports. |
 | 4 | **`wrapTool` higher-order function** wraps each tool's business logic in the auth → cross-blog guard → idempotency → error-envelope pipeline. The 8 tool registrations each pass a `WrapToolOpts` + a thin business handler. | Keeps per-tool logic readable and greppable while ensuring the cross-cutting plumbing lives in one place. Prevents silent divergence (e.g. forgetting the cross-blog guard on a single tool). |
 | 5 | **Config mirrors `ApiRouterConfig` 1:1.** Same field names, same types, same defaults. | Platform passes a single config object to both `createApiRouter` and `createMcpServer` without renames. |
-| 6 | **`signup` tool rejects `idempotency_key` at the schema layer.** `CreateBlogInputSchema` is already `.strict()`-compatible and does not include `idempotency_key`. Any such arg fails Zod validation and surfaces as a `ZOD_VALIDATION` envelope. | MCP mirror of REST decision #22. Discoverable at the schema layer rather than silently dropped. Same security invariant: no replay path for an unauthenticated call. |
+| 6 | **`signup` tool rejects `idempotency_key` at the schema layer.** `CreateBlogInputSchema` is already `.strict()`-compatible and does not include `idempotency_key`. Any such arg fails SDK-level Zod validation and surfaces as the SDK's standard `{ isError: true, content: [{ text: 'Input validation error: ...' }] }` — no `structuredContent`. See decision #15 for why MCP validation errors do not carry the `ZOD_VALIDATION` envelope. | MCP mirror of REST decision #22. The arg is rejected, not silently dropped — that's the security invariant. The SDK-shaped error is still a discoverable signal for the regression guard test. |
 | 7 | **Cross-blog guard mirrors REST decision #18.** `args.blog_id !== ctx.blog.id` → `BLOG_NOT_FOUND` (same envelope as a genuinely-missing blog). | Don't leak existence of other blogs. |
 | 8 | **Idempotency scope uses `method = "MCP"`, `path = toolName`.** Namespaces MCP idempotency keys away from REST so the same key reused on REST `POST /blogs/:id/posts` and MCP `create_post` does not collide. | Prevents cross-transport replay ambiguity. The `method` column is already in the existing `idempotency_keys` primary key; no schema change needed. |
 | 9 | **Canonical-JSON hashing for MCP idempotency.** `request_hash = sha256("MCP" + "\0" + toolName + "\0" + canonicalJson(args without idempotency_key))` where canonicalJson sorts object keys and emits no whitespace. | MCP args arrive JSON-parsed; there is no "raw body bytes" to hash. Canonical-key-sorted serialization gives agents stability across JSON library differences. Differs from REST's bytewise hash — documented in SKILL.md. |
 | 10 | **Tool descriptions are non-technical.** Short imperative sentences. Banned vocabulary enforced by a test: `endpoint`, `MCP`, `middleware`, `primitive`, `bridge`. | Descriptions are rendered by an LLM for audience #1 (non-technical users). `PRODUCT_BRIEF.md` language rules apply. |
-| 11 | **Zod schemas passed directly to `registerTool`.** No pre-conversion via `z.toJSONSchema()`. The MCP SDK's `registerTool` accepts a Zod schema as `inputSchema` and converts it to JSON Schema internally for the `tools/list` response. | One less step. The handoff's "`z.toJSONSchema()` from existing Zod schemas" language predates full Zod support in the SDK. Behavior is equivalent on the wire. |
+| 11 | **Zod schemas passed directly to `registerTool`.** No pre-conversion via `z.toJSONSchema()`. The MCP SDK's `registerTool` accepts a Zod schema as `inputSchema` and converts it to JSON Schema internally for the `tools/list` response. The SDK also uses it to validate args *before* our callback runs — see decision #15 for the consequence on error shape. | One less step. The handoff's "`z.toJSONSchema()` from existing Zod schemas" language predates full Zod support in the SDK. Behavior is equivalent on the wire. |
 | 12 | **`createMcpServer` returns an unattached `McpServer`.** The consumer calls `await server.connect(transport)` themselves. Core does not bundle a transport. | Matches ARCHITECTURE rule #4 (factories, not servers) and the REST pattern (`createApiRouter` returns a Hono app). |
 | 13 | **Tier 2 examples: stdio + HTTP.** `examples/self-hosted/mcp-stdio.ts` pairs with `authMode: 'none'`. `examples/self-hosted/mcp-http.ts` mounts `StreamableHTTPServerTransport` alongside REST under the same Hono instance, pairing with `authMode: 'api_key'`. | Stdio is the local-dev / single-tenant path; HTTP is the shape the platform PR will mirror. |
 | 14 | **No MCP resources, prompts, or progress notifications.** Tools only. | Publishing is fast and atomic; no progress to report. `generateOnboardingBlock` output lives in the `signup` tool's result field; no MCP `prompts/` surface needed. |
+| 15 | **SDK-shaped validation errors, not REST-parity validation envelopes.** Input-schema failures in MCP SDK 1.29 are validated *before* the tool callback runs (see `server/mcp.js:125` — `validateToolInput` throws `McpError(InvalidParams)`, caught and wrapped into `{ isError: true, content: [{ type: 'text', text: 'Input validation error: ...' }] }` without `structuredContent`). `wrapTool`'s catch block never sees them. Accepted as-is rather than bypassing SDK validation. | Bypassing SDK validation would mean not publishing `inputSchema` on `tools/list`, which regresses LLM tool-calling UX (the LLM can't see the arg shape from the manifest). Validation errors are a rare/adversarial path — REST parity matters for the common business errors (`BLOG_NOT_FOUND`, `POST_SLUG_CONFLICT`, `IDEMPOTENCY_KEY_CONFLICT`, `UNAUTHORIZED`, etc.) which all flow through `wrapTool` and get the unified envelope. |
+| 16 | **Idempotency is api_key-mode only.** `authMode: 'none'` skips idempotency storage and replay entirely (`ctx.apiKeyHash === ''` → pipeline step 3 is a no-op). This mirrors the REST middleware's existing behavior (decision #22 from REST spec: empty api_key_hash → no idempotency). Self-host stdio agents are single-caller; retries produce the same observable outcomes as the REST crash window (decision #20). | Synthetic self-host scopes (`authMode:none:<blog_id>`) add code for no real benefit: a self-host stdio user running one agent against one process doesn't need replay — the agent can inspect state before retrying. Documented in SKILL.md. |
 
 ---
 
@@ -50,17 +52,17 @@ MCP is configured through the same shape as REST: `createMcpServer(config)` take
 | `src/mcp/server.ts` | MODIFY | `createMcpServer(config)` factory. Constructs an SDK `McpServer`, calls `registerTools(server, config)`, returns the server. No transport attached. |
 | `src/mcp/tools.ts` | NEW | `registerTools(server, config): void`. The 8 tool registrations + their business handlers. |
 | `src/mcp/wrap-tool.ts` | NEW | `wrapTool(name, opts, business): ToolCallback`. Auth + cross-blog + idempotency + error-envelope pipeline in one place. |
-| `src/mcp/auth.ts` | NEW | `resolveBearer(extra, config): string \| null`. Reads `Authorization: Bearer` from `extra.requestInfo?.headers`; `null` under `authMode: 'none'`. |
+| `src/mcp/auth.ts` | NEW | `resolveBearer(extra, config): string \| null`. Reads `Authorization: Bearer` from `extra.requestInfo?.headers` case-insensitively (the SDK's `IsomorphicHeaders` is a plain record, not a `Headers` instance — Streamable HTTP lowercases but other transports may not); `null` under `authMode: 'none'`. |
 | `src/idempotency-store.ts` | NEW | Transport-agnostic. `lookupIdempotencyRecord(store, scope): { status: 'miss' } \| { status: 'hit-match', body: string } \| { status: 'hit-mismatch' }` + `recordIdempotencyResponse(store, scope, body): void`. Shared `idempotency_keys` table. |
-| `src/envelope.ts` | NEW | `mapErrorToEnvelope(err): Envelope` where `Envelope = { code, message, details, statusHint }`. Pure. |
+| `src/envelope.ts` | NEW | `mapErrorToEnvelope(err): Envelope` where `Envelope = { code, message, details, statusHint }`. Deterministic but has one side effect — `console.error` on unhandled errors so a single log line fires regardless of transport. |
 | `src/api/errors.ts` | MODIFY | `respondError` delegates to `mapErrorToEnvelope`. External shape unchanged; `errorMiddleware` signature unchanged. Also strips `statusHint` from the wire envelope. |
 | `src/api/idempotency.ts` | MODIFY | Hono middleware delegates the DB-touching parts (`SELECT` / `INSERT` + scope-tuple lookup) to `src/idempotency-store.ts`. Keeps Hono-specific request/response handling (body re-expose, `c.res` capture). |
 | `src/skill.ts` | MODIFY (Tier 2) | Append "## MCP tools" section listing the 8 tools + "signup is not idempotent" caveat + "canonical-JSON hash for MCP" caveat. |
 | `src/index.ts` | MODIFY | Swap `createMcpServer` stub body. Update `McpServerConfig` shape. No new barrel exports. |
 | `tests/mcp/signup.test.ts` | NEW | Happy path; `BLOG_NAME_CONFLICT`; regression guard that `idempotency_key` in args is rejected by the schema. |
-| `tests/mcp/posts-create.test.ts` | NEW | Happy path; cross-blog guard; idempotency replay + 422 mismatch; `POST_SLUG_CONFLICT`; missing-title `ZOD_VALIDATION`. |
+| `tests/mcp/posts-create.test.ts` | NEW | Happy path; cross-blog guard; idempotency replay + `IDEMPOTENCY_KEY_CONFLICT` on mismatch; `POST_SLUG_CONFLICT`; missing-title returns SDK-shaped validation error (decision #15). |
 | `tests/mcp/posts-update.test.ts` | NEW | Each row of the REST render matrix; slug-in-patch rejected; no-op empty patch. |
-| `tests/mcp/posts-delete.test.ts` | NEW | Happy path; idempotent-retry-after-delete returns `POST_NOT_FOUND` (mirrors REST decision #20); cross-blog guard. |
+| `tests/mcp/posts-delete.test.ts` | NEW | Happy path; same-key retry replays `{ deleted: true }` (hit-match); no-key retry (or crash-window case) returns `POST_NOT_FOUND` envelope (mirrors REST decision #20); cross-blog guard. |
 | `tests/mcp/posts-read.test.ts` | NEW | `get_blog`, `get_post`, `list_posts` default + status filter. |
 | `tests/mcp/bridge.test.ts` | NEW | `report_bug` returns `isError: true` + envelope; `details.use` present when configured, absent when not. |
 | `tests/mcp/auth.test.ts` | NEW | No header → `UNAUTHORIZED`; invalid token → `UNAUTHORIZED`; cross-blog `blog_id` → `BLOG_NOT_FOUND`; `authMode: 'none'` skips bearer entirely. |
@@ -141,7 +143,7 @@ Pipeline steps inside the returned callback (executed in order):
      - `hit-match` → return parsed body directly (skip business handler, skip record step) wrapped in the standard success envelope below.
      - `hit-mismatch` → throw `IDEMPOTENCY_KEY_CONFLICT` (details: `{ key, method: 'MCP', path: name }`).
 4. **Business** — `const result = await business(args, ctx)`.
-5. **Idempotency record** — same condition as step 3; `recordIdempotencyResponse(store, scope, JSON.stringify(result))`. On success only. Weakened-durability per REST decision #20 (record after success, crash window tolerated).
+5. **Idempotency record** — same condition as step 3; `recordIdempotencyResponse(store, scope, JSON.stringify(result), 200)`. The `200` is a fixed status for MCP (MCP has no HTTP status; REST uses the actual response status). On success only. Weakened-durability per REST decision #20 (record after success, crash window tolerated).
 6. **Success return** — `{ content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result }`.
 7. **Catch** (wraps the entire pipeline) — `mapErrorToEnvelope(err)` → `{ isError: true, content: [{ type: 'text', text: '${code}: ${message}' }], structuredContent: { error: { code, message, details } } }`. `statusHint` is stripped from the wire envelope (MCP has no HTTP status to hint at).
 
@@ -165,16 +167,18 @@ Mapping table:
 
 | Input | `code` | `statusHint` | `details` |
 |---|---|---|---|
-| `ZodError` | `ZOD_VALIDATION` | 400 | `{ issues: err.issues }` |
+| `ZodError` | `ZOD_VALIDATION` | 400 | `{ issues: err.issues }` (REST-only — SDK validates MCP args before `wrapTool` runs, per decision #15) |
 | `SyntaxError` | `BAD_REQUEST` | 400 | `{ message: err.message }` (REST-only reach; MCP args arrive pre-parsed) |
 | `SlopItError` | `err.code` | `CODE_TO_STATUS[err.code] ?? 500` | `err.details` |
 | other | `INTERNAL_ERROR` | 500 | `{}`, and `console.error(err)` side effect |
 
+The `console.error` is intentional and lives inside `mapErrorToEnvelope` so both transports log exactly once per unhandled error — centralizing the side effect avoids a "who logs?" disagreement between REST and MCP wrappers.
+
 REST: `respondError(c, err)` → `const e = mapErrorToEnvelope(err); return c.json({ error: { code: e.code, message: e.message, details: e.details } }, e.statusHint)`.
 
-MCP: see `wrapTool` step 7.
+MCP: see `wrapTool` step 7. `ZodError` is effectively unreachable via `wrapTool`'s catch under MCP (SDK validates first); business handlers that throw `ZodError` explicitly (e.g., if `updatePost`'s internal re-parse fails at some depth) still map correctly.
 
-No new `SlopItErrorCode` is added for MCP. Agents debugging across both transports see the same code on the same underlying condition.
+No new `SlopItErrorCode` is added for MCP. Agents debugging across both transports see the same code on the same underlying business condition. Input-validation errors are an explicit exception (decision #15) — REST returns `ZOD_VALIDATION`; MCP returns the SDK's own shape.
 
 ---
 
@@ -236,7 +240,7 @@ All input schemas are Zod. `z.strict()` is applied at the top level to reject ex
 
 ### Notes per tool
 
-- **`signup`** — Calls `createBlog` → `createApiKey` → `generateOnboardingBlock` with `blogUrl = rendererFor(blog).baseUrl`. Result field `onboarding_text` carries the imperative onboarding string (matches REST). `mcp_endpoint` field included when `config.mcpEndpoint` is set. `idempotency_key` is rejected at the Zod layer (`CreateBlogInputSchema` is built without it; `.strict()` catches attempts to pass it).
+- **`signup`** — Calls `createBlog` → `createApiKey` → `generateOnboardingBlock` with `blogUrl = rendererFor(blog).baseUrl`. Result field `onboarding_text` carries the imperative onboarding string (matches REST). `mcp_endpoint` field included when `config.mcpEndpoint` is set. `idempotency_key` is rejected at the SDK's schema validation layer (`CreateBlogInputSchema.strict()` does not include it); the client receives an SDK-shaped validation error before `wrapTool` runs (decision #15).
 - **`create_post`** — Input is `{ blog_id }` plus every `PostInputSchema` field plus optional `idempotency_key`. Reuses the existing `superRefine` slug-derivation guard. The handler call is `createPost(store, renderer, ctx.blog.id, args)` after dropping `blog_id` and `idempotency_key` from args.
 - **`update_post`** — Wraps `PostPatchSchema` in a `patch` field. An empty `patch: {}` is a valid no-op (matches REST). Calls `updatePost(store, renderer, ctx.blog.id, args.slug, args.patch)`.
 - **`delete_post`** — Calls `deletePost(store, renderer, ctx.blog.id, args.slug)`. Returns `{ deleted: true }`. Idempotent-retry behavior: after a successful delete, a retry with the same `idempotency_key` replays the stored `{ deleted: true }` response (hit-match). A retry WITHOUT the same `idempotency_key` produces `POST_NOT_FOUND` (which is semantically equivalent — the post is already gone). Mirrors REST decision #20.
@@ -271,7 +275,7 @@ export function resolveBearer(
 ```
 
 - `config.authMode === 'none'`: return `null`. Callers that need a bearer in this mode throw `UNAUTHORIZED` — but of the 8 tools, only those with `crossBlogGuard` reach the auth path in `'none'` mode, and they resolve via `getBlogInternal(store, args.blog_id)` instead of a bearer.
-- `config.authMode === 'api_key'`: read `extra.requestInfo?.headers.authorization`. `IsomorphicHeaders` exposes case-insensitive access. If the value is a non-empty string starting with `'Bearer '`, return the trimmed remainder. Otherwise return `null` — the `wrapTool` step maps `null` to `UNAUTHORIZED`.
+- `config.authMode === 'api_key'`: read the `authorization` header from `extra.requestInfo?.headers` **case-insensitively**. `IsomorphicHeaders` is a plain record, not a `Headers` instance — `.authorization` will hit under Streamable HTTP (lowercased today) but is not guaranteed across transports. Implementation: iterate entries and match `key.toLowerCase() === 'authorization'`. If the value is a non-empty string starting with `'Bearer '` (case-insensitive on the prefix is optional but cheap — compare with `.toLowerCase().startsWith('bearer ')`), return the trimmed remainder. Otherwise return `null` — the `wrapTool` step maps `null` to `UNAUTHORIZED`.
 
 Case handling is defensive: `extra.requestInfo` may be `undefined` on stdio or other transports that don't produce HTTP request metadata. Stdio users are expected to set `authMode: 'none'`; an `api_key` mode call arriving without `requestInfo` fails with `UNAUTHORIZED` (rather than crashing).
 
@@ -286,11 +290,11 @@ Target: `pnpm test` passes with all existing 308 tests plus the new ones. New mo
 - **Signup** (`tests/mcp/signup.test.ts`):
   - Happy path: returns `blog_id`, `blog_url`, `api_key`, `onboarding_text`; `mcp_endpoint` present iff configured.
   - `BLOG_NAME_CONFLICT` on duplicate name → envelope with `code = BLOG_NAME_CONFLICT`.
-  - Regression guard (decision #22 parity): calling `signup` with `idempotency_key` in args returns `ZOD_VALIDATION` envelope — confirms the arg is rejected, not silently dropped.
+  - Regression guard (decision #22 parity): calling `signup` with `idempotency_key` in args returns the SDK-shaped validation error (`isError: true`, `content[0].text` begins with `'Input validation error:'`, no `structuredContent`). Confirms the arg is rejected at the schema layer, not silently dropped. See decision #15 for why this is the SDK shape rather than our `ZOD_VALIDATION` envelope.
 
 - **`create_post`** (`tests/mcp/posts-create.test.ts`):
   - Happy path: post created, returned `post_url` matches `rendererFor(blog).baseUrl + '/<slug>'`.
-  - Missing title: `ZOD_VALIDATION` envelope.
+  - Missing title: SDK-shaped validation error (no `structuredContent`; text starts with `'Input validation error:'`). See decision #15.
   - Cross-blog guard: call with `blog_id` that doesn't match bearer's blog → `BLOG_NOT_FOUND` envelope.
   - Idempotency replay: two identical calls with the same `idempotency_key` return identical `structuredContent`.
   - Idempotency mismatch: same key, different `body` field → `IDEMPOTENCY_KEY_CONFLICT` envelope (422-equivalent code).
@@ -298,7 +302,7 @@ Target: `pnpm test` passes with all existing 308 tests plus the new ones. New mo
 
 - **`update_post`** (`tests/mcp/posts-update.test.ts`):
   - Each row of the REST status-matrix from the REST spec (draft→draft, draft→published, published→published, published→draft) — verify file/DB side effects match REST.
-  - Slug in patch → `ZOD_VALIDATION` envelope (`PostPatchSchema` is `.strict()` and excludes slug).
+  - Slug in patch → SDK-shaped validation error (`PostPatchSchema` is `.strict()` and excludes slug; validation fires at the SDK layer). See decision #15.
   - Empty patch → no-op, returns current post unchanged.
 
 - **`delete_post`** (`tests/mcp/posts-delete.test.ts`):
@@ -347,7 +351,12 @@ The SDK's `InMemoryTransport` doesn't carry HTTP headers. For `authMode: 'api_ke
 
 - `examples/self-hosted/mcp-stdio.ts` — ~30 lines. Boots core, calls `createMcpServer({ ..., authMode: 'none' })`, awaits `server.connect(new StdioServerTransport())`. README note: stdio implies single-tenant; pair with `authMode: 'none'`.
 - `examples/self-hosted/mcp-http.ts` — ~60 lines. Mounts `StreamableHTTPServerTransport` on a Hono route (`/mcp`) alongside the REST router (`/`) under one process. `authMode: 'api_key'`. This is the shape the platform PR will mirror after core merges to `main`.
-- `src/skill.ts` — append `## MCP tools` section listing the 8 tools + description + auth/idempotency caveats. Add drift-guard test (`tests/mcp/skill-parity.test.ts`): the tools registered on a fresh `McpServer` match the tools documented in `generateSkillFile({ baseUrl })` output.
+- `src/skill.ts` — append `## MCP tools` section listing the 8 tools + description + these caveats:
+  - **Validation errors are SDK-shaped** (no `structuredContent`); match on `content[0].text.startsWith('Input validation error')`. Business errors preserve full REST-parity envelope shape.
+  - **Idempotency is api_key-mode only.** Under `authMode: 'none'`, retries re-execute — same behavior as REST's crash window (decision #20). Self-hosters using stdio should not rely on `idempotency_key` for replay semantics.
+  - **`signup` is not idempotent** (mirror of REST decision #22). Passing `idempotency_key` fails schema validation.
+  - **Canonical-JSON hash for MCP idempotency** (vs REST's bytewise). Sending the same args with different key orders hashes identically, unlike REST.
+  Add drift-guard test (`tests/mcp/skill-parity.test.ts`): the tools registered on a fresh `McpServer` match the tools documented in `generateSkillFile({ baseUrl })` output.
 
 If execution runs long, Tier 2 lands in a follow-up feature (`feat/mcp-examples`). The minimum to call this feature done is Tier 1 with all its tests green.
 
@@ -371,6 +380,8 @@ If execution runs long, Tier 2 lands in a follow-up feature (`feat/mcp-examples`
 - Batch tool calls / streaming tool responses.
 - MCP auth modes other than `api_key` / `none` (e.g., per-call `apiKey` arg — explicitly rejected in brainstorming).
 - Stdio transport with `authMode: 'api_key'` — stdio gets `authMode: 'none'` by convention; HTTP is the mode where api_key makes sense.
+- REST-parity envelope shape for MCP *validation* errors (decision #15). Business-error parity is preserved via `wrapTool`; schema-validation errors surface in the SDK's shape.
+- Idempotency under `authMode: 'none'` (decision #16). Mirrors REST's "no caller identity → no replay" behavior.
 
 ---
 
