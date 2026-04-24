@@ -1,218 +1,345 @@
-<!DOCTYPE html>
+<!doctype html>
 
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Why AI Slop is the Future - SlopIt</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    "colors": {
-                        "on-tertiary": "#ffffff",
-                        "surface": "#fff8f6",
-                        "secondary-fixed": "#e5e2e1",
-                        "tertiary-fixed": "#d4e3ff",
-                        "on-primary": "#ffffff",
-                        "tertiary-fixed-dim": "#a4c9ff",
-                        "on-tertiary-container": "#fdfcff",
-                        "primary-fixed": "#ffdbd0",
-                        "inverse-surface": "#3f2c26",
-                        "surface-bright": "#fff8f6",
-                        "tertiary": "#005da8",
-                        "on-tertiary-fixed-variant": "#004884",
-                        "surface-container-highest": "#fbdcd3",
-                        "inverse-on-surface": "#ffede8",
-                        "surface-dim": "#f2d3ca",
-                        "surface-container-low": "#fff1ed",
-                        "primary": "#a93100",
-                        "secondary-fixed-dim": "#c8c6c5",
-                        "tertiary-container": "#0076d3",
-                        "on-primary-fixed": "#3a0b00",
-                        "on-error-container": "#93000a",
-                        "error": "#ba1a1a",
-                        "outline": "#916f65",
-                        "primary-container": "#d34000",
-                        "on-surface": "#281712",
-                        "on-surface-variant": "#5c4037",
-                        "error-container": "#ffdad6",
-                        "inverse-primary": "#ffb59e",
-                        "on-primary-container": "#fffbff",
-                        "primary-fixed-dim": "#ffb59e",
-                        "on-secondary-container": "#636262",
-                        "background": "#fff8f6",
-                        "on-tertiary-fixed": "#001c39",
-                        "secondary-container": "#e2dfde",
-                        "surface-variant": "#fbdcd3",
-                        "outline-variant": "#e6beb2",
-                        "surface-container": "#ffe9e3",
-                        "surface-container-lowest": "#ffffff",
-                        "on-primary-fixed-variant": "#842500",
-                        "on-error": "#ffffff",
-                        "on-secondary-fixed": "#1c1b1b",
-                        "secondary": "#5f5e5e",
-                        "surface-tint": "#ad3300",
-                        "surface-container-high": "#ffe2da",
-                        "on-background": "#281712",
-                        "on-secondary-fixed-variant": "#474746",
-                        "on-secondary": "#ffffff"
-                    },
-                    "borderRadius": {
-                        "DEFAULT": "0.25rem",
-                        "lg": "0.5rem",
-                        "xl": "0.75rem",
-                        "full": "9999px"
-                    },
-                    "spacing": {
-                        "max-width": "1080px",
-                        "section-gap": "4rem",
-                        "reading-width": "720px",
-                        "stack-gap": "1.5rem",
-                        "container-padding": "2rem",
-                        "unit": "4px"
-                    },
-                    "fontFamily": {
-                        "h3": ["Satoshi", "sans-serif"],
-                        "h2": ["Satoshi", "sans-serif"],
-                        "caption": ["Satoshi", "sans-serif"],
-                        "display-lg": ["Satoshi", "sans-serif"],
-                        "h1": ["Satoshi", "sans-serif"],
-                        "body-md": ["Satoshi", "sans-serif"],
-                        "code": ["JetBrains Mono", "monospace"],
-                        "body-lg": ["Satoshi", "sans-serif"]
-                    },
-                    "fontSize": {
-                        "h3": ["20px", {"lineHeight": "1.4", "fontWeight": "500"}],
-                        "h2": ["24px", {"lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "700"}],
-                        "caption": ["14px", {"lineHeight": "1.4", "fontWeight": "500"}],
-                        "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "900"}],
-                        "h1": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "900"}],
-                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
-                        "code": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
-                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
-                    }
-                }
-            }
-        }
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Why AI Slop is the Future - SlopIt</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'on-tertiary': '#ffffff',
+              surface: '#fff8f6',
+              'secondary-fixed': '#e5e2e1',
+              'tertiary-fixed': '#d4e3ff',
+              'on-primary': '#ffffff',
+              'tertiary-fixed-dim': '#a4c9ff',
+              'on-tertiary-container': '#fdfcff',
+              'primary-fixed': '#ffdbd0',
+              'inverse-surface': '#3f2c26',
+              'surface-bright': '#fff8f6',
+              tertiary: '#005da8',
+              'on-tertiary-fixed-variant': '#004884',
+              'surface-container-highest': '#fbdcd3',
+              'inverse-on-surface': '#ffede8',
+              'surface-dim': '#f2d3ca',
+              'surface-container-low': '#fff1ed',
+              primary: '#a93100',
+              'secondary-fixed-dim': '#c8c6c5',
+              'tertiary-container': '#0076d3',
+              'on-primary-fixed': '#3a0b00',
+              'on-error-container': '#93000a',
+              error: '#ba1a1a',
+              outline: '#916f65',
+              'primary-container': '#d34000',
+              'on-surface': '#281712',
+              'on-surface-variant': '#5c4037',
+              'error-container': '#ffdad6',
+              'inverse-primary': '#ffb59e',
+              'on-primary-container': '#fffbff',
+              'primary-fixed-dim': '#ffb59e',
+              'on-secondary-container': '#636262',
+              background: '#fff8f6',
+              'on-tertiary-fixed': '#001c39',
+              'secondary-container': '#e2dfde',
+              'surface-variant': '#fbdcd3',
+              'outline-variant': '#e6beb2',
+              'surface-container': '#ffe9e3',
+              'surface-container-lowest': '#ffffff',
+              'on-primary-fixed-variant': '#842500',
+              'on-error': '#ffffff',
+              'on-secondary-fixed': '#1c1b1b',
+              secondary: '#5f5e5e',
+              'surface-tint': '#ad3300',
+              'surface-container-high': '#ffe2da',
+              'on-background': '#281712',
+              'on-secondary-fixed-variant': '#474746',
+              'on-secondary': '#ffffff',
+            },
+            borderRadius: {
+              DEFAULT: '0.25rem',
+              lg: '0.5rem',
+              xl: '0.75rem',
+              full: '9999px',
+            },
+            spacing: {
+              'max-width': '1080px',
+              'section-gap': '4rem',
+              'reading-width': '720px',
+              'stack-gap': '1.5rem',
+              'container-padding': '2rem',
+              unit: '4px',
+            },
+            fontFamily: {
+              h3: ['Satoshi', 'sans-serif'],
+              h2: ['Satoshi', 'sans-serif'],
+              caption: ['Satoshi', 'sans-serif'],
+              'display-lg': ['Satoshi', 'sans-serif'],
+              h1: ['Satoshi', 'sans-serif'],
+              'body-md': ['Satoshi', 'sans-serif'],
+              code: ['JetBrains Mono', 'monospace'],
+              'body-lg': ['Satoshi', 'sans-serif'],
+            },
+            fontSize: {
+              h3: ['20px', { lineHeight: '1.4', fontWeight: '500' }],
+              h2: ['24px', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '700' }],
+              caption: ['14px', { lineHeight: '1.4', fontWeight: '500' }],
+              'display-lg': [
+                '48px',
+                { lineHeight: '1.1', letterSpacing: '-0.04em', fontWeight: '900' },
+              ],
+              h1: ['32px', { lineHeight: '1.2', letterSpacing: '-0.02em', fontWeight: '900' }],
+              'body-md': ['16px', { lineHeight: '1.6', fontWeight: '400' }],
+              code: ['14px', { lineHeight: '1.5', fontWeight: '400' }],
+              'body-lg': ['18px', { lineHeight: '1.6', fontWeight: '400' }],
+            },
+          },
+        },
+      }
     </script>
-<style type="text/tailwindcss">
-        @layer utilities {
-            .material-symbols-outlined {
-                font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-            }
+    <style type="text/tailwindcss">
+      @layer utilities {
+        .material-symbols-outlined {
+          font-variation-settings:
+            'FILL' 0,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24;
         }
+      }
     </style>
-</head>
-<body class="bg-background text-on-surface font-body-md antialiased flex flex-col min-h-screen">
-<!-- TopAppBar Component -->
-<header class="bg-[#FAFAF9] dark:bg-stone-950 font-sans text-stone-900 dark:text-stone-50 antialiased sticky full-width top-0 z-50 border-b border-stone-200 dark:border-stone-800 shadow-none">
-<div class="max-w-[1080px] mx-auto w-full flex items-center justify-between px-6 py-6">
-<div class="flex items-center gap-8">
-<a class="text-2xl font-black tracking-tighter text-stone-900 dark:text-stone-50" href="#">SlopIt</a>
-<nav class="hidden md:flex items-center gap-6">
-<a class="text-stone-600 dark:text-stone-400 font-medium hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform" href="#">Philosophy</a>
-<a class="text-stone-600 dark:text-stone-400 font-medium hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform" href="#">How it Works</a>
-<a class="text-stone-600 dark:text-stone-400 font-medium hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform" href="#">Pricing</a>
-<a class="text-[#FF4F00] border-b-2 border-[#FF4F00] pb-1 font-bold hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform" href="#">Blog</a>
-</nav>
-</div>
-<div class="flex items-center gap-4">
-<button class="font-medium text-stone-600 dark:text-stone-400 hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform">Log In</button>
-<button class="bg-[#FF4F00] text-white px-4 py-2 rounded font-medium active:scale-95 transition-transform">Start Writing</button>
-</div>
-</div>
-</header>
-<!-- Main Content Area -->
-<main class="flex-grow w-full max-w-max-width mx-auto px-6 py-section-gap">
-<article class="max-w-reading-width mx-auto">
-<!-- Header -->
-<header class="mb-stack-gap">
-<div class="flex gap-2 mb-6">
-<span class="inline-block px-2 py-1 bg-primary/10 text-primary text-[12px] font-bold uppercase tracking-[0.05em] rounded">AI TRENDS</span>
-<span class="inline-block px-2 py-1 bg-secondary-container text-secondary text-[12px] font-bold uppercase tracking-[0.05em] rounded">EDITORIAL</span>
-</div>
-<h1 class="font-display-lg text-display-lg text-on-surface mb-6">Why AI Slop is the Future</h1>
-<div class="flex flex-col sm:flex-row sm:items-center justify-between py-6 border-y border-outline-variant/30 gap-4">
-<div class="flex items-center gap-4">
-<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary font-bold">
-                            SL
-                        </div>
-<div>
-<div class="font-caption text-caption text-on-surface font-bold">SlopIt Editorial Team</div>
-<div class="font-caption text-caption text-secondary">Oct 24, 2024 · 5 min read</div>
-</div>
-</div>
-<div class="flex items-center gap-3 text-secondary">
-<button aria-label="Share" class="hover:text-primary transition-colors flex items-center justify-center p-2 rounded-full hover:bg-surface-variant">
-<span class="material-symbols-outlined" data-icon="share">share</span>
-</button>
-<button aria-label="Save" class="hover:text-primary transition-colors flex items-center justify-center p-2 rounded-full hover:bg-surface-variant">
-<span class="material-symbols-outlined" data-icon="bookmark">bookmark</span>
-</button>
-</div>
-</div>
-</header>
-<!-- Featured Image -->
-<figure class="mb-section-gap">
-<img class="w-full aspect-[16/9] object-cover rounded-xl border border-outline-variant/50" data-alt="abstract digital waves in warm coral and grey tones representing data flow and creative generation, soft lighting, modern minimalist aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOcowFEjLCVOaTPulYrFFpbtwyJ_AWN4QcTY_hbkeKW73rUtbyxfEmfk_zulSUXa_2l7mizlrcBB3a42X0oOiUy2A7iGv0exzlT-QCKAqQUDNttlxOLx2jyGPJhRjP8WjUhkP15TRVBw9_RJ4yePvVxIyOgPbmAhICQobPlGkA8NZkmGdn2bP2xDFHWMYZ2_kvt4SgbZ_bnHMmA42WqkUoXXrVodQw0LtRNML4vy1FbeE5VzJEO5rxmYIKyy8K_D1SwyXOQjxucPFa"/>
-<figcaption class="font-caption text-caption text-secondary mt-3 text-center">The convergence of volume and value in the modern content ecosystem.</figcaption>
-</figure>
-<!-- Body Content -->
-<div class="prose prose-lg prose-stone max-w-none">
-<p class="font-body-lg text-body-lg text-on-surface mb-6">
-                    For years, the internet has feared the rise of "slop"—endless, low-effort content churned out by algorithms. The prevailing narrative has been one of defensive curation: build higher walls, deploy stronger filters, and retreat to gated communities of verified human authorship. But what if we've been looking at the equation backwards?
-                </p>
-<p class="font-body-lg text-body-lg text-on-surface mb-6">
-                    The democratization of content creation via AI isn't an erosion of quality; it's a recalibration of exactly what content is supposed to do. When the marginal cost of creating a readable, structurally sound article approaches zero, the value stops being about the mechanics of the writing and shifts entirely to the <em>intent</em> behind it.
-                </p>
-<h2 class="font-h2 text-h2 text-on-surface mt-12 mb-6">The Rebranding of Volume</h2>
-<p class="font-body-lg text-body-lg text-on-surface mb-6">
-                    Think about the architectural shift from artisanal bricklaying to modern modular construction. We don't lament the loss of individual brick character when building a skyscraper; we marvel at the scale and utility. Content is entering its skyscraper phase.
-                </p>
-<blockquote class="border-l-4 border-primary bg-surface-container-low pl-6 py-4 my-8 rounded-r-lg shadow-sm">
-<p class="font-h3 text-h3 text-on-surface-variant italic mb-0">
-                        "High-trust authorship in the AI era isn't about proving a human typed every word. It's about a human standing behind the semantic truth of the output."
-                    </p>
-</blockquote>
-<p class="font-body-lg text-body-lg text-on-surface mb-6">
-                    Platforms like SlopIt are built on a controversial but undeniable premise: utility scales. By providing a high-trust, frictionless environment for algorithmic drafting, we allow creators to operate as editors-in-chief of their own personal media empires.
-                </p>
-<h3 class="font-h3 text-h3 text-on-surface mt-10 mb-4">Embracing the Flow</h3>
-<ul class="list-disc pl-6 mb-8 font-body-lg text-body-lg text-on-surface space-y-2">
-<li><strong>Transparency over purity:</strong> Readers care if an article solves their problem, not if an LLM structured the opening paragraph.</li>
-<li><strong>Iterative perfection:</strong> Rapid generation allows for rapid refinement. The first draft is cheap, but the final polish is where the value accrues.</li>
-<li><strong>The death of writer's block:</strong> A blank page is intimidating. A page full of "slop" to be sculpted is an invitation.</li>
-</ul>
-<p class="font-body-lg text-body-lg text-on-surface mb-12">
-                    The future belongs to those who stop fighting the tide of generated text and start learning to surf it. It's time to stop worrying and learn to love the output.
-                </p>
-</div>
-<!-- Tags -->
-<div class="flex flex-wrap gap-2 pt-8 border-t border-outline-variant/30">
-<span class="px-3 py-1 bg-surface-container rounded-full font-caption text-caption text-on-surface-variant border border-outline-variant/50">#AI Content</span>
-<span class="px-3 py-1 bg-surface-container rounded-full font-caption text-caption text-on-surface-variant border border-outline-variant/50">#Future of Work</span>
-<span class="px-3 py-1 bg-surface-container rounded-full font-caption text-caption text-on-surface-variant border border-outline-variant/50">#Creator Economy</span>
-</div>
-</article>
-</main>
-<!-- Footer Component -->
-<footer class="bg-[#F0EFEB] dark:bg-stone-900 w-full border-t border-stone-200 dark:border-stone-800 shadow-none opacity-100">
-<div class="max-w-[1080px] mx-auto w-full py-16 px-6 flex flex-col md:flex-row justify-between items-center gap-8">
-<div class="font-bold text-stone-900 dark:text-stone-50">SlopIt</div>
-<nav class="flex flex-wrap justify-center gap-6">
-<a class="font-sans text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors" href="#">Terms</a>
-<a class="font-sans text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors" href="#">Privacy</a>
-<a class="font-sans text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors" href="#">Twitter</a>
-<a class="font-sans text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors" href="#">RSS Feed</a>
-</nav>
-<div class="font-sans text-sm text-stone-500 dark:text-stone-400">
-                © 2024 SlopIt. Built for high-trust authorship.
+  </head>
+  <body class="bg-background text-on-surface font-body-md antialiased flex flex-col min-h-screen">
+    <!-- TopAppBar Component -->
+    <header
+      class="bg-[#FAFAF9] dark:bg-stone-950 font-sans text-stone-900 dark:text-stone-50 antialiased sticky full-width top-0 z-50 border-b border-stone-200 dark:border-stone-800 shadow-none"
+    >
+      <div class="max-w-[1080px] mx-auto w-full flex items-center justify-between px-6 py-6">
+        <div class="flex items-center gap-8">
+          <a class="text-2xl font-black tracking-tighter text-stone-900 dark:text-stone-50" href="#"
+            >SlopIt</a
+          >
+          <nav class="hidden md:flex items-center gap-6">
+            <a
+              class="text-stone-600 dark:text-stone-400 font-medium hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform"
+              href="#"
+              >Philosophy</a
+            >
+            <a
+              class="text-stone-600 dark:text-stone-400 font-medium hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform"
+              href="#"
+              >How it Works</a
+            >
+            <a
+              class="text-stone-600 dark:text-stone-400 font-medium hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform"
+              href="#"
+              >Pricing</a
+            >
+            <a
+              class="text-[#FF4F00] border-b-2 border-[#FF4F00] pb-1 font-bold hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform"
+              href="#"
+              >Blog</a
+            >
+          </nav>
+        </div>
+        <div class="flex items-center gap-4">
+          <button
+            class="font-medium text-stone-600 dark:text-stone-400 hover:text-[#FF4F00] transition-colors duration-200 active:scale-95 transition-transform"
+          >
+            Log In
+          </button>
+          <button
+            class="bg-[#FF4F00] text-white px-4 py-2 rounded font-medium active:scale-95 transition-transform"
+          >
+            Start Writing
+          </button>
+        </div>
+      </div>
+    </header>
+    <!-- Main Content Area -->
+    <main class="flex-grow w-full max-w-max-width mx-auto px-6 py-section-gap">
+      <article class="max-w-reading-width mx-auto">
+        <!-- Header -->
+        <header class="mb-stack-gap">
+          <div class="flex gap-2 mb-6">
+            <span
+              class="inline-block px-2 py-1 bg-primary/10 text-primary text-[12px] font-bold uppercase tracking-[0.05em] rounded"
+              >AI TRENDS</span
+            >
+            <span
+              class="inline-block px-2 py-1 bg-secondary-container text-secondary text-[12px] font-bold uppercase tracking-[0.05em] rounded"
+              >EDITORIAL</span
+            >
+          </div>
+          <h1 class="font-display-lg text-display-lg text-on-surface mb-6">
+            Why AI Slop is the Future
+          </h1>
+          <div
+            class="flex flex-col sm:flex-row sm:items-center justify-between py-6 border-y border-outline-variant/30 gap-4"
+          >
+            <div class="flex items-center gap-4">
+              <div
+                class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary font-bold"
+              >
+                SL
+              </div>
+              <div>
+                <div class="font-caption text-caption text-on-surface font-bold">
+                  SlopIt Editorial Team
+                </div>
+                <div class="font-caption text-caption text-secondary">
+                  Oct 24, 2024 · 5 min read
+                </div>
+              </div>
             </div>
-</div>
-</footer>
-</body></html>
+            <div class="flex items-center gap-3 text-secondary">
+              <button
+                aria-label="Share"
+                class="hover:text-primary transition-colors flex items-center justify-center p-2 rounded-full hover:bg-surface-variant"
+              >
+                <span class="material-symbols-outlined" data-icon="share">share</span>
+              </button>
+              <button
+                aria-label="Save"
+                class="hover:text-primary transition-colors flex items-center justify-center p-2 rounded-full hover:bg-surface-variant"
+              >
+                <span class="material-symbols-outlined" data-icon="bookmark">bookmark</span>
+              </button>
+            </div>
+          </div>
+        </header>
+        <!-- Featured Image -->
+        <figure class="mb-section-gap">
+          <img
+            class="w-full aspect-[16/9] object-cover rounded-xl border border-outline-variant/50"
+            data-alt="abstract digital waves in warm coral and grey tones representing data flow and creative generation, soft lighting, modern minimalist aesthetic"
+            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOcowFEjLCVOaTPulYrFFpbtwyJ_AWN4QcTY_hbkeKW73rUtbyxfEmfk_zulSUXa_2l7mizlrcBB3a42X0oOiUy2A7iGv0exzlT-QCKAqQUDNttlxOLx2jyGPJhRjP8WjUhkP15TRVBw9_RJ4yePvVxIyOgPbmAhICQobPlGkA8NZkmGdn2bP2xDFHWMYZ2_kvt4SgbZ_bnHMmA42WqkUoXXrVodQw0LtRNML4vy1FbeE5VzJEO5rxmYIKyy8K_D1SwyXOQjxucPFa"
+          />
+          <figcaption class="font-caption text-caption text-secondary mt-3 text-center">
+            The convergence of volume and value in the modern content ecosystem.
+          </figcaption>
+        </figure>
+        <!-- Body Content -->
+        <div class="prose prose-lg prose-stone max-w-none">
+          <p class="font-body-lg text-body-lg text-on-surface mb-6">
+            For years, the internet has feared the rise of "slop"—endless, low-effort content
+            churned out by algorithms. The prevailing narrative has been one of defensive curation:
+            build higher walls, deploy stronger filters, and retreat to gated communities of
+            verified human authorship. But what if we've been looking at the equation backwards?
+          </p>
+          <p class="font-body-lg text-body-lg text-on-surface mb-6">
+            The democratization of content creation via AI isn't an erosion of quality; it's a
+            recalibration of exactly what content is supposed to do. When the marginal cost of
+            creating a readable, structurally sound article approaches zero, the value stops being
+            about the mechanics of the writing and shifts entirely to the <em>intent</em> behind it.
+          </p>
+          <h2 class="font-h2 text-h2 text-on-surface mt-12 mb-6">The Rebranding of Volume</h2>
+          <p class="font-body-lg text-body-lg text-on-surface mb-6">
+            Think about the architectural shift from artisanal bricklaying to modern modular
+            construction. We don't lament the loss of individual brick character when building a
+            skyscraper; we marvel at the scale and utility. Content is entering its skyscraper
+            phase.
+          </p>
+          <blockquote
+            class="border-l-4 border-primary bg-surface-container-low pl-6 py-4 my-8 rounded-r-lg shadow-sm"
+          >
+            <p class="font-h3 text-h3 text-on-surface-variant italic mb-0">
+              "High-trust authorship in the AI era isn't about proving a human typed every word.
+              It's about a human standing behind the semantic truth of the output."
+            </p>
+          </blockquote>
+          <p class="font-body-lg text-body-lg text-on-surface mb-6">
+            Platforms like SlopIt are built on a controversial but undeniable premise: utility
+            scales. By providing a high-trust, frictionless environment for algorithmic drafting, we
+            allow creators to operate as editors-in-chief of their own personal media empires.
+          </p>
+          <h3 class="font-h3 text-h3 text-on-surface mt-10 mb-4">Embracing the Flow</h3>
+          <ul class="list-disc pl-6 mb-8 font-body-lg text-body-lg text-on-surface space-y-2">
+            <li>
+              <strong>Transparency over purity:</strong> Readers care if an article solves their
+              problem, not if an LLM structured the opening paragraph.
+            </li>
+            <li>
+              <strong>Iterative perfection:</strong> Rapid generation allows for rapid refinement.
+              The first draft is cheap, but the final polish is where the value accrues.
+            </li>
+            <li>
+              <strong>The death of writer's block:</strong> A blank page is intimidating. A page
+              full of "slop" to be sculpted is an invitation.
+            </li>
+          </ul>
+          <p class="font-body-lg text-body-lg text-on-surface mb-12">
+            The future belongs to those who stop fighting the tide of generated text and start
+            learning to surf it. It's time to stop worrying and learn to love the output.
+          </p>
+        </div>
+        <!-- Tags -->
+        <div class="flex flex-wrap gap-2 pt-8 border-t border-outline-variant/30">
+          <span
+            class="px-3 py-1 bg-surface-container rounded-full font-caption text-caption text-on-surface-variant border border-outline-variant/50"
+            >#AI Content</span
+          >
+          <span
+            class="px-3 py-1 bg-surface-container rounded-full font-caption text-caption text-on-surface-variant border border-outline-variant/50"
+            >#Future of Work</span
+          >
+          <span
+            class="px-3 py-1 bg-surface-container rounded-full font-caption text-caption text-on-surface-variant border border-outline-variant/50"
+            >#Creator Economy</span
+          >
+        </div>
+      </article>
+    </main>
+    <!-- Footer Component -->
+    <footer
+      class="bg-[#F0EFEB] dark:bg-stone-900 w-full border-t border-stone-200 dark:border-stone-800 shadow-none opacity-100"
+    >
+      <div
+        class="max-w-[1080px] mx-auto w-full py-16 px-6 flex flex-col md:flex-row justify-between items-center gap-8"
+      >
+        <div class="font-bold text-stone-900 dark:text-stone-50">SlopIt</div>
+        <nav class="flex flex-wrap justify-center gap-6">
+          <a
+            class="font-sans text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+            href="#"
+            >Terms</a
+          >
+          <a
+            class="font-sans text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+            href="#"
+            >Privacy</a
+          >
+          <a
+            class="font-sans text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+            href="#"
+            >Twitter</a
+          >
+          <a
+            class="font-sans text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
+            href="#"
+            >RSS Feed</a
+          >
+        </nav>
+        <div class="font-sans text-sm text-stone-500 dark:text-stone-400">
+          © 2024 SlopIt. Built for high-trust authorship.
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

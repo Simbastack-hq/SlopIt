@@ -31,7 +31,7 @@ The test: *"Could someone run this as a personal single-tenant blog on their lap
 |---|---|---|
 | Blog + post schema (SQLite migrations) | ✅ | |
 | Markdown → HTML rendering | ✅ | |
-| Theme system + 3 built-in themes | ✅ | |
+| Theme system + built-in themes (v1: `minimal` only) | ✅ | |
 | Static file output to configurable dir | ✅ | |
 | REST API routes (CRUD on posts/blogs) | ✅ (as factory) | |
 | MCP server + tools | ✅ (as factory) | |
@@ -181,7 +181,7 @@ slopit-platform/
 2. **Core is single-blog-scoped at the request level.** Every core handler receives an already-resolved blog context. Core does not resolve "which blog is this request for." That's the consumer's job.
 3. **Core owns its tables.** `blogs`, `posts`, `api_keys`, etc. Platform never writes to core tables directly — it calls core's store API. Platform migrations add its own tables only (`accounts`, `subscriptions`, `custom_domains`, etc.) with foreign keys *into* core tables.
 4. **Core writes to a configurable output directory.** Platform chooses the path per blog. Core never assumes `/var/slopit/...`.
-5. **No `slopit.io` strings in core.** URLs, branding, marketing copy, Stripe keys, llms.txt pointing at our domain — all platform. Core emits relative URLs or takes a `baseUrl` parameter.
+5. **No `slopit.io` strings, and no platform env vars, in core — with one documented exception:** the "Powered by SlopIt" footer link emitted by `renderPoweredBy` in `src/rendering/generator.ts` points to `https://slopit.io`. This is the single branding hook in core; platform strips/replaces it per plan (Pro tier). Everything else this rule covers — Stripe keys, Cloudflare tokens, marketing copy, platform env vars, other hardcoded domains — stays forbidden. Core emits relative URLs or takes a `baseUrl` parameter.
 6. **Core ships themes. Platform does not.** Adding a theme = PR to the public repo. If we ever want private/premium themes, we cross that bridge then.
 7. **Self-hosted must stay viable.** Every core PR runs the self-hosted example in CI. If you can't `docker compose up` and publish a post, the PR doesn't merge.
 8. **Platform private features are flags layered on top of core responses.** E.g., core returns a post; platform middleware strips/adds "Powered by SlopIt" footer based on the account's plan. Core doesn't know plans exist.

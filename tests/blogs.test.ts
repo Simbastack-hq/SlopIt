@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createStore, type Store } from '../src/db/store.js'
-import { createApiKey, createBlog, isBlogNameConflict } from '../src/blogs.js'
+import {
+  createApiKey,
+  createBlog,
+  isBlogNameConflict,
+  getBlogInternal,
+  getBlog,
+} from '../src/blogs.js'
 import { hashApiKey } from '../src/auth/api-key.js'
 import { SlopItError } from '../src/errors.js'
 import { CreateBlogInputSchema } from '../src/schema/index.js'
@@ -36,7 +42,9 @@ describe('isBlogNameConflict', () => {
     expect(isBlogNameConflict(null)).toBe(false)
     expect(isBlogNameConflict(undefined)).toBe(false)
     expect(isBlogNameConflict('not an error')).toBe(false)
-    expect(isBlogNameConflict({ code: 'SQLITE_CONSTRAINT_UNIQUE', message: 'blogs.name' })).toBe(false)
+    expect(isBlogNameConflict({ code: 'SQLITE_CONSTRAINT_UNIQUE', message: 'blogs.name' })).toBe(
+      false,
+    )
   })
 })
 
@@ -53,10 +61,13 @@ describe('CreateBlogInputSchema', () => {
     }
   })
 
-  it('accepts all three valid themes', () => {
-    for (const theme of ['minimal', 'classic', 'zine'] as const) {
-      expect(CreateBlogInputSchema.parse({ theme }).theme).toBe(theme)
-    }
+  it('accepts the minimal theme', () => {
+    expect(CreateBlogInputSchema.parse({ theme: 'minimal' }).theme).toBe('minimal')
+  })
+
+  it('rejects classic and zine (narrowed to minimal-only in v1)', () => {
+    expect(() => CreateBlogInputSchema.parse({ theme: 'classic' })).toThrow()
+    expect(() => CreateBlogInputSchema.parse({ theme: 'zine' })).toThrow()
   })
 
   it('rejects invalid theme', () => {
@@ -104,17 +115,19 @@ describe('createBlog', () => {
     const { blog } = createBlog(store, { name: 'ai-thoughts' })
     expect(blog.name).toBe('ai-thoughts')
 
-    const row = store.db
-      .prepare('SELECT id, name, theme FROM blogs WHERE id = ?')
-      .get(blog.id) as { id: string; name: string; theme: string }
+    const row = store.db.prepare('SELECT id, name, theme FROM blogs WHERE id = ?').get(blog.id) as {
+      id: string
+      name: string
+      theme: string
+    }
     expect(row.id).toBe(blog.id)
     expect(row.name).toBe('ai-thoughts')
     expect(row.theme).toBe('minimal')
   })
 
   it('creates a blog with an explicit theme', () => {
-    const { blog } = createBlog(store, { theme: 'zine' })
-    expect(blog.theme).toBe('zine')
+    const { blog } = createBlog(store, { theme: 'minimal' })
+    expect(blog.theme).toBe('minimal')
   })
 
   it('generates a different id on each call', () => {
@@ -173,9 +186,7 @@ describe('createApiKey', () => {
     expect(row.key_hash).toBe(hash)
 
     // No row where key_hash == plaintext (defense check)
-    const plaintextRows = store.db
-      .prepare('SELECT 1 FROM api_keys WHERE key_hash = ?')
-      .all(apiKey)
+    const plaintextRows = store.db.prepare('SELECT 1 FROM api_keys WHERE key_hash = ?').all(apiKey)
     expect(plaintextRows).toHaveLength(0)
   })
 
@@ -203,10 +214,12 @@ describe('createApiKey', () => {
   })
 
   it('leaves no api_keys row behind when the blog does not exist', () => {
-    try { createApiKey(store, 'nonexistent') } catch { /* expected */ }
-    const count = store.db
-      .prepare('SELECT COUNT(*) AS n FROM api_keys')
-      .get() as { n: number }
+    try {
+      createApiKey(store, 'nonexistent')
+    } catch {
+      /* expected */
+    }
+    const count = store.db.prepare('SELECT COUNT(*) AS n FROM api_keys').get() as { n: number }
     expect(count.n).toBe(0)
   })
 })
@@ -218,5 +231,73 @@ describe('public barrel exports', () => {
     expect(typeof mod.createApiKey).toBe('function')
     expect(typeof mod.SlopItError).toBe('function') // class is callable
     expect(typeof mod.CreateBlogInputSchema).toBe('object') // Zod schema
+  })
+})
+
+describe('getBlogInternal', () => {
+  let dir: string
+  let store: Store
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('returns a named blog', () => {
+    const { blog } = createBlog(store, { name: 'ai-thoughts' })
+    const fetched = getBlogInternal(store, blog.id)
+    expect(fetched.id).toBe(blog.id)
+    expect(fetched.name).toBe('ai-thoughts')
+    expect(fetched.theme).toBe('minimal')
+  })
+
+  it('returns an unnamed blog', () => {
+    const { blog } = createBlog(store, {})
+    const fetched = getBlogInternal(store, blog.id)
+    expect(fetched.name).toBeNull()
+  })
+
+  it('throws SlopItError(BLOG_NOT_FOUND) when the id does not exist', () => {
+    let caught: unknown
+    try {
+      getBlogInternal(store, 'nonexistent')
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(SlopItError)
+    expect((caught as SlopItError).code).toBe('BLOG_NOT_FOUND')
+    expect((caught as SlopItError).details).toEqual({ blogId: 'nonexistent' })
+  })
+})
+
+describe('getBlog', () => {
+  let dir: string
+  let store: Store
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-getblog-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('returns the blog for a known id', () => {
+    const { blog } = createBlog(store, { name: 'my-blog' })
+    const fetched = getBlog(store, blog.id)
+    expect(fetched).toEqual(blog)
+  })
+
+  it('throws SlopItError(BLOG_NOT_FOUND) for an unknown id', () => {
+    expect(() => getBlog(store, 'missing')).toThrow(
+      expect.objectContaining({ code: 'BLOG_NOT_FOUND', details: { blogId: 'missing' } }),
+    )
   })
 })

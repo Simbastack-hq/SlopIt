@@ -40,7 +40,7 @@ describe('createStore', () => {
     const second = createStore({ dbPath: path })
 
     const rows = second.db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()
-    expect((rows as { n: number }).n).toBe(1)
+    expect((rows as { n: number }).n).toBe(2)
 
     second.close()
     rmSync(dir, { recursive: true, force: true })
