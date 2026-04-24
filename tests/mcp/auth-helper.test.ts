@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js'
-import type {
-  ServerNotification,
-  ServerRequest,
-} from '@modelcontextprotocol/sdk/types.js'
+import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js'
 import { resolveBearer } from '../../src/mcp/auth.js'
 
 type Extra = RequestHandlerExtra<ServerRequest, ServerNotification>
@@ -33,7 +30,7 @@ describe('resolveBearer', () => {
     expect(resolveBearer(extra, { authMode: 'api_key' })).toBe('sk_slop_lower')
   })
 
-  it("reads from requestInfo.headers case-insensitively (Authorization, AUTHORIZATION)", () => {
+  it('reads from requestInfo.headers case-insensitively (Authorization, AUTHORIZATION)', () => {
     const extra1 = makeExtra({
       requestInfo: { headers: { Authorization: 'Bearer sk_slop_cap' } },
     })

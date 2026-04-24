@@ -41,7 +41,7 @@ Implements spec Decision #6 + file `src/schema/post-input-base.ts`. Preparatory 
 - Create: `src/schema/post-input-base.ts`
 - Modify: `src/schema/index.ts` (lines 16–43 — extract `PostInputBaseSchema` const and the `superRefine` callback)
 
-- [ ] **Step 1: Create `src/schema/post-input-base.ts`**
+- [x] **Step 1: Create `src/schema/post-input-base.ts`**
 
 ```ts
 import { z } from 'zod'
@@ -91,7 +91,7 @@ export const slugTitleRefinement = (
 }
 ```
 
-- [ ] **Step 2: Rewrite `src/schema/index.ts`**
+- [x] **Step 2: Rewrite `src/schema/index.ts`**
 
 Replace the inline `PostInputBaseSchema` const + inline `superRefine` callback with imports from the new module. Do NOT re-export them — they must stay out of the barrel because `src/index.ts` does `export * from './schema/index.js'` and re-exporting would leak them publicly. `src/mcp/tools.ts` (Task 8+) imports directly from `./post-input-base.js`, bypassing the barrel.
 
@@ -160,12 +160,12 @@ export type CreateBlogInput = z.input<typeof CreateBlogInputSchema>
 
 Copy the block-doc comments from the original file verbatim — the snippet above omits a few for brevity but the file on disk should preserve them.
 
-- [ ] **Step 3: Run the full test suite to verify no regression**
+- [x] **Step 3: Run the full test suite to verify no regression**
 
 Run: `pnpm check`
 Expected: all 308 tests still pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/schema/post-input-base.ts src/schema/index.ts
@@ -193,7 +193,7 @@ Implements spec "Error envelope — shared helper" section. Lifts the mapping lo
 - Create: `tests/envelope.test.ts`
 - Modify: `src/api/errors.ts`
 
-- [ ] **Step 1: Write failing tests for `mapErrorToEnvelope`**
+- [x] **Step 1: Write failing tests for `mapErrorToEnvelope`**
 
 Create `tests/envelope.test.ts`:
 
@@ -266,12 +266,12 @@ describe('mapErrorToEnvelope', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test -- tests/envelope.test.ts`
 Expected: module not found — `Cannot find module '../src/envelope.js'`.
 
-- [ ] **Step 3: Create `src/envelope.ts`**
+- [x] **Step 3: Create `src/envelope.ts`**
 
 ```ts
 import { ZodError } from 'zod'
@@ -338,7 +338,7 @@ export function mapErrorToEnvelope(err: unknown): Envelope {
 }
 ```
 
-- [ ] **Step 4: Update `src/api/errors.ts` to delegate to `mapErrorToEnvelope`**
+- [x] **Step 4: Update `src/api/errors.ts` to delegate to `mapErrorToEnvelope`**
 
 Replace the file contents with:
 
@@ -366,17 +366,17 @@ export function respondError(c: Context, err: unknown): Response {
 }
 ```
 
-- [ ] **Step 5: Run the new tests — they should pass**
+- [x] **Step 5: Run the new tests — they should pass**
 
 Run: `pnpm test -- tests/envelope.test.ts`
 Expected: 5 passed.
 
-- [ ] **Step 6: Run the full test suite — REST tests should still pass unchanged**
+- [x] **Step 6: Run the full test suite — REST tests should still pass unchanged**
 
 Run: `pnpm check`
 Expected: 308 + 5 = 313 tests pass; typecheck + lint + prettier green.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/envelope.ts src/api/errors.ts tests/envelope.test.ts
@@ -405,7 +405,7 @@ Implements spec "Idempotency — shared helper" section. Pulls the SQL + scope-t
 - Create: `tests/idempotency-store.test.ts`
 - Modify: `src/api/idempotency.ts`
 
-- [ ] **Step 1: Write failing tests for the store helper**
+- [x] **Step 1: Write failing tests for the store helper**
 
 Create `tests/idempotency-store.test.ts`:
 
@@ -492,12 +492,12 @@ describe('idempotency-store', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `pnpm test -- tests/idempotency-store.test.ts`
 Expected: module not found.
 
-- [ ] **Step 3: Create `src/idempotency-store.ts`**
+- [x] **Step 3: Create `src/idempotency-store.ts`**
 
 ```ts
 import type { Store } from './db/store.js'
@@ -576,7 +576,7 @@ export function recordIdempotencyResponse(
 }
 ```
 
-- [ ] **Step 4: Update `src/api/idempotency.ts` to use the new helper**
+- [x] **Step 4: Update `src/api/idempotency.ts` to use the new helper**
 
 Replace the file with:
 
@@ -662,12 +662,12 @@ export function idempotencyMiddleware(
 }
 ```
 
-- [ ] **Step 5: Run the full test suite**
+- [x] **Step 5: Run the full test suite**
 
 Run: `pnpm check`
 Expected: 308 + 5 (Task 2) + 8 (new idempotency-store tests) = 321 tests pass; typecheck + lint + prettier green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/idempotency-store.ts src/api/idempotency.ts tests/idempotency-store.test.ts
@@ -695,7 +695,7 @@ Implements spec "Auth resolution" section. Reads the bearer token from `extra.au
 - Create: `src/mcp/auth.ts`
 - Create: `tests/mcp/auth-helper.test.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `tests/mcp/auth-helper.test.ts`:
 
@@ -775,12 +775,12 @@ describe('resolveBearer', () => {
 })
 ```
 
-- [ ] **Step 2: Run — fails because module missing**
+- [x] **Step 2: Run — fails because module missing**
 
 Run: `pnpm test -- tests/mcp/auth-helper.test.ts`
 Expected: module not found.
 
-- [ ] **Step 3: Create `src/mcp/auth.ts`**
+- [x] **Step 3: Create `src/mcp/auth.ts`**
 
 ```ts
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js'
@@ -835,12 +835,12 @@ export function resolveBearer(
 }
 ```
 
-- [ ] **Step 4: Run tests — should pass**
+- [x] **Step 4: Run tests — should pass**
 
 Run: `pnpm test -- tests/mcp/auth-helper.test.ts`
 Expected: 8 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/mcp/auth.ts tests/mcp/auth-helper.test.ts
@@ -867,7 +867,7 @@ Implements spec "`wrapTool` pipeline" section. One central place for auth → cr
 - Create: `src/mcp/wrap-tool.ts`
 - Create: `tests/mcp/wrap-tool.test.ts`
 
-- [ ] **Step 1: Write failing tests for `wrapTool`**
+- [x] **Step 1: Write failing tests for `wrapTool`**
 
 Create `tests/mcp/wrap-tool.test.ts`:
 
@@ -1066,12 +1066,12 @@ describe('wrapTool', () => {
 
 `wrapTool`'s signature is `wrapTool(config, name, opts, business)` — config first, always explicit, no module-globals. `registerTools` in Tasks 7–12 passes the same `config` that `createMcpServer` received.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `pnpm test -- tests/mcp/wrap-tool.test.ts`
 Expected: module not found.
 
-- [ ] **Step 3: Create `src/mcp/wrap-tool.ts`**
+- [x] **Step 3: Create `src/mcp/wrap-tool.ts`**
 
 ```ts
 import { createHash } from 'node:crypto'
@@ -1253,19 +1253,19 @@ export function wrapTool<A extends Record<string, unknown> = Record<string, unkn
 
 Note: no module-global state. `registerTools(server, config)` has `config` in scope and passes it to every `wrapTool` call. Tests do the same.
 
-- [ ] **Step 4: Run the `wrapTool` tests**
+- [x] **Step 4: Run the `wrapTool` tests**
 
 Run: `pnpm test -- tests/mcp/wrap-tool.test.ts`
 Expected: 10 passed.
 
 Note: `getBlogInternal` throws `BLOG_NOT_FOUND` on miss; the catch at step 7 maps it to the envelope correctly.
 
-- [ ] **Step 5: Run the full suite**
+- [x] **Step 5: Run the full suite**
 
 Run: `pnpm check`
 Expected: typecheck + lint + prettier green. Test count = 321 (Task 3) + 8 (Task 4) + 10 (Task 5) = 339.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/mcp/wrap-tool.ts tests/mcp/wrap-tool.test.ts
