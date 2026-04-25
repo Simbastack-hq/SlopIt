@@ -89,6 +89,34 @@ export function getBlog(store: Store, blogId: string): Blog {
 }
 
 /**
+ * Look up a blog by name. Returns null on miss — names are user input
+ * and a miss is a normal 404, unlike getBlog where a miss usually means
+ * caller bug. CreateBlogInputSchema enforces lowercase DNS-safe names,
+ * so an exact match is sufficient.
+ */
+export function getBlogByName(store: Store, name: string): Blog | null {
+  const row = store.db
+    .prepare('SELECT id, name, theme, created_at FROM blogs WHERE name = ?')
+    .get(name) as
+    | {
+        id: string
+        name: string
+        theme: 'minimal'
+        created_at: string
+      }
+    | undefined
+
+  if (row === undefined) return null
+
+  return {
+    id: row.id,
+    name: row.name,
+    theme: row.theme,
+    createdAt: row.created_at,
+  }
+}
+
+/**
  * Fetch a blog by id, throwing SlopItError(BLOG_NOT_FOUND) if missing.
  * Used by the renderer (for display name / theme) and by createPost's
  * existence check. Not in the public barrel — callers must import from

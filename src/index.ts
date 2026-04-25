@@ -7,7 +7,7 @@ export type { Store, StoreConfig } from './db/store.js'
 export * from './schema/index.js'
 
 // Blog primitives
-export { createBlog, createApiKey, getBlog } from './blogs.js'
+export { createBlog, createApiKey, getBlog, getBlogByName } from './blogs.js'
 
 // Post primitives
 export { createPost, updatePost, deletePost, getPost, listPosts } from './posts.js'
