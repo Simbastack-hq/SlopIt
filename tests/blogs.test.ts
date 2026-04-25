@@ -9,6 +9,7 @@ import {
   isBlogNameConflict,
   getBlogInternal,
   getBlog,
+  getBlogByName,
 } from '../src/blogs.js'
 import { hashApiKey } from '../src/auth/api-key.js'
 import { SlopItError } from '../src/errors.js'
@@ -225,12 +226,44 @@ describe('createApiKey', () => {
 })
 
 describe('public barrel exports', () => {
-  it('exposes createBlog, createApiKey, SlopItError, CreateBlogInputSchema', async () => {
+  it('exposes createBlog, createApiKey, getBlog, getBlogByName, SlopItError, CreateBlogInputSchema', async () => {
     const mod = await import('../src/index.js')
     expect(typeof mod.createBlog).toBe('function')
     expect(typeof mod.createApiKey).toBe('function')
+    expect(typeof mod.getBlog).toBe('function')
+    expect(typeof mod.getBlogByName).toBe('function')
     expect(typeof mod.SlopItError).toBe('function') // class is callable
     expect(typeof mod.CreateBlogInputSchema).toBe('object') // Zod schema
+  })
+})
+
+describe('getBlogByName', () => {
+  let dir: string
+  let store: Store
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-getblogbyname-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('returns the blog for a known name', () => {
+    const { blog } = createBlog(store, { name: 'my-blog' })
+    const fetched = getBlogByName(store, 'my-blog')
+    expect(fetched).toEqual(blog)
+  })
+
+  it('returns null for an unknown name (no throw — names are user input)', () => {
+    expect(getBlogByName(store, 'nope')).toBeNull()
+  })
+
+  it('returns null for an unnamed blog (a name parameter never matches a NULL row)', () => {
+    createBlog(store, {})
+    expect(getBlogByName(store, '')).toBeNull()
   })
 })
 
