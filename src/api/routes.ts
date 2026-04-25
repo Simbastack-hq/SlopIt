@@ -32,8 +32,20 @@ async function readJsonBodyOptional(c: Context): Promise<unknown> {
 }
 
 export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterConfig): void {
-  // Health
-  app.get('/health', (c) => c.json({ ok: true }))
+  // Health probe. Hits the DB so the deploy script's retry gate actually
+  // catches a missing data dir / unwritable volume / closed connection,
+  // not just whether the process is up. Caught (not thrown) because the
+  // job of this endpoint is to report DB state via HTTP status — exactly
+  // the system-boundary case where catching is appropriate.
+  app.get('/health', (c) => {
+    try {
+      config.store.db.prepare('SELECT 1').get()
+      return c.json({ ok: true })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      return c.json({ ok: false, error: message }, 503)
+    }
+  })
 
   // Schema — returns PostInput JSONSchema at top level
   app.get('/schema', (c) => {
