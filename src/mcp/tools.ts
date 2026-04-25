@@ -1,11 +1,10 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { createApiKey, createBlog } from '../blogs.js'
 import { SlopItError } from '../errors.js'
-import { generateOnboardingBlock } from '../onboarding.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { CreateBlogInputSchema, PostPatchSchema } from '../schema/index.js'
 import { PostInputBaseSchema, slugTitleRefinement } from '../schema/post-input-base.js'
+import { signupBlog } from '../signup.js'
 import type { McpServerConfig } from './server.js'
 import { wrapTool } from './wrap-tool.js'
 
@@ -21,30 +20,22 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
         'Create a SlopIt blog and get an API key. Use this once, before anything else. Returns a live URL, the API key, and onboarding text to follow.',
       inputSchema: CreateBlogInputSchema.strict(),
     },
-    wrapTool<{ name?: string; theme?: 'minimal' }>(config, 'signup', { auth: 'public' }, (args) => {
-      const { blog } = createBlog(config.store, args)
-      const { apiKey } = createApiKey(config.store, blog.id)
-      const renderer = config.rendererFor(blog)
-      const onboardingText = generateOnboardingBlock({
-        blog,
-        apiKey,
-        blogUrl: renderer.baseUrl,
-        baseUrl: config.baseUrl,
-        schemaUrl: `${config.baseUrl}/schema`,
-        mcpEndpoint: config.mcpEndpoint,
-        dashboardUrl: config.dashboardUrl,
-        docsUrl: config.docsUrl,
-        skillUrl: config.skillUrl,
-        bugReportUrl: config.bugReportUrl,
-      })
-      return {
-        blog_id: blog.id,
-        blog_url: renderer.baseUrl,
-        api_key: apiKey,
-        ...(config.mcpEndpoint !== undefined ? { mcp_endpoint: config.mcpEndpoint } : {}),
-        onboarding_text: onboardingText,
-      }
-    }),
+    wrapTool<{ name?: string; theme?: 'minimal'; email?: string }>(
+      config,
+      'signup',
+      { auth: 'public' },
+      async (args) => {
+        const result = await signupBlog(config, args)
+        return {
+          blog_id: result.blog.id,
+          blog_url: result.blogUrl,
+          api_key: result.apiKey,
+          ...(config.mcpEndpoint !== undefined ? { mcp_endpoint: config.mcpEndpoint } : {}),
+          onboarding_text: result.onboardingText,
+          email_sent: result.emailSent,
+        }
+      },
+    ),
   )
 
   // 2. create_post — publish a new post.
