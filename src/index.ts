@@ -7,7 +7,17 @@ export type { Store, StoreConfig } from './db/store.js'
 export * from './schema/index.js'
 
 // Blog primitives
-export { createBlog, createApiKey, getBlog, getBlogByName } from './blogs.js'
+export { createBlog, createApiKey, getBlog, getBlogByName, getBlogsByEmail } from './blogs.js'
+
+// Signup orchestration — single source of truth for REST + MCP signup.
+export { signupBlog } from './signup.js'
+export type { OnSignupHook, SignupConfig, SignupResult } from './signup.js'
+
+// Recovery primitives — two-step email recovery flow. Platform owns the
+// HTTP routes, email sending, and rate limiting; core owns the data
+// layer (token storage, validation, atomic key rotation).
+export { requestRecoveryByEmail, consumeRecoveryToken } from './recovery.js'
+export type { RecoveryRequestResult, RecoveryConsumeResult } from './recovery.js'
 
 // Post primitives
 export { createPost, updatePost, deletePost, getPost, listPosts } from './posts.js'

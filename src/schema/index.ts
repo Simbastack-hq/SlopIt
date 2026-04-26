@@ -55,12 +55,25 @@ export type Post = z.infer<typeof PostSchema>
 // lowercase alphanumerics + hyphens, no leading/trailing hyphen, 2–63 chars.
 // Same constraints whether the blog ends up on a subdomain or not, for
 // consistency and so unnamed blogs can claim a subdomain later.
+//
+// `email` is optional and private — recovery channel only. It's persisted
+// on the blog row but never returned in BlogSchema or surfaced through any
+// public read path. Normalized via preprocess (trim + lowercase, empty
+// string → undefined) so casing/whitespace differences don't break the
+// recovery lookup.
 export const CreateBlogInputSchema = z.object({
   name: z
     .string()
     .min(2)
     .max(63)
     .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/)
+    .optional(),
+  email: z
+    .preprocess((val) => {
+      if (typeof val !== 'string') return val
+      const normalized = val.trim().toLowerCase()
+      return normalized === '' ? undefined : normalized
+    }, z.email().optional())
     .optional(),
   theme: z.enum(['minimal']).default('minimal'),
 })

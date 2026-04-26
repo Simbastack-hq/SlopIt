@@ -25,11 +25,13 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
   const id = generateShortId()
   const name = parsed.name ?? null
   const theme = parsed.theme
+  // Already normalized by the schema's preprocess (trim + lowercase).
+  const email = parsed.email ?? null
 
-  const insert = store.db.prepare('INSERT INTO blogs (id, name, theme) VALUES (?, ?, ?)')
+  const insert = store.db.prepare('INSERT INTO blogs (id, name, theme, email) VALUES (?, ?, ?, ?)')
 
   try {
-    insert.run(id, name, theme)
+    insert.run(id, name, theme, email)
   } catch (e) {
     if (isBlogNameConflict(e)) {
       throw new SlopItError('BLOG_NAME_CONFLICT', `Blog name "${name}" is already taken`)
@@ -54,6 +56,34 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
   }
 
   return { blog }
+}
+
+/**
+ * Look up all blogs registered under a given email. Used only by the
+ * recovery flow — never exposed via the public REST/MCP read paths
+ * because email is intentionally absent from `BlogSchema` (private
+ * recovery channel, not blog metadata).
+ *
+ * Caller is responsible for normalizing `email` to the same form the
+ * schema persists (trim + lowercase). Returns [] for no match; never
+ * throws.
+ */
+export function getBlogsByEmail(store: Store, email: string): Blog[] {
+  const rows = store.db
+    .prepare('SELECT id, name, theme, created_at FROM blogs WHERE email = ?')
+    .all(email) as Array<{
+    id: string
+    name: string | null
+    theme: 'minimal'
+    created_at: string
+  }>
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    theme: row.theme,
+    createdAt: row.created_at,
+  }))
 }
 
 export function createApiKey(store: Store, blogId: string): { apiKey: string } {

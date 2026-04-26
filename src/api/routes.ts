@@ -1,15 +1,13 @@
 import type { Context, Hono } from 'hono'
 import { z } from 'zod'
 import { PostInputSchema } from '../schema/index.js'
-import { CreateBlogInputSchema } from '../schema/index.js'
 import type { Blog, PostPatchInput } from '../schema/index.js'
 import type { ApiRouterConfig } from './index.js'
 import { SlopItError } from '../errors.js'
-import { createBlog, createApiKey } from '../blogs.js'
-import { generateOnboardingBlock } from '../onboarding.js'
 import { buildLinks } from './links.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { parseMarkdownBody } from './markdown-body.js'
+import { signupBlog } from '../signup.js'
 
 const StatusQuerySchema = z.enum(['draft', 'published']).optional()
 
@@ -61,32 +59,20 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     )
   })
 
-  // Signup — create blog + api key in one shot
+  // Signup — create blog + api key in one shot. Orchestration lives in
+  // src/signup.ts so REST and MCP cannot drift on validation, the
+  // onSignup hook, or onboarding text.
   app.post('/signup', async (c) => {
     const raw = await readJsonBodyOptional(c)
-    const parsed = CreateBlogInputSchema.parse(raw)
-    const { blog } = createBlog(config.store, parsed)
-    const { apiKey } = createApiKey(config.store, blog.id)
-    const renderer = config.rendererFor(blog)
-    const onboardingText = generateOnboardingBlock({
-      blog,
-      apiKey,
-      blogUrl: renderer.baseUrl,
-      baseUrl: config.baseUrl,
-      schemaUrl: `${config.baseUrl}/schema`,
-      mcpEndpoint: config.mcpEndpoint,
-      dashboardUrl: config.dashboardUrl,
-      docsUrl: config.docsUrl,
-      skillUrl: config.skillUrl,
-      bugReportUrl: config.bugReportUrl,
-    })
+    const result = await signupBlog(config, raw)
     return c.json({
-      blog_id: blog.id,
-      blog_url: renderer.baseUrl,
-      api_key: apiKey,
+      blog_id: result.blog.id,
+      blog_url: result.blogUrl,
+      api_key: result.apiKey,
       ...(config.mcpEndpoint !== undefined ? { mcp_endpoint: config.mcpEndpoint } : {}),
-      onboarding_text: onboardingText,
-      _links: buildLinks(blog, config),
+      onboarding_text: result.onboardingText,
+      email_sent: result.emailSent,
+      _links: buildLinks(result.blog, config),
     })
   })
 
