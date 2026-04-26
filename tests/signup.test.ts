@@ -4,13 +4,18 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type Store } from '../src/db/store.js'
 import { createRenderer } from '../src/rendering/generator.js'
-import { signupBlog, type OnSignupHook } from '../src/signup.js'
+import { signupBlog, type OnSignupHook, type SignupConfig } from '../src/signup.js'
 
 describe('signupBlog orchestration', () => {
   let dir: string
   let store: Store
 
-  const makeConfig = (overrides: { onSignup?: OnSignupHook } = {}) => {
+  const makeConfig = (
+    overrides: {
+      onSignup?: OnSignupHook
+      nameValidator?: SignupConfig['nameValidator']
+    } = {},
+  ) => {
     const renderer = createRenderer({
       store,
       outputDir: join(dir, 'out'),
@@ -117,5 +122,40 @@ describe('signupBlog orchestration', () => {
     const result = await signupBlog(makeConfig(), { name: 'plain' })
     expect(result.onboardingText).not.toContain('We sent a copy')
     expect(result.onboardingText).not.toContain('Email send FAILED')
+  })
+
+  describe('nameValidator hook', () => {
+    it('throws BLOG_NAME_RESERVED when the validator rejects the name', async () => {
+      const config = makeConfig({
+        nameValidator: (name) =>
+          name === 'admin' ? { ok: false, reason: "'admin' is reserved." } : { ok: true },
+      })
+      await expect(signupBlog(config, { name: 'admin' })).rejects.toMatchObject({
+        code: 'BLOG_NAME_RESERVED',
+        message: "'admin' is reserved.",
+        details: { name: 'admin' },
+      })
+    })
+
+    it('skips the validator entirely when name is omitted', async () => {
+      const validator = vi.fn(() => ({ ok: true as const }))
+      const result = await signupBlog(makeConfig({ nameValidator: validator }), {})
+      expect(validator).not.toHaveBeenCalled()
+      expect(result.blog.name).toBeNull()
+    })
+
+    it('proceeds when validator returns ok', async () => {
+      const validator = vi.fn(() => ({ ok: true as const }))
+      const result = await signupBlog(makeConfig({ nameValidator: validator }), {
+        name: 'happy-blog',
+      })
+      expect(validator).toHaveBeenCalledWith('happy-blog')
+      expect(result.blog.name).toBe('happy-blog')
+    })
+
+    it('proceeds when no validator is wired (self-host backward compat)', async () => {
+      const result = await signupBlog(makeConfig(), { name: 'no-validator' })
+      expect(result.blog.name).toBe('no-validator')
+    })
   })
 })

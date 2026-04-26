@@ -54,6 +54,7 @@ Call \`GET /schema\` (full URL: \`${baseUrl}/schema\`) for the machine-readable 
 |---|---|---|
 | BAD_REQUEST | 400 | Malformed JSON body. Parse your payload before sending. |
 | ZOD_VALIDATION | 400 | Body parsed but failed schema validation. \`details.issues\` holds the Zod issue list. |
+| BLOG_NAME_RESERVED | 400 | Blog name rejected by host policy (reserved subdomain, length, or content rules). \`details.name\` echoes the input. Retry with a different name. |
 | UNAUTHORIZED | 401 | Missing or invalid api key. |
 | BLOG_NOT_FOUND | 404 | Unknown blog id or cross-blog access attempt. |
 | POST_NOT_FOUND | 404 | Unknown post slug. |
