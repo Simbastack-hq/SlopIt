@@ -37,6 +37,7 @@ describe('SlopItError', () => {
 
   it.each([
     'BLOG_NAME_CONFLICT',
+    'BLOG_NAME_RESERVED',
     'BLOG_NOT_FOUND',
     'POST_SLUG_CONFLICT',
     'POST_NOT_FOUND',

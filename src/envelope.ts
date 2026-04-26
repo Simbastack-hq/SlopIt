@@ -10,6 +10,7 @@ export interface Envelope {
 
 const CODE_TO_STATUS: Record<SlopItErrorCode, number> = {
   BLOG_NAME_CONFLICT: 409,
+  BLOG_NAME_RESERVED: 400,
   BLOG_NOT_FOUND: 404,
   POST_SLUG_CONFLICT: 409,
   POST_NOT_FOUND: 404,

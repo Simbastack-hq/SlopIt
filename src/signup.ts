@@ -1,4 +1,5 @@
 import { createApiKey, createBlog } from './blogs.js'
+import { SlopItError } from './errors.js'
 import { generateOnboardingBlock } from './onboarding.js'
 import type { MutationRenderer } from './rendering/generator.js'
 import type { Blog } from './schema/index.js'
@@ -31,6 +32,15 @@ export interface SignupConfig {
   bugReportUrl?: string
   dashboardUrl?: string
   onSignup?: OnSignupHook
+  /**
+   * Optional policy hook for blog names. Runs AFTER core's structural
+   * validation (length, regex) but BEFORE persistence. Core treats names
+   * as opaque DNS-safe strings; the platform wires this to enforce
+   * reserved-subdomain, length-floor, and profanity rules. Skipped when
+   * `name` is not provided. A rejection becomes a `BLOG_NAME_RESERVED`
+   * error with the validator's `reason` as the message.
+   */
+  nameValidator?: (name: string) => { ok: true } | { ok: false; reason: string }
 }
 
 export interface SignupResult {
@@ -55,6 +65,17 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
   // that's cheap and not worth carving out.
   const input = CreateBlogInputSchema.parse(rawInput)
   const email = input.email ?? null
+
+  // Policy check (platform-supplied). Runs only when a name was actually
+  // requested — unnamed blogs have nothing to validate. The hook decides
+  // its own rules; core just translates a rejection into a structured
+  // error so REST and MCP envelopes stay consistent.
+  if (input.name !== undefined && config.nameValidator !== undefined) {
+    const verdict = config.nameValidator(input.name)
+    if (!verdict.ok) {
+      throw new SlopItError('BLOG_NAME_RESERVED', verdict.reason, { name: input.name })
+    }
+  }
 
   const { blog } = createBlog(config.store, input)
   const { apiKey } = createApiKey(config.store, blog.id)
