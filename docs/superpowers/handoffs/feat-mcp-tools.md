@@ -10,7 +10,7 @@
 
 SlopIt is an open-core MIT library (`@slopit/core`) for "instant blogs for AI agents." Strategy: agents call a handful of functions and get back a live URL with ~zero friction. No CMS UI, three themes max in v1, minimal HTML templates, static file output, Caddy serves.
 
-Public repo `Wipiway/SlopIt`. Private platform repo `Wipiway/slopit-platform`. Stack: TypeScript strict ESM, Hono, better-sqlite3, Zod v4 (with `z.toJSONSchema()`), vitest, marked, `@modelcontextprotocol/sdk`. Node ≥22. pnpm + `feat/*` → `dev` → `main` workflow. `pnpm check` (typecheck + lint + format:check + test) is the pre-commit gate.
+Public repo `Simbastack-hq/SlopIt`. Private platform repo `Simbastack-hq/slopit-platform`. Stack: TypeScript strict ESM, Hono, better-sqlite3, Zod v4 (with `z.toJSONSchema()`), vitest, marked, `@modelcontextprotocol/sdk`. Node ≥22. pnpm + `feat/*` → `dev` → `main` workflow. `pnpm check` (typecheck + lint + format:check + test) is the pre-commit gate.
 
 ### Already on `dev` (merged via PR #3 — REST routes)
 
@@ -146,7 +146,7 @@ If any of that fails at the start, stop and ask — the baseline is wrong.
 4. `docs/superpowers/specs/2026-04-23-rest-routes-mcp-design.md` — REST spec. Decision #22 (signup idempotency skip) must mirror on MCP. Error envelope, `_links`, HATEOAS — reference for what to reuse and what to drop.
 5. `src/api/errors.ts`, `src/api/idempotency.ts`, `src/api/auth.ts` — pull these patterns into transport-agnostic helpers before wiring MCP.
 6. `src/api/routes.ts` — each route maps 1:1 to a tool; use it as the reference for what the tool wrapper needs to do.
-7. `strategy.md` in `Wipiway/slopit-platform` — canonical MCP tool list + signup response shape.
+7. `strategy.md` in `Simbastack-hq/slopit-platform` — canonical MCP tool list + signup response shape.
 8. `docs/solutions/` — check for any learnings that apply; add new ones as you discover non-obvious things (per CLAUDE.md).
 
 ---
