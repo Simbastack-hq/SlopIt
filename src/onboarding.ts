@@ -11,6 +11,12 @@ export interface OnboardingInputs {
   docsUrl?: string
   skillUrl?: string
   bugReportUrl?: string
+  // Email recovery context. `emailProvided` is true if the caller passed
+  // an email at signup; `emailSent` is true only if the welcome-email
+  // hook resolved without throwing. The two together decide which note
+  // to render (success / failure / nothing).
+  emailProvided?: boolean
+  emailSent?: boolean
 }
 
 /**
@@ -33,6 +39,8 @@ export function generateOnboardingBlock(inputs: OnboardingInputs): string {
     docsUrl,
     skillUrl,
     bugReportUrl,
+    emailProvided,
+    emailSent,
   } = inputs
 
   const lines: string[] = []
@@ -44,6 +52,20 @@ export function generateOnboardingBlock(inputs: OnboardingInputs): string {
   lines.push(`Your blog:   ${blogUrl}`)
   lines.push(`API key:     ${apiKey}`)
   lines.push(`Blog id:     ${blog.id}`)
+
+  // Recovery hint, honest about send outcome. Skipped entirely when no
+  // email was provided so the no-email path stays unchanged.
+  if (emailProvided === true) {
+    lines.push('')
+    if (emailSent === true) {
+      lines.push('We sent a copy of this key to your email. Save it; it is your only way back in.')
+    } else {
+      lines.push(
+        'Email send FAILED — save this key now. It is the only copy and we cannot recover it.',
+      )
+    }
+  }
+
   lines.push('')
   lines.push('Step 1 — publish (pick one path):')
   lines.push('')

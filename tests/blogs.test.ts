@@ -10,6 +10,7 @@ import {
   getBlogInternal,
   getBlog,
   getBlogByName,
+  getBlogsByEmail,
 } from '../src/blogs.js'
 import { hashApiKey } from '../src/auth/api-key.js'
 import { SlopItError } from '../src/errors.js'
@@ -88,6 +89,30 @@ describe('CreateBlogInputSchema', () => {
   ])('rejects name: %s', (_, name) => {
     expect(() => CreateBlogInputSchema.parse({ name })).toThrow()
   })
+
+  it('email: accepts a valid address', () => {
+    const parsed = CreateBlogInputSchema.parse({ email: 'user@example.com' })
+    expect(parsed.email).toBe('user@example.com')
+  })
+
+  it('email: normalizes whitespace and casing', () => {
+    const parsed = CreateBlogInputSchema.parse({ email: '  Foo@Example.COM  ' })
+    expect(parsed.email).toBe('foo@example.com')
+  })
+
+  it('email: empty string and whitespace-only become undefined (treated as not provided)', () => {
+    expect(CreateBlogInputSchema.parse({ email: '' }).email).toBeUndefined()
+    expect(CreateBlogInputSchema.parse({ email: '   ' }).email).toBeUndefined()
+  })
+
+  it('email: omitted entirely is fine', () => {
+    expect(CreateBlogInputSchema.parse({}).email).toBeUndefined()
+  })
+
+  it('email: rejects malformed addresses', () => {
+    expect(() => CreateBlogInputSchema.parse({ email: 'not-an-email' })).toThrow()
+    expect(() => CreateBlogInputSchema.parse({ email: '@nope.com' })).toThrow()
+  })
 })
 
 describe('createBlog', () => {
@@ -153,6 +178,66 @@ describe('createBlog', () => {
   it('rejects invalid input via Zod (bad name, too short)', () => {
     expect(() => createBlog(store, { name: 'BadName' })).toThrow()
     expect(() => createBlog(store, { name: 'a' })).toThrow()
+  })
+
+  it('persists the normalized email to the blogs row but keeps it off the public Blog shape', () => {
+    const { blog } = createBlog(store, { name: 'with-email', email: '  User@Example.COM  ' })
+    // Public Blog shape stays unchanged — email is private.
+    expect(blog).not.toHaveProperty('email')
+    // But the row holds the normalized value.
+    const row = store.db.prepare('SELECT email FROM blogs WHERE id = ?').get(blog.id) as {
+      email: string
+    }
+    expect(row.email).toBe('user@example.com')
+  })
+
+  it('persists null email when none was provided', () => {
+    const { blog } = createBlog(store, { name: 'no-email' })
+    const row = store.db.prepare('SELECT email FROM blogs WHERE id = ?').get(blog.id) as {
+      email: string | null
+    }
+    expect(row.email).toBeNull()
+  })
+})
+
+describe('getBlogsByEmail', () => {
+  let dir: string
+  let store: Store
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-blogs-by-email-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('returns all blogs persisted under the given (already-normalized) email', () => {
+    const a = createBlog(store, { name: 'aa', email: 'shared@example.com' }).blog
+    const b = createBlog(store, { name: 'bb', email: 'shared@example.com' }).blog
+    createBlog(store, { name: 'cc', email: 'other@example.com' })
+
+    const found = getBlogsByEmail(store, 'shared@example.com')
+    expect(found.map((x) => x.id).sort()).toEqual([a.id, b.id].sort())
+  })
+
+  it('returns an empty array when no blog matches', () => {
+    expect(getBlogsByEmail(store, 'ghost@nowhere.com')).toEqual([])
+  })
+
+  it('does not match blogs with NULL email', () => {
+    createBlog(store, { name: 'noemail' })
+    expect(getBlogsByEmail(store, '')).toEqual([])
+  })
+
+  it('returns the public Blog shape — never leaks email back through the result', () => {
+    createBlog(store, { name: 'leakcheck', email: 'a@b.com' })
+    const [b] = getBlogsByEmail(store, 'a@b.com')
+    expect(b).not.toHaveProperty('email')
+    expect(b.id).toMatch(/^[a-z0-9]+$/)
+    expect(b.name).toBe('leakcheck')
   })
 })
 
@@ -226,12 +311,16 @@ describe('createApiKey', () => {
 })
 
 describe('public barrel exports', () => {
-  it('exposes createBlog, createApiKey, getBlog, getBlogByName, SlopItError, CreateBlogInputSchema', async () => {
+  it('exposes createBlog, createApiKey, getBlog, getBlogByName, getBlogsByEmail, signupBlog, recovery primitives, SlopItError, CreateBlogInputSchema', async () => {
     const mod = await import('../src/index.js')
     expect(typeof mod.createBlog).toBe('function')
     expect(typeof mod.createApiKey).toBe('function')
     expect(typeof mod.getBlog).toBe('function')
     expect(typeof mod.getBlogByName).toBe('function')
+    expect(typeof mod.getBlogsByEmail).toBe('function')
+    expect(typeof mod.signupBlog).toBe('function')
+    expect(typeof mod.requestRecoveryByEmail).toBe('function')
+    expect(typeof mod.consumeRecoveryToken).toBe('function')
     expect(typeof mod.SlopItError).toBe('function') // class is callable
     expect(typeof mod.CreateBlogInputSchema).toBe('object') // Zod schema
   })

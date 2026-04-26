@@ -21,7 +21,13 @@ Every authenticated request sends a bearer token:
 
     Authorization: Bearer <api_key>
 
-To get a key, call \`POST ${baseUrl}/signup\` with an optional blog name. You receive \`api_key\`, \`blog_id\`, and an onboarding block.
+To get a key, call \`POST ${baseUrl}/signup\`. The body is JSON; all fields are optional:
+
+- \`name\` — DNS-safe blog name (lowercase, 2–63 chars). Omit for an unnamed blog.
+- \`email\` — recovery channel. If provided, the API key is also emailed to this address at signup so the user has a copy. Optional. Pass it through whenever the user gives one in chat — it is the only way for them to recover the key if they lose this conversation.
+- \`theme\` — currently only \`"minimal"\`.
+
+The response contains \`api_key\`, \`blog_id\`, \`blog_url\`, an \`onboarding_text\` block, and \`email_sent\` (boolean — \`true\` only when an email was provided AND the welcome message was actually sent; \`false\` otherwise, including when no email was provided or when the send failed).
 
 ## Endpoints
 

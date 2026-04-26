@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Store } from '../db/store.js'
 import type { MutationRenderer } from '../rendering/generator.js'
 import type { Blog } from '../schema/index.js'
+import type { OnSignupHook } from '../signup.js'
 import { errorMiddleware } from './errors.js'
 import { authMiddleware } from './auth.js'
 import { idempotencyMiddleware } from './idempotency.js'
@@ -23,6 +24,14 @@ export interface ApiRouterConfig {
   skillUrl?: string
   bugReportUrl?: string
   dashboardUrl?: string
+  /**
+   * Optional hook fired after a blog + API key are created at signup,
+   * if (and only if) the caller provided an email. Platform wires this
+   * to its email sender (Resend, etc); self-hosters can omit it. Hook
+   * failures are best-effort and reported via `email_sent: false` in
+   * the signup response — they never fail the signup itself.
+   */
+  onSignup?: OnSignupHook
 }
 
 type Vars = { blog: Blog; apiKeyHash: string }

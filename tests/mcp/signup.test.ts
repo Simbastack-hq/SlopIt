@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { createStore, type Store } from '../../src/db/store.js'
@@ -14,7 +14,10 @@ describe('MCP tool: signup', () => {
   let client: Client
   let closer: () => Promise<void>
 
-  const boot = async (mcpEndpoint?: string) => {
+  const boot = async (
+    mcpEndpoint?: string,
+    onSignup?: (params: { blog: { id: string }; apiKey: string; email: string }) => Promise<void>,
+  ) => {
     const renderer = createRenderer({
       store,
       outputDir: join(dir, 'out'),
@@ -25,6 +28,7 @@ describe('MCP tool: signup', () => {
       rendererFor: () => renderer,
       baseUrl: 'https://api.example',
       mcpEndpoint,
+      onSignup,
     })
     const [clientT, serverT] = InMemoryTransport.createLinkedPair()
     await server.connect(serverT)
@@ -48,7 +52,7 @@ describe('MCP tool: signup', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('happy path: returns blog_id, blog_url, api_key, onboarding_text', async () => {
+  it('happy path: returns blog_id, blog_url, api_key, onboarding_text, email_sent: false', async () => {
     await boot()
     const result = (await client.callTool({
       name: 'signup',
@@ -59,6 +63,7 @@ describe('MCP tool: signup', () => {
         blog_url: string
         api_key: string
         onboarding_text: string
+        email_sent: boolean
         mcp_endpoint?: string
       }
       isError?: boolean
@@ -70,7 +75,44 @@ describe('MCP tool: signup', () => {
     expect(result.structuredContent.onboarding_text).toContain(
       'Published my first post to SlopIt: <url>',
     )
+    expect(result.structuredContent.email_sent).toBe(false)
     expect(result.structuredContent).not.toHaveProperty('mcp_endpoint')
+  })
+
+  it('MCP signup fires onSignup hook (parity with REST) and reports email_sent: true on success', async () => {
+    const calls: Array<{ blog_id: string; api_key: string; email: string }> = []
+    await boot(undefined, async ({ blog, apiKey, email }) => {
+      calls.push({ blog_id: blog.id, api_key: apiKey, email })
+    })
+    const result = (await client.callTool({
+      name: 'signup',
+      arguments: { name: 'mcp-mail', email: '  Foo@Bar.COM  ' },
+    })) as unknown as {
+      structuredContent: { email_sent: boolean; api_key: string; blog_id: string }
+    }
+    expect(result.structuredContent.email_sent).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].email).toBe('foo@bar.com') // normalized before hook
+    expect(calls[0].blog_id).toBe(result.structuredContent.blog_id)
+    expect(calls[0].api_key).toBe(result.structuredContent.api_key)
+  })
+
+  it('MCP signup reports email_sent: false when the hook throws; signup still succeeds', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await boot(undefined, async () => {
+      throw new Error('hook down')
+    })
+    const result = (await client.callTool({
+      name: 'signup',
+      arguments: { name: 'mcp-fail', email: 'a@b.com' },
+    })) as unknown as {
+      isError?: boolean
+      structuredContent: { email_sent: boolean; api_key: string }
+    }
+    expect(result.isError).toBeFalsy()
+    expect(result.structuredContent.email_sent).toBe(false)
+    expect(result.structuredContent.api_key).toMatch(/^sk_slop_/)
+    errSpy.mockRestore()
   })
 
   it('includes mcp_endpoint when configured', async () => {
