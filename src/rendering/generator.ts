@@ -88,6 +88,17 @@ export function renderPostList(posts: Post[]): string {
 }
 
 /**
+ * Build the cover-image fragment. Empty string when no coverImage.
+ * URL is escaped because it lands inside an HTML attribute.
+ *
+ * @internal
+ */
+export function renderCoverImage(coverImage: string | undefined, alt: string): string {
+  if (!coverImage) return ''
+  return `<img class="cover" src="${escapeHtml(coverImage)}" alt="${escapeHtml(alt)}">`
+}
+
+/**
  * Build the tag-pill fragment. Empty string when no tags.
  *
  * @internal
@@ -175,6 +186,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         blogHomeHref: '..',
         canonicalUrl: config.baseUrl + '/' + post.slug + '/',
         seoMeta: renderSeoMeta(post.seoTitle, post.seoDescription),
+        coverImage: renderCoverImage(post.coverImage, post.title),
         postBody: renderMarkdown(post.body),
         tagList: renderTagList(post.tags),
         poweredBy: renderPoweredBy(),

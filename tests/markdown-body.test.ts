@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseMarkdownBody } from '../src/api/markdown-body.js'
+import { SlopItError } from '../src/errors.js'
 
 describe('parseMarkdownBody', () => {
   it('parses minimal input: title from query, body from raw', () => {
@@ -31,14 +32,25 @@ describe('parseMarkdownBody', () => {
     expect(parsed.tags).toEqual(['a', 'b', 'c'])
   })
 
-  it('throws when title is missing', () => {
-    expect(() => parseMarkdownBody({ body: 'b', query: new URLSearchParams() })).toThrow(/title/i)
+  it('throws BAD_REQUEST when title is missing', () => {
+    try {
+      parseMarkdownBody({ body: 'b', query: new URLSearchParams() })
+      expect.fail('expected throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(SlopItError)
+      expect((e as SlopItError).code).toBe('BAD_REQUEST')
+      expect((e as SlopItError).message).toMatch(/title/i)
+    }
   })
 
-  it('throws when body is empty', () => {
-    expect(() =>
-      parseMarkdownBody({ body: '', query: new URLSearchParams({ title: 'T' }) }),
-    ).toThrow()
+  it('throws BAD_REQUEST when body is empty', () => {
+    try {
+      parseMarkdownBody({ body: '', query: new URLSearchParams({ title: 'T' }) })
+      expect.fail('expected throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(SlopItError)
+      expect((e as SlopItError).code).toBe('BAD_REQUEST')
+    }
   })
 
   it('ignores unknown query params (e.g. seoTitle) silently', () => {
