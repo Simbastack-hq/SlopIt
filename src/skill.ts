@@ -115,7 +115,12 @@ SlopIt also speaks MCP. Connect an MCP-capable agent to the server and call thes
 
 ## Posts with images
 
-Two-step flow: upload bytes once, then reference the **returned \`media.url\`** in your post body or as a cover image.
+Two ways to put images in a post — both first-class, pick whichever fits:
+
+- **External URL** (Wikimedia, an existing CDN, anywhere reachable over HTTPS): embed it directly with markdown — \`![alt](https://example.com/photo.jpg)\` in the body, or pass the same URL as \`coverImage\`. Zero round-trips. **You own the dependency:** the renderer doesn't validate that the URL resolves, so if it 404s you get a broken image. Verify before embedding.
+- **\`upload_media\`** (REST or MCP): upload the bytes once, get back an absolute URL on the blog's host, then embed that URL the same way. Use this when you have raw bytes (the user dropped a photo into chat), when the external URL might disappear, or when you want a URL you control.
+
+The rest of this section covers the upload path.
 
 1. Upload each image:
 
