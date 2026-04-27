@@ -35,19 +35,30 @@ export function idempotencyMiddleware(
     const method = c.req.method
     const path = c.req.path
     const contentType = c.req.header('Content-Type') ?? ''
-    const rawBody = await c.req.text()
-    // Re-expose body so the handler can re-read it
+    // Buffer the body as bytes (binary-safe). Re-expose so handlers can re-read.
+    const rawBytes = new Uint8Array(await c.req.raw.arrayBuffer())
     c.req.raw = new Request(c.req.url, {
       method: c.req.method,
       headers: c.req.raw.headers,
-      body: rawBody || undefined,
+      body: rawBytes.byteLength > 0 ? rawBytes : undefined,
     })
+
     const queryString = [...new URL(c.req.url).searchParams.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${k}=${v}`)
       .join('&')
-    const hashInput = [method, path, contentType, queryString, rawBody].join('\0')
-    const requestHash = createHash('sha256').update(hashInput).digest('hex')
+
+    const hasher = createHash('sha256')
+    hasher.update(method)
+    hasher.update('\0')
+    hasher.update(path)
+    hasher.update('\0')
+    hasher.update(contentType)
+    hasher.update('\0')
+    hasher.update(queryString)
+    hasher.update('\0')
+    hasher.update(rawBytes)
+    const requestHash = hasher.digest('hex')
 
     const scope: IdempotencyScope = { key, apiKeyHash, method, path, requestHash }
     const result = lookupIdempotencyRecord(config.store, scope)
