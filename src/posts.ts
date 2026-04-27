@@ -353,7 +353,7 @@ export function createPost(
       }
       throw renderErr
     }
-    return { post, postUrl: renderer.baseUrl + '/' + post.slug + '/' }
+    return { post, postUrl: renderer.baseUrl + post.slug + '/' }
   }
 
   return { post }
@@ -392,7 +392,7 @@ export function updatePost(
   const patchKeys = Object.keys(parsed)
   if (patchKeys.length === 0) {
     return prior.status === 'published'
-      ? { post: prior, postUrl: renderer.baseUrl + '/' + prior.slug + '/' }
+      ? { post: prior, postUrl: renderer.baseUrl + prior.slug + '/' }
       : { post: prior }
   }
 
@@ -506,7 +506,7 @@ export function updatePost(
   }
 
   return newStatus === 'published'
-    ? { post: updated, postUrl: renderer.baseUrl + '/' + updated.slug + '/' }
+    ? { post: updated, postUrl: renderer.baseUrl + updated.slug + '/' }
     : { post: updated }
 }
 

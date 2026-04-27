@@ -476,6 +476,26 @@ describe('createRenderer — renderPost', () => {
     expect(html).toContain('href="https://b.example.com/my-slug/"')
   })
 
+  it('normalizes baseUrl: trailing slash present whether or not the caller supplied one', () => {
+    // The renderer's baseUrl is also the user-facing blog URL (returned
+    // as blog_url and shown in onboarding). Without a trailing slash the
+    // browser at /b/<id> resolves the relative style.css href against
+    // /b/, so CSS 404s. Normalizing here means callers can pass either
+    // form and both renderer.baseUrl and canonical URLs end up correct.
+    const { blog } = createBlog(store, {})
+    const r1 = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    const r2 = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com/' })
+
+    expect(r1.baseUrl).toBe('https://b.example.com/')
+    expect(r2.baseUrl).toBe('https://b.example.com/')
+
+    r1.renderPost(blog.id, makePost({ blogId: blog.id, slug: 's1' }))
+    const html = readFileSync(join(outputDir, blog.id, 's1', 'index.html'), 'utf8')
+    // No double slash even though the unnormalized form would have produced one.
+    expect(html).not.toContain('//s1/')
+    expect(html).toContain('href="https://b.example.com/s1/"')
+  })
+
   it('ensureCss always overwrites (picks up CSS changes on re-render)', () => {
     const { blog } = createBlog(store, { name: 'bb' })
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })

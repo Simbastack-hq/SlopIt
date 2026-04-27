@@ -54,11 +54,11 @@ describe('POST /signup', () => {
       _links: Record<string, string>
     }
     expect(body.blog_id).toMatch(/^[a-z0-9]+$/)
-    expect(body.blog_url).toBe('https://blog.example')
+    expect(body.blog_url).toBe('https://blog.example/')
     expect(body.api_key).toMatch(/^sk_slop_/)
     expect(body.onboarding_text).toContain('Published my first post to SlopIt: <url>')
     expect(body.email_sent).toBe(false) // no email was provided
-    expect(body._links.view).toBe('https://blog.example')
+    expect(body._links.view).toBe('https://blog.example/')
     expect(body._links.bridge).toBe('/bridge/report_bug')
   })
 
