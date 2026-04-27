@@ -16,6 +16,8 @@ export interface LinksBlock {
   view: string
   publish: string
   list_posts: string
+  upload_media: string
+  list_media: string
   dashboard?: string
   docs?: string
   bridge: string
@@ -33,6 +35,8 @@ export function buildLinks(blog: Blog, config: LinkConfig): LinksBlock {
     view: config.rendererFor(blog).baseUrl,
     publish: `/blogs/${blog.id}/posts`,
     list_posts: `/blogs/${blog.id}/posts`,
+    upload_media: `/blogs/${blog.id}/media`,
+    list_media: `/blogs/${blog.id}/media`,
     bridge: '/bridge/report_bug',
   }
   if (config.dashboardUrl !== undefined) links.dashboard = config.dashboardUrl

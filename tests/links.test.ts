@@ -44,4 +44,12 @@ describe('buildLinks', () => {
     })
     expect(links.view).toBe('https://test.slopit.io')
   })
+
+  it('includes upload_media and list_media paths', () => {
+    const links = buildLinks(blog, {
+      rendererFor: () => makeRenderer('https://b1.example'),
+    })
+    expect(links.upload_media).toBe('/blogs/b1/media')
+    expect(links.list_media).toBe('/blogs/b1/media')
+  })
 })
