@@ -115,6 +115,62 @@ describe('REST media upload', () => {
     expect(body.error.code).toBe('MEDIA_TYPE_UNSUPPORTED')
   })
 
+  it('honours plan-tier function form: pro = unlimited, free = capped', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'slopit-tier-media-'))
+    const store = createStore({ dbPath: join(dir, 'test.db') })
+    const renderer = createRenderer({
+      store,
+      outputDir: join(dir, 'out'),
+      baseUrl: 'https://test.example/',
+    })
+    const app = new Hono()
+    app.route(
+      '/',
+      createApiRouter({
+        store,
+        rendererFor: () => renderer,
+        baseUrl: 'https://test.example',
+        // Per-blog tier function: blog 'free_test' is capped at 4 bytes,
+        // blog 'pro_test' is unlimited (null).
+        mediaMaxTotalBytesPerBlog: (blog) => (blog.name === 'pro' ? null : 4),
+      }),
+    )
+    // Sign up as a free-tier blog (any name).
+    const sFree = await app.request('/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'free' + Date.now().toString(36) }),
+    })
+    const free = (await sFree.json()) as { blog_id: string; api_key: string }
+
+    // Sign up as a "pro" blog (function reads name === 'pro' to pick tier).
+    // Use the literal name 'pro' so the function returns null.
+    const sPro = await app.request('/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'pro' }),
+    })
+    const pro = (await sPro.json()) as { blog_id: string; api_key: string }
+
+    const fd1 = new FormData()
+    fd1.append('file', new Blob([PNG_BYTES], { type: 'image/png' }), 'a.png')
+    const r1 = await app.request(`/blogs/${free.blog_id}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${free.api_key}` },
+      body: fd1,
+    })
+    expect(r1.status).toBe(413)
+
+    const fd2 = new FormData()
+    fd2.append('file', new Blob([PNG_BYTES], { type: 'image/png' }), 'a.png')
+    const r2 = await app.request(`/blogs/${pro.blog_id}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${pro.api_key}` },
+      body: fd2,
+    })
+    expect(r2.status).toBe(200)
+  })
+
   it('GET /blogs/:id/media/:mid returns a single record; DELETE removes it', async () => {
     const { app, blogId, apiKey } = await freshApi()
     const fd = new FormData()

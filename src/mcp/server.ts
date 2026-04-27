@@ -17,14 +17,17 @@ export interface McpServerConfig {
   dashboardUrl?: string
   /**
    * Per-file upload cap in bytes. Default 5_000_000 (5 MB) when undefined.
+   * Function form lets platform pass plan-tier values per-blog.
    * Platform passes plan-tier values; self-hosted leaves unset.
    */
-  mediaMaxBytes?: number
+  mediaMaxBytes?: number | ((blog: Blog) => number)
   /**
    * Per-blog total media cap in bytes. `null` = unlimited (default).
+   * Function form lets platform return null for paid tiers and a finite
+   * cap for free.
    * Platform passes plan-tier values; self-hosted leaves unset.
    */
-  mediaMaxTotalBytesPerBlog?: number | null
+  mediaMaxTotalBytesPerBlog?: number | null | ((blog: Blog) => number | null)
   /**
    * Mirrors ApiRouterConfig.onSignup so REST and MCP signup go through
    * the same hook. Both paths invoke signupBlog() under the hood; this

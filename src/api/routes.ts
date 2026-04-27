@@ -52,6 +52,18 @@ function inferContentTypeFromFilename(name: string): string | undefined {
   return EXT_TO_TYPE[name.slice(dot + 1).toLowerCase()]
 }
 
+function resolveMediaLimits(config: ApiRouterConfig, blog: Blog): MediaLimits {
+  const maxBytes =
+    typeof config.mediaMaxBytes === 'function'
+      ? config.mediaMaxBytes(blog)
+      : (config.mediaMaxBytes ?? 5_000_000)
+  const maxTotalBytesPerBlog =
+    typeof config.mediaMaxTotalBytesPerBlog === 'function'
+      ? config.mediaMaxTotalBytesPerBlog(blog)
+      : (config.mediaMaxTotalBytesPerBlog ?? null)
+  return { maxBytes, maxTotalBytesPerBlog }
+}
+
 export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterConfig): void {
   // Health probe. Hits the DB so the deploy script's retry gate actually
   // catches a missing data dir / unwritable volume / closed connection,
@@ -177,10 +189,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
   // Media: upload (multipart)
   app.post('/blogs/:id/media', async (c) => {
     const renderer = config.rendererFor(c.var.blog)
-    const limits: MediaLimits = {
-      maxBytes: config.mediaMaxBytes ?? 5_000_000,
-      maxTotalBytesPerBlog: config.mediaMaxTotalBytesPerBlog ?? null,
-    }
+    const limits = resolveMediaLimits(config, c.var.blog)
     const ct = c.req.header('Content-Type') ?? ''
     if (!ct.startsWith('multipart/form-data')) {
       throw new SlopItError('BAD_REQUEST', 'multipart/form-data required', { content_type: ct })

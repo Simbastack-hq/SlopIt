@@ -249,10 +249,16 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       { auth: 'required', idempotent: true, crossBlogGuard: true },
       (args, ctx) => {
         const renderer = config.rendererFor(ctx.blog!)
-        const limits: MediaLimits = {
-          maxBytes: config.mediaMaxBytes ?? 5_000_000,
-          maxTotalBytesPerBlog: config.mediaMaxTotalBytesPerBlog ?? null,
-        }
+        const blog = ctx.blog!
+        const maxBytes =
+          typeof config.mediaMaxBytes === 'function'
+            ? config.mediaMaxBytes(blog)
+            : (config.mediaMaxBytes ?? 5_000_000)
+        const maxTotalBytesPerBlog =
+          typeof config.mediaMaxTotalBytesPerBlog === 'function'
+            ? config.mediaMaxTotalBytesPerBlog(blog)
+            : (config.mediaMaxTotalBytesPerBlog ?? null)
+        const limits: MediaLimits = { maxBytes, maxTotalBytesPerBlog }
         const bytes = Buffer.from(args.data_base64, 'base64')
         if (bytes.length === 0) {
           throw new SlopItError('BAD_REQUEST', 'data_base64 decoded to zero bytes', {})
