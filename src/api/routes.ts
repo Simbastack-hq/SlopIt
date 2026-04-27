@@ -8,6 +8,8 @@ import { buildLinks } from './links.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { parseMarkdownBody } from './markdown-body.js'
 import { signupBlog } from '../signup.js'
+import { uploadMedia } from '../media.js'
+import type { MediaLimits } from '../media.js'
 
 const StatusQuerySchema = z.enum(['draft', 'published']).optional()
 
@@ -149,5 +151,40 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     const renderer = config.rendererFor(c.var.blog)
     const result = deletePost(config.store, renderer, c.var.blog.id, c.req.param('slug'))
     return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
+  })
+
+  // Media: upload (multipart)
+  app.post('/blogs/:id/media', async (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    const limits: MediaLimits = {
+      maxBytes: config.mediaMaxBytes ?? 5_000_000,
+      maxTotalBytesPerBlog: config.mediaMaxTotalBytesPerBlog ?? null,
+    }
+    const ct = c.req.header('Content-Type') ?? ''
+    if (!ct.startsWith('multipart/form-data')) {
+      throw new SlopItError('BAD_REQUEST', 'multipart/form-data required', { content_type: ct })
+    }
+    const form = await c.req.parseBody({ all: true })
+    const fileField = form['file']
+    if (fileField === undefined) {
+      throw new SlopItError('BAD_REQUEST', "multipart 'file' field required", {})
+    }
+    if (Array.isArray(fileField)) {
+      throw new SlopItError('BAD_REQUEST', 'only one file per request', {})
+    }
+    if (typeof fileField === 'string') {
+      throw new SlopItError('BAD_REQUEST', "'file' must be a binary upload", {})
+    }
+    const file = fileField
+    if (file.size === 0) {
+      throw new SlopItError('BAD_REQUEST', 'file is empty', {})
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const media = uploadMedia(config.store, renderer, limits, c.var.blog, {
+      filename: file.name,
+      contentType: file.type,
+      bytes,
+    })
+    return c.json({ media, _links: buildLinks(c.var.blog, config) })
   })
 }

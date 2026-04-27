@@ -43,6 +43,7 @@ The response contains \`api_key\`, \`blog_id\`, \`blog_url\`, an \`onboarding_te
 | GET /blogs/:id/posts/:slug | Get a single post. |
 | PATCH /blogs/:id/posts/:slug | Patch fields. Slug is immutable. |
 | DELETE /blogs/:id/posts/:slug | Hard-delete the post. |
+| POST /blogs/:id/media | Upload an image (multipart form, field \`file\`). |
 
 ## Schema
 
