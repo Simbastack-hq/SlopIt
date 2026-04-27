@@ -110,6 +110,17 @@ article pre code {
   background: transparent;
   padding: 0;
 }
+article img {
+  /* Constrain to column width; preserve aspect ratio. Without this an
+     800-960px Wikimedia thumb (or any phone-camera JPEG) blows past the
+     720px body width. Centering matches the inline post-flow shape and
+     a small radius matches the existing <pre> block. */
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 24px auto;
+  border-radius: 8px;
+}
 
 .tags {
   margin-top: 32px;
