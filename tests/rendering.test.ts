@@ -613,3 +613,19 @@ describe('renderPost — null publishedAt branch', () => {
     expect(html).toContain('datetime=""')
   })
 })
+
+describe('MutationRenderer.mediaDir', () => {
+  it('returns <outputDir>/<blogId>/_media without creating the directory', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'slopit-mediadir-'))
+    const store = createStore({ dbPath: join(dir, 'test.db') })
+    const outputDir = join(dir, 'out')
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'http://x/' })
+
+    const got = renderer.mediaDir('blog_abc123')
+    expect(got).toBe(join(outputDir, 'blog_abc123', '_media'))
+    expect(existsSync(got)).toBe(false)
+
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+})

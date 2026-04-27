@@ -35,6 +35,13 @@ export interface MutationRenderer extends Renderer {
    * compensation.
    */
   removePostFiles(blogId: string, slug: string): void
+  /**
+   * Absolute path to the blog's media directory
+   * (`<outputDir>/<blogId>/_media`). Pure path computation — does not
+   * create the directory. Callers `mkdirSync(dir, { recursive: true })`
+   * on first write.
+   */
+  mediaDir(blogId: string): string
 }
 
 /**
@@ -197,6 +204,9 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
     removePostFiles(blogId, slug) {
       rmSync(join(config.outputDir, blogId, slug), { recursive: true, force: true })
+    },
+    mediaDir(blogId) {
+      return join(config.outputDir, blogId, '_media')
     },
   }
 }
