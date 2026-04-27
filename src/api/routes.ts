@@ -31,6 +31,27 @@ async function readJsonBodyOptional(c: Context): Promise<unknown> {
   return JSON.parse(text)
 }
 
+// Multipart MIME inference. Many clients (default cURL, browsers when
+// the user drag-drops, etc.) tag a file part as application/octet-stream
+// or with no type at all. The spec disallows magic-byte sniffing, but
+// inferring from the filename extension when the client didn't declare
+// a useful MIME closes the gap unambiguously. Keys mirror the four
+// extensions we accept in src/media.ts; widening this map implies
+// widening the allowlist there, which is a separate change.
+const EXT_TO_TYPE: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+}
+
+function inferContentTypeFromFilename(name: string): string | undefined {
+  const dot = name.lastIndexOf('.')
+  if (dot < 0 || dot === name.length - 1) return undefined
+  return EXT_TO_TYPE[name.slice(dot + 1).toLowerCase()]
+}
+
 export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterConfig): void {
   // Health probe. Hits the DB so the deploy script's retry gate actually
   // catches a missing data dir / unwritable volume / closed connection,
@@ -179,10 +200,15 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     if (file.size === 0) {
       throw new SlopItError('BAD_REQUEST', 'file is empty', {})
     }
+    const declared = file.type
+    const effectiveContentType =
+      declared !== '' && declared !== 'application/octet-stream'
+        ? declared
+        : (inferContentTypeFromFilename(file.name) ?? declared)
     const bytes = new Uint8Array(await file.arrayBuffer())
     const media = uploadMedia(config.store, renderer, limits, c.var.blog, {
       filename: file.name,
-      contentType: file.type,
+      contentType: effectiveContentType,
       bytes,
     })
     return c.json({ media, _links: buildLinks(c.var.blog, config) })

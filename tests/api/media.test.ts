@@ -85,6 +85,36 @@ describe('REST media upload', () => {
     expect(body.media).toHaveLength(1)
   })
 
+  it('infers image/png from filename when part type is application/octet-stream', async () => {
+    const { app, blogId, apiKey } = await freshApi()
+    const fd = new FormData()
+    // explicit octet-stream — what default cURL / many browsers send
+    fd.append('file', new Blob([PNG_BYTES], { type: 'application/octet-stream' }), 'photo.png')
+    const res = await app.request(`/blogs/${blogId}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: fd,
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { media: { url: string; contentType: string } }
+    expect(body.media.contentType).toBe('image/png')
+    expect(body.media.url).toMatch(/\.png$/)
+  })
+
+  it('still rejects octet-stream with an unrecognised filename extension', async () => {
+    const { app, blogId, apiKey } = await freshApi()
+    const fd = new FormData()
+    fd.append('file', new Blob([PNG_BYTES], { type: 'application/octet-stream' }), 'photo.bin')
+    const res = await app.request(`/blogs/${blogId}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: fd,
+    })
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: { code: string } }
+    expect(body.error.code).toBe('MEDIA_TYPE_UNSUPPORTED')
+  })
+
   it('GET /blogs/:id/media/:mid returns a single record; DELETE removes it', async () => {
     const { app, blogId, apiKey } = await freshApi()
     const fd = new FormData()
