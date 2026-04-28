@@ -7,6 +7,14 @@ import type { Renderer } from '../rendering/generator.js'
  * some config pieces aren't relevant).
  */
 export interface LinkConfig {
+  /**
+   * Base URL of the API as the consumer reaches it — e.g.
+   * `https://slopit.io/api` when the router is mounted under `/api`,
+   * or `https://my-blog.example` when self-hosted at root. Used to emit
+   * absolute URLs in `_links` so a caller can hit them without having
+   * to know the mount path.
+   */
+  baseUrl: string
   rendererFor: (blog: Blog) => Renderer
   dashboardUrl?: string
   docsUrl?: string
@@ -16,6 +24,8 @@ export interface LinksBlock {
   view: string
   publish: string
   list_posts: string
+  upload_media: string
+  list_media: string
   dashboard?: string
   docs?: string
   bridge: string
@@ -23,17 +33,21 @@ export interface LinksBlock {
 
 /**
  * HATEOAS block emitted on every 2xx response except /health and /schema.
- * `view` is the public URL of the rendered blog (per-blog; derived from
- * rendererFor(blog).baseUrl). `publish` / `list_posts` / `bridge` are
- * relative paths — the consumer is expected to resolve against baseUrl
- * if needed. `dashboard` / `docs` are absolute URLs from config.
+ * Every link is an **absolute URL** — relative paths break when the
+ * consumer resolves them against the apex (which strips the API mount
+ * path) instead of the API base. `view` is the public URL of the
+ * rendered blog; `publish` / `list_posts` / `upload_media` /
+ * `list_media` / `bridge` resolve against `config.baseUrl`;
+ * `dashboard` / `docs` are absolute URLs from config.
  */
 export function buildLinks(blog: Blog, config: LinkConfig): LinksBlock {
   const links: LinksBlock = {
     view: config.rendererFor(blog).baseUrl,
-    publish: `/blogs/${blog.id}/posts`,
-    list_posts: `/blogs/${blog.id}/posts`,
-    bridge: '/bridge/report_bug',
+    publish: `${config.baseUrl}/blogs/${blog.id}/posts`,
+    list_posts: `${config.baseUrl}/blogs/${blog.id}/posts`,
+    upload_media: `${config.baseUrl}/blogs/${blog.id}/media`,
+    list_media: `${config.baseUrl}/blogs/${blog.id}/media`,
+    bridge: `${config.baseUrl}/bridge/report_bug`,
   }
   if (config.dashboardUrl !== undefined) links.dashboard = config.dashboardUrl
   if (config.docsUrl !== undefined) links.docs = config.docsUrl

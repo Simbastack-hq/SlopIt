@@ -85,6 +85,35 @@ describe('generateOnboardingBlock', () => {
     expect(text).toContain('Published my first post to SlopIt: <url>')
   })
 
+  it('email recovery line: omitted when no email provided, success vs failure copy when one was', () => {
+    const baseInputs = {
+      blog,
+      apiKey: 'k',
+      blogUrl: 'b',
+      baseUrl: 'a',
+      schemaUrl: 'https://api.example/schema',
+    }
+
+    const noEmail = generateOnboardingBlock(baseInputs)
+    expect(noEmail).not.toContain('We sent a copy')
+    expect(noEmail).not.toContain('Email send FAILED')
+
+    const sent = generateOnboardingBlock({
+      ...baseInputs,
+      emailProvided: true,
+      emailSent: true,
+    })
+    expect(sent).toContain('We sent a copy of this key to your email')
+
+    const failed = generateOnboardingBlock({
+      ...baseInputs,
+      emailProvided: true,
+      emailSent: false,
+    })
+    expect(failed).toContain('Email send FAILED')
+    expect(failed).not.toContain('We sent a copy')
+  })
+
   it('More section: always lists schema URL; others appear only when provided', () => {
     const minimal = generateOnboardingBlock({
       blog,

@@ -1,3 +1,4 @@
+import { SlopItError } from '../errors.js'
 import type { PostInput } from '../schema/index.js'
 
 /**
@@ -13,10 +14,14 @@ import type { PostInput } from '../schema/index.js'
 export function parseMarkdownBody(input: { body: string; query: URLSearchParams }): PostInput {
   const title = input.query.get('title')
   if (title === null || title.length === 0) {
-    throw new Error('text/markdown body requires a ?title=<string> query parameter')
+    throw new SlopItError(
+      'BAD_REQUEST',
+      'text/markdown body requires a ?title=<string> query parameter',
+      { missing: 'title' },
+    )
   }
   if (input.body.length === 0) {
-    throw new Error('text/markdown body must not be empty')
+    throw new SlopItError('BAD_REQUEST', 'text/markdown body must not be empty', {})
   }
 
   const result: Partial<PostInput> = {

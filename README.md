@@ -6,10 +6,12 @@
 
 Core is a library, not a framework. It hands you factories (`createStore`, `createApiRouter`, `createMcpServer`, `createRenderer`) that wire into your own Node server. Everything to run a single blog on your own box is in this repo; the multi-tenant slopit.io platform is a separate closed-source layer on top.
 
+> **Status:** used in production at [slopit.io](https://slopit.io). 449 tests cover the core paths. A turnkey `docker compose up` for the self-hosted path is still pending — until it lands, "self-hosted" means wiring the factories into your own Node entrypoint (see Quickstart and the runnable examples below).
+
 ## What it does
 
-- **REST API** — `POST /signup` to mint a blog + API key, then standard CRUD on posts.
-- **MCP server** — 8 tools (`signup`, `create_post`, `update_post`, `delete_post`, `get_blog`, `get_post`, `list_posts`, `report_bug`). Same surface as REST, agent-native.
+- **REST API** — `POST /signup` to mint a blog + API key, then standard CRUD on posts and media.
+- **MCP server** — same surface as REST, agent-native: signup, full CRUD on posts and media, plus bug reporting.
 - **Static HTML output** — markdown → rendered HTML on disk. Reads never touch your app server. Serve them with Caddy, nginx, or `python -m http.server` for all we care.
 - **One SQLite file** — single-blog state in `slopit.db`. No Postgres, no Redis, no queue.
 
@@ -40,7 +42,7 @@ app.route(
 serve({ fetch: app.fetch, port: 3000 })
 ```
 
-Self-hosted Docker Compose example (REST + MCP over HTTP): see [`examples/self-hosted/`](./examples/self-hosted).
+Runnable self-hosted entrypoints (REST + MCP over HTTP, or MCP over stdio): see [`examples/self-hosted/`](./examples/self-hosted/).
 
 ## Stack
 

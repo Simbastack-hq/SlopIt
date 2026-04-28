@@ -78,7 +78,6 @@ Irreverent, self-aware, minimal. We know AI content is called slop. We lean into
 - No analytics dashboard (later, as a paid feature)
 - No comments, newsletters, or social features
 - No approval workflows
-- No image hosting (external URLs only)
 
 ## Decision Framework
 

@@ -1,11 +1,12 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { createApiKey, createBlog } from '../blogs.js'
 import { SlopItError } from '../errors.js'
-import { generateOnboardingBlock } from '../onboarding.js'
+import { uploadMedia, listMedia, deleteMedia } from '../media.js'
+import type { MediaLimits } from '../media.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { CreateBlogInputSchema, PostPatchSchema } from '../schema/index.js'
 import { PostInputBaseSchema, slugTitleRefinement } from '../schema/post-input-base.js'
+import { signupBlog } from '../signup.js'
 import type { McpServerConfig } from './server.js'
 import { wrapTool } from './wrap-tool.js'
 
@@ -21,30 +22,22 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
         'Create a SlopIt blog and get an API key. Use this once, before anything else. Returns a live URL, the API key, and onboarding text to follow.',
       inputSchema: CreateBlogInputSchema.strict(),
     },
-    wrapTool<{ name?: string; theme?: 'minimal' }>(config, 'signup', { auth: 'public' }, (args) => {
-      const { blog } = createBlog(config.store, args)
-      const { apiKey } = createApiKey(config.store, blog.id)
-      const renderer = config.rendererFor(blog)
-      const onboardingText = generateOnboardingBlock({
-        blog,
-        apiKey,
-        blogUrl: renderer.baseUrl,
-        baseUrl: config.baseUrl,
-        schemaUrl: `${config.baseUrl}/schema`,
-        mcpEndpoint: config.mcpEndpoint,
-        dashboardUrl: config.dashboardUrl,
-        docsUrl: config.docsUrl,
-        skillUrl: config.skillUrl,
-        bugReportUrl: config.bugReportUrl,
-      })
-      return {
-        blog_id: blog.id,
-        blog_url: renderer.baseUrl,
-        api_key: apiKey,
-        ...(config.mcpEndpoint !== undefined ? { mcp_endpoint: config.mcpEndpoint } : {}),
-        onboarding_text: onboardingText,
-      }
-    }),
+    wrapTool<{ name?: string; theme?: 'minimal'; email?: string }>(
+      config,
+      'signup',
+      { auth: 'public' },
+      async (args) => {
+        const result = await signupBlog(config, args)
+        return {
+          blog_id: result.blog.id,
+          blog_url: result.blogUrl,
+          api_key: result.apiKey,
+          ...(config.mcpEndpoint !== undefined ? { mcp_endpoint: config.mcpEndpoint } : {}),
+          onboarding_text: result.onboardingText,
+          email_sent: result.emailSent,
+        }
+      },
+    ),
   )
 
   // 2. create_post — publish a new post.
@@ -221,5 +214,108 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
         config.bugReportUrl !== undefined ? { use: config.bugReportUrl } : {},
       )
     }),
+  )
+
+  // 9. upload_media — accepts base64 bytes, returns public URL.
+  // base64 validated via Zod refine; full size/type/quota check happens
+  // inside uploadMedia().
+  const Base64Schema = z
+    .string()
+    .min(1)
+    .refine((s) => /^[A-Za-z0-9+/]+={0,2}$/.test(s) && s.length % 4 === 0, {
+      message: 'data_base64 must be valid standard base64',
+    })
+
+  const UploadMediaInputSchema = z
+    .object({
+      blog_id: z.string(),
+      filename: z.string().min(1).max(255),
+      content_type: z.string().min(1),
+      data_base64: Base64Schema,
+      idempotency_key: z.string().optional(),
+    })
+    .strict()
+
+  server.registerTool(
+    'upload_media',
+    {
+      description:
+        'Upload an image (JPEG/PNG/GIF/WebP, max 5MB) as base64 in `data_base64`. Returns a public URL — use it as ![alt](url) in post markdown or pass as coverImage.',
+      inputSchema: UploadMediaInputSchema,
+    },
+    wrapTool<z.infer<typeof UploadMediaInputSchema>>(
+      config,
+      'upload_media',
+      { auth: 'required', idempotent: true, crossBlogGuard: true },
+      (args, ctx) => {
+        const renderer = config.rendererFor(ctx.blog!)
+        const blog = ctx.blog!
+        const maxBytes =
+          typeof config.mediaMaxBytes === 'function'
+            ? config.mediaMaxBytes(blog)
+            : (config.mediaMaxBytes ?? 5_000_000)
+        const maxTotalBytesPerBlog =
+          typeof config.mediaMaxTotalBytesPerBlog === 'function'
+            ? config.mediaMaxTotalBytesPerBlog(blog)
+            : (config.mediaMaxTotalBytesPerBlog ?? null)
+        const limits: MediaLimits = { maxBytes, maxTotalBytesPerBlog }
+        const bytes = Buffer.from(args.data_base64, 'base64')
+        if (bytes.length === 0) {
+          throw new SlopItError('BAD_REQUEST', 'data_base64 decoded to zero bytes', {})
+        }
+        const media = uploadMedia(config.store, renderer, limits, ctx.blog!, {
+          filename: args.filename,
+          contentType: args.content_type,
+          bytes: new Uint8Array(bytes),
+        })
+        return { media }
+      },
+    ),
+  )
+
+  // 10. list_media
+  server.registerTool(
+    'list_media',
+    {
+      description:
+        "List uploaded images for the blog. Returns each image's id, public URL, content type, and byte size.",
+      inputSchema: z.object({ blog_id: z.string() }).strict(),
+    },
+    wrapTool<{ blog_id: string }>(
+      config,
+      'list_media',
+      { auth: 'required', crossBlogGuard: true },
+      (_args, ctx) => {
+        const renderer = config.rendererFor(ctx.blog!)
+        return { media: listMedia(config.store, renderer, ctx.blog!.id) }
+      },
+    ),
+  )
+
+  // 11. delete_media
+  const DeleteMediaInputSchema = z
+    .object({
+      blog_id: z.string(),
+      media_id: z.string(),
+      idempotency_key: z.string().optional(),
+    })
+    .strict()
+
+  server.registerTool(
+    'delete_media',
+    {
+      description:
+        'Permanently delete an uploaded image by id. The URL stops working immediately. Posts that referenced it will show a broken image until edited.',
+      inputSchema: DeleteMediaInputSchema,
+    },
+    wrapTool<z.infer<typeof DeleteMediaInputSchema>>(
+      config,
+      'delete_media',
+      { auth: 'required', idempotent: true, crossBlogGuard: true },
+      (args, ctx) => {
+        const renderer = config.rendererFor(ctx.blog!)
+        return deleteMedia(config.store, renderer, ctx.blog!.id, args.media_id)
+      },
+    ),
   )
 }

@@ -1,15 +1,15 @@
 import type { Context, Hono } from 'hono'
 import { z } from 'zod'
 import { PostInputSchema } from '../schema/index.js'
-import { CreateBlogInputSchema } from '../schema/index.js'
 import type { Blog, PostPatchInput } from '../schema/index.js'
 import type { ApiRouterConfig } from './index.js'
 import { SlopItError } from '../errors.js'
-import { createBlog, createApiKey } from '../blogs.js'
-import { generateOnboardingBlock } from '../onboarding.js'
 import { buildLinks } from './links.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { parseMarkdownBody } from './markdown-body.js'
+import { signupBlog } from '../signup.js'
+import { uploadMedia, listMedia, getMedia, deleteMedia } from '../media.js'
+import type { MediaLimits } from '../media.js'
 
 const StatusQuerySchema = z.enum(['draft', 'published']).optional()
 
@@ -31,9 +31,54 @@ async function readJsonBodyOptional(c: Context): Promise<unknown> {
   return JSON.parse(text)
 }
 
+// Multipart MIME inference. Many clients (default cURL, browsers when
+// the user drag-drops, etc.) tag a file part as application/octet-stream
+// or with no type at all. The spec disallows magic-byte sniffing, but
+// inferring from the filename extension when the client didn't declare
+// a useful MIME closes the gap unambiguously. Keys mirror the four
+// extensions we accept in src/media.ts; widening this map implies
+// widening the allowlist there, which is a separate change.
+const EXT_TO_TYPE: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+}
+
+function inferContentTypeFromFilename(name: string): string | undefined {
+  const dot = name.lastIndexOf('.')
+  if (dot < 0 || dot === name.length - 1) return undefined
+  return EXT_TO_TYPE[name.slice(dot + 1).toLowerCase()]
+}
+
+function resolveMediaLimits(config: ApiRouterConfig, blog: Blog): MediaLimits {
+  const maxBytes =
+    typeof config.mediaMaxBytes === 'function'
+      ? config.mediaMaxBytes(blog)
+      : (config.mediaMaxBytes ?? 5_000_000)
+  const maxTotalBytesPerBlog =
+    typeof config.mediaMaxTotalBytesPerBlog === 'function'
+      ? config.mediaMaxTotalBytesPerBlog(blog)
+      : (config.mediaMaxTotalBytesPerBlog ?? null)
+  return { maxBytes, maxTotalBytesPerBlog }
+}
+
 export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterConfig): void {
-  // Health
-  app.get('/health', (c) => c.json({ ok: true }))
+  // Health probe. Hits the DB so the deploy script's retry gate actually
+  // catches a missing data dir / unwritable volume / closed connection,
+  // not just whether the process is up. Caught (not thrown) because the
+  // job of this endpoint is to report DB state via HTTP status — exactly
+  // the system-boundary case where catching is appropriate.
+  app.get('/health', (c) => {
+    try {
+      config.store.db.prepare('SELECT 1').get()
+      return c.json({ ok: true })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      return c.json({ ok: false, error: message }, 503)
+    }
+  })
 
   // Schema — returns PostInput JSONSchema at top level
   app.get('/schema', (c) => {
@@ -49,32 +94,20 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     )
   })
 
-  // Signup — create blog + api key in one shot
+  // Signup — create blog + api key in one shot. Orchestration lives in
+  // src/signup.ts so REST and MCP cannot drift on validation, the
+  // onSignup hook, or onboarding text.
   app.post('/signup', async (c) => {
     const raw = await readJsonBodyOptional(c)
-    const parsed = CreateBlogInputSchema.parse(raw)
-    const { blog } = createBlog(config.store, parsed)
-    const { apiKey } = createApiKey(config.store, blog.id)
-    const renderer = config.rendererFor(blog)
-    const onboardingText = generateOnboardingBlock({
-      blog,
-      apiKey,
-      blogUrl: renderer.baseUrl,
-      baseUrl: config.baseUrl,
-      schemaUrl: `${config.baseUrl}/schema`,
-      mcpEndpoint: config.mcpEndpoint,
-      dashboardUrl: config.dashboardUrl,
-      docsUrl: config.docsUrl,
-      skillUrl: config.skillUrl,
-      bugReportUrl: config.bugReportUrl,
-    })
+    const result = await signupBlog(config, raw)
     return c.json({
-      blog_id: blog.id,
-      blog_url: renderer.baseUrl,
-      api_key: apiKey,
+      blog_id: result.blog.id,
+      blog_url: result.blogUrl,
+      api_key: result.apiKey,
       ...(config.mcpEndpoint !== undefined ? { mcp_endpoint: config.mcpEndpoint } : {}),
-      onboarding_text: onboardingText,
-      _links: buildLinks(blog, config),
+      onboarding_text: result.onboardingText,
+      email_sent: result.emailSent,
+      _links: buildLinks(result.blog, config),
     })
   })
 
@@ -150,6 +183,61 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
   app.delete('/blogs/:id/posts/:slug', (c) => {
     const renderer = config.rendererFor(c.var.blog)
     const result = deletePost(config.store, renderer, c.var.blog.id, c.req.param('slug'))
+    return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
+  })
+
+  // Media: upload (multipart)
+  app.post('/blogs/:id/media', async (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    const limits = resolveMediaLimits(config, c.var.blog)
+    const ct = c.req.header('Content-Type') ?? ''
+    if (!ct.startsWith('multipart/form-data')) {
+      throw new SlopItError('BAD_REQUEST', 'multipart/form-data required', { content_type: ct })
+    }
+    const form = await c.req.parseBody({ all: true })
+    const fileField = form['file']
+    if (fileField === undefined) {
+      throw new SlopItError('BAD_REQUEST', "multipart 'file' field required", {})
+    }
+    if (Array.isArray(fileField)) {
+      throw new SlopItError('BAD_REQUEST', 'only one file per request', {})
+    }
+    if (typeof fileField === 'string') {
+      throw new SlopItError('BAD_REQUEST', "'file' must be a binary upload", {})
+    }
+    const file = fileField
+    if (file.size === 0) {
+      throw new SlopItError('BAD_REQUEST', 'file is empty', {})
+    }
+    const declared = file.type
+    const effectiveContentType =
+      declared !== '' && declared !== 'application/octet-stream'
+        ? declared
+        : (inferContentTypeFromFilename(file.name) ?? declared)
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const media = uploadMedia(config.store, renderer, limits, c.var.blog, {
+      filename: file.name,
+      contentType: effectiveContentType,
+      bytes,
+    })
+    return c.json({ media, _links: buildLinks(c.var.blog, config) })
+  })
+
+  app.get('/blogs/:id/media', (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    const media = listMedia(config.store, renderer, c.var.blog.id)
+    return c.json({ media, _links: buildLinks(c.var.blog, config) })
+  })
+
+  app.get('/blogs/:id/media/:mid', (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    const media = getMedia(config.store, renderer, c.var.blog.id, c.req.param('mid'))
+    return c.json({ media, _links: buildLinks(c.var.blog, config) })
+  })
+
+  app.delete('/blogs/:id/media/:mid', (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    const result = deleteMedia(config.store, renderer, c.var.blog.id, c.req.param('mid'))
     return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
   })
 }

@@ -68,7 +68,7 @@ describe('GET /blogs/:id/posts and /:slug', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as { post: { slug: string }; _links: Record<string, string> }
     expect(body.post.slug).toBe('p2')
-    expect(body._links.publish).toBe(`/blogs/${blogId}/posts`)
+    expect(body._links.publish).toBe(`https://api.example/blogs/${blogId}/posts`)
   })
 
   it('single: POST_NOT_FOUND for unknown slug', async () => {

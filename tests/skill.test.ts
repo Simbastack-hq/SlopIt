@@ -38,18 +38,19 @@ describe('generateSkillFile', () => {
     expect(text).toMatch(/Authorization:\s+Bearer/)
   })
 
-  it('lists all 9 REST routes in the endpoints table', () => {
+  it('lists all REST routes as absolute URLs anchored on baseUrl', () => {
+    const base = 'https://api.example'
     const expected = [
-      'GET /health',
-      'POST /signup',
-      'GET /schema',
-      'POST /bridge/report_bug',
-      'GET /blogs/:id',
-      'POST /blogs/:id/posts',
-      'GET /blogs/:id/posts',
-      'GET /blogs/:id/posts/:slug',
-      'PATCH /blogs/:id/posts/:slug',
-      'DELETE /blogs/:id/posts/:slug',
+      `GET ${base}/health`,
+      `POST ${base}/signup`,
+      `GET ${base}/schema`,
+      `POST ${base}/bridge/report_bug`,
+      `GET ${base}/blogs/:id`,
+      `POST ${base}/blogs/:id/posts`,
+      `GET ${base}/blogs/:id/posts`,
+      `GET ${base}/blogs/:id/posts/:slug`,
+      `PATCH ${base}/blogs/:id/posts/:slug`,
+      `DELETE ${base}/blogs/:id/posts/:slug`,
     ]
     for (const route of expected) {
       expect(text, `missing route ${route}`).toContain(route)
@@ -94,8 +95,8 @@ describe('generateSkillFile', () => {
     expect(intro).not.toMatch(/POST \/signup/)
   })
 
-  it('refers to GET /schema for the machine-readable JSONSchema', () => {
-    expect(text).toMatch(/GET \/schema/)
+  it('refers to GET <baseUrl>/schema for the machine-readable JSONSchema', () => {
+    expect(text).toContain('GET https://api.example/schema')
   })
 
   it('includes the MCP tools section with all 8 tool names', () => {
@@ -127,10 +128,15 @@ describe('SKILL.md endpoint parity with createApiRouter', () => {
       baseUrl: 'https://api.example',
     })
 
-    // Extract Hono's routes list. Each has method + path.
-    const routes = app.routes.filter((r) => r.method !== 'ALL').map((r) => `${r.method} ${r.path}`)
+    // Extract Hono's routes list. Each has method + path. SKILL.md
+    // emits these as absolute URLs anchored on baseUrl, so prefix each
+    // path with baseUrl when matching.
+    const baseUrl = 'https://api.example'
+    const routes = app.routes
+      .filter((r) => r.method !== 'ALL')
+      .map((r) => `${r.method} ${baseUrl}${r.path}`)
 
-    const skill = generateSkillFile({ baseUrl: 'https://api.example' })
+    const skill = generateSkillFile({ baseUrl })
     for (const route of new Set(routes)) {
       expect(skill, `SKILL.md missing route ${route}`).toContain(route)
     }

@@ -18,6 +18,9 @@ const EXPECTED_TOOLS = [
   'get_post',
   'list_posts',
   'report_bug',
+  'upload_media',
+  'list_media',
+  'delete_media',
 ]
 
 describe('MCP tool descriptions', () => {
@@ -34,7 +37,7 @@ describe('MCP tool descriptions', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('all 8 tools are registered, each with a description under 240 chars and no banned vocab', async () => {
+  it('all 11 tools are registered, each with a description under 240 chars and no banned vocab', async () => {
     const renderer = createRenderer({
       store,
       outputDir: join(dir, 'out'),

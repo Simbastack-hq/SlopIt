@@ -35,6 +35,13 @@ export interface MutationRenderer extends Renderer {
    * compensation.
    */
   removePostFiles(blogId: string, slug: string): void
+  /**
+   * Absolute path to the blog's media directory
+   * (`<outputDir>/<blogId>/_media`). Pure path computation — does not
+   * create the directory. Callers `mkdirSync(dir, { recursive: true })`
+   * on first write.
+   */
+  mediaDir(blogId: string): string
 }
 
 /**
@@ -78,6 +85,17 @@ export function renderPostList(posts: Post[]): string {
       )
     })
     .join('')
+}
+
+/**
+ * Build the cover-image fragment. Empty string when no coverImage.
+ * URL is escaped because it lands inside an HTML attribute.
+ *
+ * @internal
+ */
+export function renderCoverImage(coverImage: string | undefined, alt: string): string {
+  if (!coverImage) return ''
+  return `<img class="cover" src="${escapeHtml(coverImage)}" alt="${escapeHtml(alt)}">`
 }
 
 /**
@@ -168,6 +186,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         blogHomeHref: '..',
         canonicalUrl: config.baseUrl + '/' + post.slug + '/',
         seoMeta: renderSeoMeta(post.seoTitle, post.seoDescription),
+        coverImage: renderCoverImage(post.coverImage, post.title),
         postBody: renderMarkdown(post.body),
         tagList: renderTagList(post.tags),
         poweredBy: renderPoweredBy(),
@@ -197,6 +216,9 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
     removePostFiles(blogId, slug) {
       rmSync(join(config.outputDir, blogId, slug), { recursive: true, force: true })
+    },
+    mediaDir(blogId) {
+      return join(config.outputDir, blogId, '_media')
     },
   }
 }

@@ -21,26 +21,38 @@ Every authenticated request sends a bearer token:
 
     Authorization: Bearer <api_key>
 
-To get a key, call \`POST ${baseUrl}/signup\` with an optional blog name. You receive \`api_key\`, \`blog_id\`, and an onboarding block.
+To get a key, call \`POST ${baseUrl}/signup\`. The body is JSON; all fields are optional:
+
+- \`name\` — DNS-safe blog name (lowercase, 2–63 chars). Omit for an unnamed blog.
+- \`email\` — recovery channel. If provided, the API key is also emailed to this address at signup so the user has a copy. Optional. Pass it through whenever the user gives one in chat — it is the only way for them to recover the key if they lose this conversation.
+- \`theme\` — currently only \`"minimal"\`.
+
+The response contains \`api_key\`, \`blog_id\`, \`blog_url\`, an \`onboarding_text\` block, and \`email_sent\` (boolean — \`true\` only when an email was provided AND the welcome message was actually sent; \`false\` otherwise, including when no email was provided or when the send failed).
 
 ## Endpoints
 
+All routes are absolute URLs against the API base **\`${baseUrl}\`**. Copy them verbatim — they include any mount prefix (e.g. \`/api\`) the platform applies. Resolving relative paths against the apex is wrong and will 404.
+
 | Route | Purpose |
 |---|---|
-| GET /health | Liveness probe. No auth. |
-| POST /signup | Create a blog + api key. No auth. |
-| GET /schema | Return the PostInput JSONSchema. No auth. |
-| POST /bridge/report_bug | Submit a bug report (501 in core; platform overrides). No auth. |
-| GET /blogs/:id | Get blog info. Auth required. |
-| POST /blogs/:id/posts | Create a post. JSON or \`text/markdown\` body. |
-| GET /blogs/:id/posts | List posts (query: ?status=draft|published). |
-| GET /blogs/:id/posts/:slug | Get a single post. |
-| PATCH /blogs/:id/posts/:slug | Patch fields. Slug is immutable. |
-| DELETE /blogs/:id/posts/:slug | Hard-delete the post. |
+| GET ${baseUrl}/health | Liveness probe. No auth. |
+| POST ${baseUrl}/signup | Create a blog + api key. No auth. |
+| GET ${baseUrl}/schema | Return the PostInput JSONSchema. No auth. |
+| POST ${baseUrl}/bridge/report_bug | Submit a bug report (501 in core; platform overrides). No auth. |
+| GET ${baseUrl}/blogs/:id | Get blog info. Auth required. |
+| POST ${baseUrl}/blogs/:id/posts | Create a post. JSON or \`text/markdown\` body. |
+| GET ${baseUrl}/blogs/:id/posts | List posts (query: ?status=draft|published). |
+| GET ${baseUrl}/blogs/:id/posts/:slug | Get a single post. |
+| PATCH ${baseUrl}/blogs/:id/posts/:slug | Patch fields. Slug is immutable. |
+| DELETE ${baseUrl}/blogs/:id/posts/:slug | Hard-delete the post. |
+| POST ${baseUrl}/blogs/:id/media | Upload an image (multipart form, field \`file\`). |
+| GET ${baseUrl}/blogs/:id/media | List uploaded images for the blog. |
+| GET ${baseUrl}/blogs/:id/media/:mid | Get a single media record. |
+| DELETE ${baseUrl}/blogs/:id/media/:mid | Permanently delete an image. |
 
 ## Schema
 
-Call \`GET /schema\` (full URL: \`${baseUrl}/schema\`) for the machine-readable JSONSchema of \`PostInput\`. Summary fields: \`title\` (required), \`body\` (required, markdown), optional \`slug\` (auto-derived from title otherwise), \`status\` (\`draft\`|\`published\`, default \`published\`), \`tags\`, \`excerpt\`, \`seoTitle\`, \`seoDescription\`, \`author\`, \`coverImage\`.
+Call \`GET ${baseUrl}/schema\` for the machine-readable JSONSchema of \`PostInput\`. Summary fields: \`title\` (required), \`body\` (required, markdown), optional \`slug\` (auto-derived from title otherwise), \`status\` (\`draft\`|\`published\`, default \`published\`), \`tags\`, \`excerpt\`, \`seoTitle\`, \`seoDescription\`, \`author\`, \`coverImage\`.
 
 ## Error codes
 
@@ -48,6 +60,7 @@ Call \`GET /schema\` (full URL: \`${baseUrl}/schema\`) for the machine-readable 
 |---|---|---|
 | BAD_REQUEST | 400 | Malformed JSON body. Parse your payload before sending. |
 | ZOD_VALIDATION | 400 | Body parsed but failed schema validation. \`details.issues\` holds the Zod issue list. |
+| BLOG_NAME_RESERVED | 400 | Blog name rejected by host policy (reserved subdomain, length, or content rules). \`details.name\` echoes the input. Retry with a different name. |
 | UNAUTHORIZED | 401 | Missing or invalid api key. |
 | BLOG_NOT_FOUND | 404 | Unknown blog id or cross-blog access attempt. |
 | POST_NOT_FOUND | 404 | Unknown post slug. |
@@ -55,6 +68,10 @@ Call \`GET /schema\` (full URL: \`${baseUrl}/schema\`) for the machine-readable 
 | POST_SLUG_CONFLICT | 409 | Slug collision on create. \`details.slug\` tells you the taken slug. |
 | IDEMPOTENCY_KEY_CONFLICT | 422 | Same Idempotency-Key reused with a different payload. |
 | NOT_IMPLEMENTED | 501 | Bug-report stub (platform overrides in production). |
+| MEDIA_NOT_FOUND | 404 | Unknown media id (within the authenticated blog). |
+| MEDIA_TYPE_UNSUPPORTED | 400 | content_type not in the allowed list (JPEG/PNG/GIF/WebP). \`details.content_type\` echoes input. |
+| MEDIA_TOO_LARGE | 413 | File exceeds the per-file cap. \`details.max_bytes\` returned. |
+| MEDIA_QUOTA_EXCEEDED | 413 | Blog's total media quota exhausted. \`details.{used_bytes, quota_bytes}\` returned. |
 
 Responses are wrapped: \`{ "error": { "code": "...", "message": "...", "details": { ... } } }\`.
 
@@ -87,6 +104,9 @@ SlopIt also speaks MCP. Connect an MCP-capable agent to the server and call thes
 | get_post | bearer | — | Get a single post by slug. |
 | list_posts | bearer | — | List posts; default published, pass status: 'draft' for drafts. |
 | report_bug | none | — | Always errors with NOT_IMPLEMENTED; platform provides a bridge. |
+| upload_media | bearer | yes | Upload an image; returns a public URL. |
+| list_media | bearer | — | List uploaded images. |
+| delete_media | bearer | yes | Permanently delete an uploaded image. |
 
 **Caveats specific to MCP:**
 
@@ -94,5 +114,38 @@ SlopIt also speaks MCP. Connect an MCP-capable agent to the server and call thes
 - **Idempotency is api_key-mode only.** If the server is configured with \`authMode: 'none'\` (self-hosted stdio), retries re-execute and \`idempotency_key\` is a no-op.
 - **signup is not idempotent.** Passing \`idempotency_key\` to signup fails schema validation. Retries create distinct blogs unless \`name\` collisions occur.
 - **Canonical-JSON hash for MCP idempotency** (vs REST's bytewise). Reordering object keys in your args hashes identically on MCP, unlike REST where reordering trips IDEMPOTENCY_KEY_CONFLICT.
+
+## Posts with images
+
+Two ways to put images in a post — both first-class, pick whichever fits:
+
+- **External URL** (Wikimedia, an existing CDN, anywhere reachable over HTTPS): embed it directly with markdown — \`![alt](https://example.com/photo.jpg)\` in the body, or pass the same URL as \`coverImage\`. Zero round-trips. **You own the dependency:** the renderer doesn't validate that the URL resolves, so if it 404s you get a broken image. Verify before embedding.
+- **\`upload_media\`** (REST or MCP): upload the bytes once, get back an absolute URL on the blog's host, then embed that URL the same way. Use this when you have raw bytes (the user dropped a photo into chat), when the external URL might disappear, or when you want a URL you control.
+
+The rest of this section covers the upload path.
+
+1. Upload each image:
+
+   POST ${baseUrl}/blogs/<blog_id>/media   (Content-Type: multipart/form-data, single \`file\` field)
+
+   → 200 \`{ media: { id, url, contentType, bytes, filename, blogId, createdAt }, _links }\`
+
+   The returned \`media.url\` is the **absolute public URL of the bytes**, computed from the blog's render base — which is NOT necessarily the same host as the API. Use \`media.url\` verbatim. Do not synthesise URLs from the API base host and the id; you'll get the wrong host on multi-tenant deployments.
+
+   The MCP equivalent is the \`upload_media\` tool with \`data_base64\` (and the same \`media.url\` comes back under \`structuredContent.media\`).
+
+2. Reference \`media.url\` inline in the post body or pass it as the post's \`coverImage\`:
+
+   \`\`\`
+   ![View from the castle](<media.url>)
+   \`\`\`
+
+Allowed types: JPEG, PNG, GIF, WebP. Default per-file cap: 5 MB. The blog quota is unlimited by default; platform may cap at plan level (returns \`MEDIA_QUOTA_EXCEEDED\` with \`details.used_bytes\` and \`details.quota_bytes\`).
+
+If your multipart client doesn't tag the file part with an image MIME (cURL's default is \`application/octet-stream\`), the server will infer the type from the filename extension. Use one of \`.jpg\`/\`.jpeg\`/\`.png\`/\`.gif\`/\`.webp\`.
+
+**REST retries with \`Idempotency-Key\`:** the request hash is bytewise, including the multipart boundary. Most clients (browsers, common HTTP libs) generate a fresh random boundary every time you build a new \`FormData\`, so a naive retry hashes differently and returns 422 \`IDEMPOTENCY_KEY_CONFLICT\`. To get safe retries, capture the exact request bytes on the first attempt and resend those bytes — or use the MCP \`upload_media\` tool, which canonicalises arguments before hashing.
+
+Deleting an image (DELETE /blogs/:id/media/:mid or \`delete_media\`) makes the URL stop working immediately. Posts that referenced it will show a broken image until edited.
 `
 }

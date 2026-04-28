@@ -9,6 +9,7 @@ import {
   renderTagList,
   renderPoweredBy,
   renderSeoMeta,
+  renderCoverImage,
   createRenderer,
 } from '../src/rendering/generator.js'
 import { renderMarkdown } from '../src/rendering/markdown.js'
@@ -235,6 +236,26 @@ describe('renderSeoMeta', () => {
   it('emits a title meta (og:title) when seoTitle is present', () => {
     const out = renderSeoMeta('My Title', undefined)
     expect(out).toContain('My Title')
+  })
+})
+
+describe('renderCoverImage', () => {
+  it('returns empty string when coverImage is undefined', () => {
+    expect(renderCoverImage(undefined, 'Title')).toBe('')
+  })
+
+  it('emits an <img> with class="cover" when coverImage is present', () => {
+    const out = renderCoverImage('https://example.com/img.png', 'My Post')
+    expect(out).toContain('<img class="cover"')
+    expect(out).toContain('src="https://example.com/img.png"')
+    expect(out).toContain('alt="My Post"')
+  })
+
+  it('escapes attribute-injection attempts in URL and alt', () => {
+    const out = renderCoverImage('"><script>alert(1)</script>', '<x>')
+    expect(out).not.toContain('<script>')
+    expect(out).toContain('&quot;')
+    expect(out).toContain('alt="&lt;x&gt;"')
   })
 })
 
@@ -611,5 +632,21 @@ describe('renderPost — null publishedAt branch', () => {
 
     const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
     expect(html).toContain('datetime=""')
+  })
+})
+
+describe('MutationRenderer.mediaDir', () => {
+  it('returns <outputDir>/<blogId>/_media without creating the directory', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'slopit-mediadir-'))
+    const store = createStore({ dbPath: join(dir, 'test.db') })
+    const outputDir = join(dir, 'out')
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'http://x/' })
+
+    const got = renderer.mediaDir('blog_abc123')
+    expect(got).toBe(join(outputDir, 'blog_abc123', '_media'))
+    expect(existsSync(got)).toBe(false)
+
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
   })
 })

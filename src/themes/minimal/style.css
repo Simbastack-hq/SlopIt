@@ -54,6 +54,13 @@ article header time {
   font-size: 14px;
   color: var(--text-muted);
 }
+article header img.cover {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 24px 0 0;
+  border-radius: 4px;
+}
 
 article {
   margin-bottom: 64px;
