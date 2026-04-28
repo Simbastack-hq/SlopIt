@@ -151,7 +151,7 @@ Side-project pace. Small scope, staged integration.
 
 - `main` — release-ready. Future Hetzner deploys cut from here.
 - `dev` — integration branch. All work lands here first.
-- Work branches — `feat/<short-name>`, `fix/<short-name>`, `chore/<short-name>`. Branch from `dev`, PR back to `dev`, squash merge.
+- Work branches — `feat/<short-name>`, `fix/<short-name>`, `chore/<short-name>`. Branch from `dev`, PR back to `dev`, merge commit (squash is disabled on the repo).
 - `dev → main` via PR when ready to cut a release. Not every `dev` merge triggers a `main` release; batching is fine.
 - No direct pushes to `main` or `dev`. No force-pushes. No history rewrites.
 - No cherry-picking across `dev` and `main` — promote a commit by PRing `dev → main`. When we hit a case that needs cherry-picking, we'll add a rule; until then, don't.
