@@ -8,7 +8,7 @@ Core is a library, not a framework. It exposes factories (`createStore`, `create
 
 ## Status
 
-Early scaffolding. Not yet usable.
+Used in production at [slopit.io](https://slopit.io). The library is stable enough to be the engine behind real, paying tenants — REST + MCP + media + plan-tier quotas are all live, with 449 tests covering the core paths. The `examples/self-hosted/` Docker Compose is still pending; until it lands, "self-hosted" means wiring the factories into your own Node entrypoint.
 
 ## Docs
 
