@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomInt } from 'node:crypto'
 import type { Store } from '../db/store.js'
 import { getBlogInternal } from '../blogs.js'
 import type { Blog } from '../schema/index.js'
@@ -9,15 +9,19 @@ import { SlopItError } from '../errors.js'
 
 const PREFIX = 'sk_slop_'
 
+// base62: alphanumeric only. We deliberately avoid base64url's `-` and `_`
+// because they're visually ambiguous next to the `-----` separators in the
+// onboarding credential block — humans and agents copy-pasting the block
+// silently truncate them, producing 401s on a key that "looks right."
+// 32 chars × log2(62) ≈ 190 bits of entropy, well above any practical bar.
+const KEY_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+const KEY_BODY_LEN = 32
+
 export function generateApiKey(): string {
-  // base64url's alphabet is [A-Za-z0-9_-]. A trailing `-` or `_` is visually
-  // indistinguishable from the `-----` separator in the onboarding credential
-  // block, and gets silently dropped by humans and agents that parse the
-  // block. Reroll the body until the last char is alphanumeric. ~3% of
-  // attempts get rejected; effectively a single iteration in practice.
-  let body = randomBytes(24).toString('base64url')
-  while (!/[A-Za-z0-9]$/.test(body)) {
-    body = randomBytes(24).toString('base64url')
+  // randomInt(0, n) uses crypto-grade rejection sampling — no modulo bias.
+  let body = ''
+  for (let i = 0; i < KEY_BODY_LEN; i++) {
+    body += KEY_ALPHABET[randomInt(0, KEY_ALPHABET.length)]
   }
   return PREFIX + body
 }

@@ -1,5 +1,5 @@
 ---
-title: API keys must not end in non-alphanumeric characters
+title: API key body is base62, not base64url
 tags: [auth, onboarding, api]
 severity: p2
 date: 2026-05-01
@@ -8,8 +8,9 @@ applies-to: [core, platform, self-hosted]
 
 ## Rule
 
-`generateApiKey()` MUST reroll until the body's last character is in
-`[A-Za-z0-9]`. Keys ending in `-` or `_` are forbidden.
+`generateApiKey()` MUST produce keys whose body is alphanumeric only:
+`/^sk_slop_[A-Za-z0-9]{32}$/`. The body is sampled from a base62 alphabet
+using `randomInt`. base64url's `-` and `_` are forbidden in keys.
 
 ## Why
 
@@ -23,32 +24,39 @@ Blog id:      8995kuea
 -----------------------
 ```
 
-base64url's alphabet is `[A-Za-z0-9_-]`, so ~3% of generated keys end in `-`
-or `_`. When the trailing character is `-`, it is visually indistinguishable
-from the `-----` separator on the line below. Humans copy-pasting the block,
-and agents parsing it, silently drop the trailing `-` and produce a 39-char
-key from a 40-char one.
-
-The server returns a clean `401 UNAUTHORIZED — Invalid API key` for the
-truncated key, which gives the caller no signal that one character is
-missing. Failure mode is silent and frustrating; observed in the wild
-(2026-05-01).
+base64url's alphabet `[A-Za-z0-9_-]` includes two characters — `-` and `_` —
+that are visually ambiguous next to the dashed separators above. A trailing
+`-` is indistinguishable from the start of the closing `-----` line, and
+even an internal `-` next to a line wrap can blur in chat UIs. Humans
+copy-pasting the block, and agents parsing it, silently drop these chars
+and produce a malformed key. The server returns a clean
+`401 UNAUTHORIZED — Invalid API key` for the truncated key, giving the
+caller no signal that one character is missing. Failure mode is silent and
+frustrating; observed in the wild (2026-05-01).
 
 Considered alternatives:
 
-- **Quote the key in the email** — fixes one source but leaves agents that
-  re-emit credentials to other agents still vulnerable.
-- **Length hint in the email** — relies on every consumer checking it.
-- **Different separator (`===`)** — fixes the email but the key is still
-  ambiguous if any future surface uses dashed separators.
+- **Quote the key in the email** — fixes one surface but leaves agents
+  that re-emit credentials still vulnerable.
+- **Length hint in the email** (`API key (40 chars):`) — relies on every
+  consumer checking it.
+- **Different separator (`===`) in the email** — fixes the email but the
+  key is still ambiguous if any future surface uses dashed separators.
+- **Reroll only the trailing char** (the first attempt at this fix) —
+  leaves internal `-`/`_` in the key, which can still confuse readers at
+  line wraps; also creates a hidden invariant ("last char must be
+  alphanumeric") that future maintainers wouldn't think about.
 
-Rerolling at generation time fixes every consumer of the key forever, costs
-~3% extra `randomBytes(24)` calls, and keeps the key's entropy unchanged
-(still 23.94 bits per char × ~31.94 expected chars ≈ same bits as before).
+Restricting the alphabet at the source fixes every consumer of the key
+forever. 32 chars × log2(62) ≈ 190 bits of entropy — well above the
+128-bit target. Existing keys still verify (verification is hash-based,
+format-agnostic), so this is a no-migration change.
 
 ## Example / proof
 
 - Generation site: `src/auth/api-key.ts` (single source of truth; both
   `blogs.createApiKey()` and `recovery` rotation route through it)
-- Statistical test: `tests/smoke.test.ts` — generates 1000 keys and asserts
-  the last char of each is alphanumeric
+- Test: `tests/smoke.test.ts` — generates 1000 keys and asserts each
+  body matches `/^[A-Za-z0-9]{32}$/`
+- Implementation note: uses `crypto.randomInt(0, 62)` per character to
+  avoid the modulo bias `randomBytes(N)[i] % 62` would introduce

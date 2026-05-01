@@ -56,15 +56,18 @@ describe('api-key', () => {
     expect(hashApiKey(key)).not.toBe(key)
   })
 
-  // base64url ends in `-` or `_` ~3% of the time, which gets silently
-  // truncated when keys are pasted next to the `-----` separator in the
-  // onboarding credential block. 1000 samples gives ~99.9999999% confidence
-  // we'd catch a regression that allows trailing punctuation.
-  it('never produces keys ending in non-alphanumeric characters', () => {
+  // The key body must be alphanumeric only (no `-` or `_`) — those chars
+  // are visually ambiguous next to the `-----` separators in the
+  // onboarding credential block and silently truncated by consumers.
+  // The full body is checked, not just the trailing position, because the
+  // alphabet is constrained at the source — there is no scenario where
+  // any position should be punctuation.
+  it('produces keys whose body is alphanumeric only', () => {
     for (let i = 0; i < 1000; i++) {
       const key = generateApiKey()
-      const last = key[key.length - 1]
-      expect(last).toMatch(/[A-Za-z0-9]/)
+      const body = key.slice('sk_slop_'.length)
+      expect(body).toMatch(/^[A-Za-z0-9]+$/)
+      expect(body).toHaveLength(32)
     }
   })
 })
