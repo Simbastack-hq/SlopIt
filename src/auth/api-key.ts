@@ -10,7 +10,16 @@ import { SlopItError } from '../errors.js'
 const PREFIX = 'sk_slop_'
 
 export function generateApiKey(): string {
-  return PREFIX + randomBytes(24).toString('base64url')
+  // base64url's alphabet is [A-Za-z0-9_-]. A trailing `-` or `_` is visually
+  // indistinguishable from the `-----` separator in the onboarding credential
+  // block, and gets silently dropped by humans and agents that parse the
+  // block. Reroll the body until the last char is alphanumeric. ~3% of
+  // attempts get rejected; effectively a single iteration in practice.
+  let body = randomBytes(24).toString('base64url')
+  while (!/[A-Za-z0-9]$/.test(body)) {
+    body = randomBytes(24).toString('base64url')
+  }
+  return PREFIX + body
 }
 
 export function hashApiKey(key: string): string {
