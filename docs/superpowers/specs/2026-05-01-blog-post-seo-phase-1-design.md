@@ -1,8 +1,18 @@
-# Blog Post SEO Meta — Design Spec
+# Blog Post SEO Meta — Phase 1 Design Spec
 
 **Status:** Design draft 2026-05-01.
-**Scope:** `@slopit/core` rendering. Tier 1 only — `<head>` SEO meta + JSON-LD `BlogPosting`. Tier 2 (RSS, sitemap, `llms.txt`) is a separate spec.
-**Branch:** `feat/blog-post-seo` (from `dev @ 5d1d79b`).
+**Scope:** `@slopit/core` rendering. **Phase 1** of the agent-readable blogs feature series. `<head>` meta + JSON-LD `BlogPosting`. Pure rendering. No data collection.
+
+**Phases:**
+
+- **Phase 0** — Privacy policy contract (slopit-platform; PR #52). Binding contract for Phases 3a/3b/3c.
+- **Phase 1** — _this spec._ `<head>` meta + JSON-LD.
+- **Phase 2** — Per-post `.md`, per-blog `llms.txt`, `feed.xml`, `sitemap.xml`. Static file outputs from the renderer. No data collection.
+- **Phase 3a** — Agent-traffic measurement (Layer 1) — Caddy access log capture for agent endpoints. Platform.
+- **Phase 3b** — Anonymous human pageview counters (Layer 2). Platform.
+- **Phase 3c** — Bring-your-own analytics escape hatch (Layer 3). Core schema + platform injection.
+
+**Branch:** `plan/blog-post-seo` (from `dev @ 5d1d79b`).
 
 ---
 
@@ -36,9 +46,10 @@ This spec closes that gap with a single rendering-only PR (no schema migrations,
 3. **Zero new runtime deps.** Hand-rolled. Boring beats novel (CLAUDE.md).
 4. **Self-hosted parity.** Same HTML for slopit.io and self-hosters. Works with any `baseUrl`.
 
-## Non-goals (Tier 2, separate plan)
+## Non-goals (later phases)
 
-- RSS feed. Sitemap. `<link rel="alternate">`. `llms.txt`. Per-blog `robots.txt`. Auto-generated cover image cards. Twitter handle / `twitter:site`. Schema.org organization profile. Per-blog favicons.
+- **Phase 2:** RSS feed (`/feed.xml`), sitemap (`/sitemap.xml`), per-blog `llms.txt`, per-post `<slug>.md` source endpoint. Phase 1 emits the `<link rel="alternate">` placeholders pointing at these (forward-compat); Phase 2 ships the actual files.
+- **Out of scope entirely (later, if at all):** Per-blog `robots.txt`. Auto-generated cover image cards. Twitter handle / `twitter:site`. Schema.org organization profile. Per-blog favicons.
 
 ---
 
@@ -47,8 +58,8 @@ This spec closes that gap with a single rendering-only PR (no schema migrations,
 | # | Decision | Rationale |
 |---|----------|-----------|
 | 1 | Always emit `og:*`, `twitter:*`, and JSON-LD. Never conditionally on whether author set SEO fields. | Today's "if user set it" gate produces blank previews for the dominant case (agents not setting SEO). The whole point of fallbacks is to cover that case. |
-| 2 | `seoTitle` falls back to `post.title`. `seoDescription` falls back to a body-derived excerpt. | Author intent wins when present; otherwise the post itself is the source of truth. |
-| 3 | Body excerpt = `extractDescription(body)` — markdown stripped to plain text, whitespace collapsed, truncated to 160 chars on a word boundary, append `…` if truncated. Always returns a non-empty string for any non-empty body. | 160 chars matches Google's display limit for meta descriptions. Word-boundary truncation avoids ugly mid-word cuts. |
+| 2 | `seoTitle` falls back to `post.title`. `seoDescription` falls back to **`post.excerpt`** if set, then to a body-derived excerpt. | Author intent wins when present. The schema already has `excerpt: z.string().max(300).optional()` for human-curated short summaries — use it before falling back to algorithmic extraction. |
+| 3 | Algorithmic body excerpt = `extractDescription(body)` — markdown stripped to plain text, whitespace collapsed, truncated to 160 chars on a word boundary, append `…` if truncated. Always returns a non-empty string for any non-empty body. | 160 chars matches Google's display limit for meta descriptions. Word-boundary truncation avoids ugly mid-word cuts. |
 | 4 | Markdown stripping for the excerpt is a focused subset: drop ATX/Setext headings, fenced/inline code, link/image syntax (keep the visible text), bold/italic markers, blockquote markers, list markers. NO HTML parsing — `renderMarkdown` already strips raw HTML at publish (decision #13 of `2026-04-22-create-post-design.md`), so excerpt input is markdown-only. | YAGNI. We don't need a full CommonMark stripper; we need "produces a clean sentence." |
 | 5 | `og:image` is `post.coverImage` if set; omitted otherwise. No fallback image in v1. | YAGNI. A "default OG image" implies generating per-post cards (Tier 2+). Omitting is correct — Slack/X/etc. handle missing images gracefully. |
 | 6 | `twitter:card` is `"summary_large_image"` when `coverImage` is set, else `"summary"`. | Standard pattern. `summary_large_image` requires an image; using it without one shows nothing on X. |
@@ -59,6 +70,7 @@ This spec closes that gap with a single rendering-only PR (no schema migrations,
 | 11 | All `<meta content="...">` user-derived values pass through `escapeHtml`. | Same convention as the rest of the renderer (decision #9 of `2026-04-22-create-post-design.md`). |
 | 12 | `renderSeoMeta` is replaced (signature change) by a richer `buildSeoMeta({ post, blog, canonicalUrl })`. The new function lives in a new module `src/rendering/seo.ts`, not in `generator.ts`. `generator.ts` calls into it. | Generator is already 200+ lines and growing. SEO is its own concern; lives in its own file. Files that change together live together — SEO meta + JSON-LD + description fallback are one unit. |
 | 13 | All output is concatenated with `\n` between tags for HTML readability. The rendered output is static; size cost (~200 bytes per post) is negligible against the gzip baseline. | Debuggable view-source matters. Self-hosters and curious readers will look. |
+| 13a | Phase 1 emits `<link rel="alternate" type="text/markdown" href="<slug>.md">` and `<link rel="alternate" type="application/rss+xml" title="<blog name>" href="/feed.xml">` in the post `<head>`, even though the targets don't exist until Phase 2 lands. The cost is ~140 bytes per post; Phase 2 lights them up automatically without re-rendering Phase 1's posts. | Forward-compat: when Phase 2 ships, every existing post gets functional alternate links on the next publish. Saves a re-render pass. Cheap to add now. |
 | 14 | Pro/free tiers receive identical SEO output. The "Powered by SlopIt" footer link is the only Pro-vs-free distinction in core. | SEO is not a paywallable feature; making it one would harm free-tier discoverability and bring no upsell value. |
 | 15 | Drafts (`status: 'draft'`) are not rendered to disk today (`generator.ts` only writes for `status: 'published'`). This spec doesn't change that. SEO concerns are by definition published-only. | No-op. |
 | 16 | No new dependencies. JSON-LD is hand-built via a typed `Record<string, unknown>` and `JSON.stringify` with the script-tag-safe replacement. | Boring tech. CLAUDE.md "No abstract class with one implementation." |
@@ -127,6 +139,8 @@ For a fully-populated post:
 
 ```html
 <!-- in <head>, after <link rel="canonical"> -->
+<link rel="alternate" type="text/markdown" href="my-post.md">
+<link rel="alternate" type="application/rss+xml" title="My Blog" href="/feed.xml">
 <meta name="description" content="...">
 <meta name="author" content="Jane Doe">
 <meta property="og:title" content="My Post">
@@ -150,9 +164,11 @@ For a fully-populated post:
 </script>
 ```
 
-For a minimal post (no seoTitle, seoDescription, coverImage, author, tags; updatedAt == publishedAt):
+For a minimal post (no seoTitle, seoDescription, excerpt, coverImage, author, tags; updatedAt == publishedAt):
 
 ```html
+<link rel="alternate" type="text/markdown" href="post-title.md">
+<link rel="alternate" type="application/rss+xml" title="My Blog" href="/feed.xml">
 <meta name="description" content="The body excerpt, derived automatically.">
 <meta property="og:title" content="Post Title">
 <meta property="og:description" content="The body excerpt, derived automatically.">
@@ -167,6 +183,8 @@ For a minimal post (no seoTitle, seoDescription, coverImage, author, tags; updat
 {"@context":"https://schema.org","@type":"BlogPosting","headline":"Post Title","datePublished":"2026-05-01T12:34:56Z","mainEntityOfPage":"https://blog.slopit.io/post-title/","description":"The body excerpt, derived automatically."}
 </script>
 ```
+
+> **Note on alternate links:** until Phase 2 ships, `<slug>.md` and `/feed.xml` will 404. The link tags are inert in that interim; nothing in the rendered page depends on them resolving. Phase 2 lights them up.
 
 ---
 
