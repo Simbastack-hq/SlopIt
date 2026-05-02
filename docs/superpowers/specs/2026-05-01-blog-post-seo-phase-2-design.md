@@ -76,7 +76,7 @@ For blog-level descriptions in `llms.txt`, no schema change in Phase 2 — `blog
 | 15 | Posts in `llms.txt` are **sorted by `publishedAt` descending** (newest first). Same as the blog `index.html`. | Consistency with what humans see. |
 | 16 | Drafts are excluded from all four outputs. | Drafts aren't published; they have no canonical URL; they'd break `feed.xml`. |
 | 17 | All file writes are **atomic via a new `writeFileAtomic(path, content)` helper** — write to `${path}.tmp`, then `rename`. Phase 2 introduces this helper; the current `generator.ts` does direct `writeFileSync` (lines 195 and 214). The first task in the implementation plan adds the helper and migrates the two existing HTML writes; subsequent tasks have `<slug>.md`, `llms.txt`, `feed.xml`, `sitemap.xml` use it. | Avoids partial reads if Caddy serves mid-write. The reviewer caught the misclaim that this pattern already exists; introducing it now is the cheapest moment because we're touching the renderer's write path anyway. |
-| 18 | The renderer's `MutationRenderer` interface gains four no-op-by-default methods: `renderPostMarkdown`, `renderLlmsTxt`, `renderFeed`, `renderSitemap`. Implementation lives in the same `createRenderer` factory. Self-hosters override nothing; existing behavior is preserved. | Minimal interface growth. The methods exist for testability; they're called internally by the existing `renderPost` and `renderBlog` flows, not by external callers. |
+| 18 | The renderer's `MutationRenderer` interface gains three methods: `renderPostMarkdown(blogId, post)`, `deletePostMarkdown(blogId, slug)`, and `renderManifests(blogId)` (the last emits `llms.txt` + `feed.xml` + `sitemap.xml` together — they share the same per-blog post list, so one method per file would force three identical queries). Implementation lives in the same `createRenderer` factory. Self-hosters override nothing; existing behavior is preserved. | Minimal interface growth. The methods exist for testability; they're called internally by the existing `renderPost` flow and the published→draft / `deletePost` cleanup paths, not by external callers. |
 | 19 | Caddy file-server config in `slopit-platform`'s `Caddyfile` needs one extra rule to serve `.md` files with `Content-Type: text/markdown; charset=utf-8`. `llms.txt` and `feed.xml` get explicit Content-Type rules too. **Caddyfile change is platform-side**, not core, but documented here so the platform PR doesn't get missed. | Cross-cutting concern; flag it once, ship it together. |
 
 ---
@@ -191,7 +191,8 @@ tags: ["launch", "ai", "agents"]
 | `updatePost` (draft → published) | Same as createPost(published) | — |
 | `updatePost` (published → draft) | `llms.txt`, `feed.xml`, `sitemap.xml` (regenerated minus this post) | `<slug>/index.html`, `<slug>.md` |
 | `deletePost` | `llms.txt`, `feed.xml`, `sitemap.xml` (regenerated minus this post) | `<slug>/index.html`, `<slug>.md` |
-| `deleteBlog` | — | Entire `{outputDir}/{blogId}/` tree (already cascade-handled) |
+
+Blog deletion is out of scope: core has no `deleteBlog` function or `DELETE /blogs/:id` route today. When that surface lands (separate scope), its lifecycle row will need to remove the entire `{outputDir}/{blogId}/` tree. Phase 2 does not assume or test it.
 
 ---
 
@@ -225,7 +226,6 @@ tags: ["launch", "ai", "agents"]
 - `createPost(published)` writes `.md`, `llms.txt`, `feed.xml`, `sitemap.xml` at expected paths.
 - `updatePost(..., { status: 'draft' })` from a published post removes `.md` and regenerates manifest/feed/sitemap minus the post.
 - `deletePost` removes `.md`, `<slug>/index.html`, and regenerates manifest/feed/sitemap.
-- `deleteBlog` removes entire blog directory (existing behavior, asserted to still hold).
 
 **`tests/skill.test.ts`:** drift assertions for the new agent-endpoint documentation.
 
