@@ -8,23 +8,28 @@ applies-to: [core, platform, self-hosted]
 
 ## Rule
 
-Every published post emits a complete `<head>`: description, og:*, twitter:*, JSON-LD `BlogPosting`. Empty author-set SEO fields fall back deterministically — never produce a blank social preview.
+Every published post emits a complete `<head>`: description, og:*, twitter:*, JSON-LD `BlogPosting`. Empty *or whitespace-only* author-set SEO fields fall back deterministically — never produce a blank social preview.
+
+## "Blank" means absent
+
+The schema permits `seoTitle: ''`, `seoDescription: '   '`, etc. (the optional SEO fields don't enforce `.trim().min(1)`). The renderer's contract treats blank or whitespace-only strings as absent for resolution purposes via a private `nonBlank(s)` helper. Naive `??` (nullish coalescing) would let `''` through; naive `if (s)` would let `'   '` through. Both bypass the fallback.
 
 ## Fallback chain
 
-| Tag source | Fallback when absent |
-|------------|----------------------|
+| Tag source | Fallback when absent / blank |
+|------------|------------------------------|
 | description, og:description, twitter:description | `post.seoDescription → post.excerpt → extractDescription(post.body)` — markdown stripped, whitespace collapsed, 160-char word-boundary truncation |
-| og:title, twitter:title | `post.seoTitle ?? post.title` |
+| og:title, twitter:title, JSON-LD headline | `resolveTitle(post)` = `nonBlank(post.seoTitle) ?? post.title` (post.title is schema-guaranteed non-empty via `.trim().min(1)`) |
 | og:image, twitter:image | omitted (no default image; YAGNI for v1) |
-| og:site_name | `blog.name ?? blog.id` |
-| article:modified_time | omitted when `updatedAt === publishedAt` |
+| og:site_name | `nonBlank(blog.name) ?? blog.id` |
+| article:author / JSON-LD author | omitted when blank |
+| article:modified_time / JSON-LD dateModified | omitted when `updatedAt === publishedAt` |
 
-Single source of truth: `resolveDescription(post)` in `src/rendering/seo.ts`. Both `buildSeoMeta` and `buildJsonLd` call it; Phase 2's `.md`/RSS/`llms.txt` generators will too.
+Single source of truth: `resolveTitle(post)` and `resolveDescription(post)` in `src/rendering/seo.ts`. Both `buildSeoMeta` and `buildJsonLd` call them; Phase 2's `.md`/RSS/`llms.txt` generators will too.
 
 ## JSON-LD script-tag safety
 
-User-controlled strings (title, author, tags) can contain `</script>`. HTML-escaping inside `<script>` is the wrong tool — it would corrupt the JSON. Instead, `escapeJsonForScript` does `JSON.stringify(...)` then replaces `<` with `<`. JSON.parse decodes `<` back to `<`, so consumers see the original string; the literal `</script>` byte sequence never appears in HTML output.
+User-controlled strings (title, author, tags) can contain `</script>`. HTML-escaping inside `<script>` is the wrong tool — it would corrupt the JSON. Instead, `escapeJsonForScript` does `JSON.stringify(...)` then replaces every `<` with the unicode escape `<`. JSON.parse decodes `<` back to `<`, so consumers see the original string; the literal byte sequence `</script>` never appears in HTML output, so the parser cannot be tricked into closing the script block.
 
 ## Trailing-slash baseUrl normalization
 

@@ -3,6 +3,7 @@ import {
   extractDescription,
   escapeJsonForScript,
   resolveDescription,
+  resolveTitle,
   normalizeBaseUrl,
   buildJsonLd,
   buildSeoMeta,
@@ -110,9 +111,29 @@ describe('resolveDescription', () => {
     expect(resolveDescription(post)).toBe('Custom SEO desc.')
   })
 
+  it('trims whitespace from post.seoDescription before returning', () => {
+    const post: Post = { ...basePost, seoDescription: '  Custom SEO desc.  ' }
+    expect(resolveDescription(post)).toBe('Custom SEO desc.')
+  })
+
   it('falls back to post.excerpt when seoDescription is absent', () => {
     const post: Post = { ...basePost, excerpt: 'Curated excerpt.' }
     expect(resolveDescription(post)).toBe('Curated excerpt.')
+  })
+
+  it('treats empty-string seoDescription as absent and falls back', () => {
+    const post: Post = { ...basePost, seoDescription: '', excerpt: 'Curated.' }
+    expect(resolveDescription(post)).toBe('Curated.')
+  })
+
+  it('treats whitespace-only seoDescription as absent and falls back', () => {
+    const post: Post = { ...basePost, seoDescription: '   \t\n  ', excerpt: 'Curated.' }
+    expect(resolveDescription(post)).toBe('Curated.')
+  })
+
+  it('treats whitespace-only excerpt as absent and falls back to body', () => {
+    const post: Post = { ...basePost, excerpt: '   ', body: 'Real body.' }
+    expect(resolveDescription(post)).toBe('Real body.')
   })
 
   it('falls back to extractDescription(body) when both seoDescription and excerpt are absent', () => {
@@ -131,6 +152,37 @@ describe('resolveDescription', () => {
   it('returns empty string when all sources are empty', () => {
     const post: Post = { ...basePost, body: '   ' }
     expect(resolveDescription(post)).toBe('')
+  })
+
+  it('returns empty string when all three sources are blank/whitespace', () => {
+    const post: Post = { ...basePost, seoDescription: '', excerpt: '   ', body: '   ' }
+    expect(resolveDescription(post)).toBe('')
+  })
+})
+
+describe('resolveTitle', () => {
+  it('returns post.seoTitle when set', () => {
+    const post: Post = { ...basePost, seoTitle: 'Custom SEO Title' }
+    expect(resolveTitle(post)).toBe('Custom SEO Title')
+  })
+
+  it('trims whitespace from post.seoTitle before returning', () => {
+    const post: Post = { ...basePost, seoTitle: '  Custom SEO Title  ' }
+    expect(resolveTitle(post)).toBe('Custom SEO Title')
+  })
+
+  it('falls back to post.title when seoTitle is absent', () => {
+    expect(resolveTitle(basePost)).toBe('Title')
+  })
+
+  it('treats empty-string seoTitle as absent and falls back', () => {
+    const post: Post = { ...basePost, seoTitle: '' }
+    expect(resolveTitle(post)).toBe('Title')
+  })
+
+  it('treats whitespace-only seoTitle as absent and falls back', () => {
+    const post: Post = { ...basePost, seoTitle: '   \t  ' }
+    expect(resolveTitle(post)).toBe('Title')
   })
 })
 
@@ -294,6 +346,36 @@ describe('buildJsonLd', () => {
     >
     expect(json.description).toBe('SEO override.')
   })
+
+  it('falls back to post.title for headline when seoTitle is empty string', () => {
+    const post: Post = { ...minimalPost, seoTitle: '' }
+    const out = buildJsonLd({ post, blog: minimalBlog, canonicalUrl: canonical })
+    const json = JSON.parse(out.replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '')) as Record<
+      string,
+      unknown
+    >
+    expect(json.headline).toBe('Post Title')
+  })
+
+  it('falls back to post.title for headline when seoTitle is whitespace-only', () => {
+    const post: Post = { ...minimalPost, seoTitle: '   ' }
+    const out = buildJsonLd({ post, blog: minimalBlog, canonicalUrl: canonical })
+    const json = JSON.parse(out.replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '')) as Record<
+      string,
+      unknown
+    >
+    expect(json.headline).toBe('Post Title')
+  })
+
+  it('omits author key when post.author is whitespace-only', () => {
+    const post: Post = { ...minimalPost, author: '   ' }
+    const out = buildJsonLd({ post, blog: minimalBlog, canonicalUrl: canonical })
+    const json = JSON.parse(out.replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '')) as Record<
+      string,
+      unknown
+    >
+    expect(json).not.toHaveProperty('author')
+  })
 })
 
 describe('buildSeoMeta', () => {
@@ -420,5 +502,46 @@ describe('buildSeoMeta', () => {
     for (const line of lines) {
       expect(line).toMatch(/^<meta /)
     }
+  })
+
+  it('falls back to post.title for og:title when seoTitle is empty string', () => {
+    const post: Post = { ...minimalPost, seoTitle: '' }
+    const out = buildSeoMeta({ post, blog: minimalBlog, canonicalUrl: canonical })
+    expect(out).toContain('<meta property="og:title" content="Post Title">')
+    expect(out).not.toContain('content="">')
+  })
+
+  it('falls back to post.title for og:title when seoTitle is whitespace-only', () => {
+    const post: Post = { ...minimalPost, seoTitle: '   ' }
+    const out = buildSeoMeta({ post, blog: minimalBlog, canonicalUrl: canonical })
+    expect(out).toContain('<meta property="og:title" content="Post Title">')
+  })
+
+  it('omits description when seoDescription is whitespace-only and excerpt/body are empty', () => {
+    const post: Post = { ...minimalPost, seoDescription: '   ', body: '   ' }
+    const out = buildSeoMeta({ post, blog: minimalBlog, canonicalUrl: canonical })
+    expect(out).not.toContain('<meta name="description"')
+    expect(out).not.toContain('og:description')
+    expect(out).not.toContain('twitter:description')
+  })
+
+  it('omits author tags when post.author is empty string', () => {
+    const post: Post = { ...minimalPost, author: '' }
+    const out = buildSeoMeta({ post, blog: minimalBlog, canonicalUrl: canonical })
+    expect(out).not.toContain('<meta name="author"')
+    expect(out).not.toContain('article:author')
+  })
+
+  it('omits author tags when post.author is whitespace-only', () => {
+    const post: Post = { ...minimalPost, author: '   ' }
+    const out = buildSeoMeta({ post, blog: minimalBlog, canonicalUrl: canonical })
+    expect(out).not.toContain('<meta name="author"')
+    expect(out).not.toContain('article:author')
+  })
+
+  it('falls back to blog.id for og:site_name when blog.name is empty string', () => {
+    const blog: Blog = { ...minimalBlog, name: '' }
+    const out = buildSeoMeta({ post: minimalPost, blog, canonicalUrl: canonical })
+    expect(out).toContain('<meta property="og:site_name" content="b1">')
   })
 })

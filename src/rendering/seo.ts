@@ -40,8 +40,9 @@ export function extractDescription(body: string, max = 160): string {
 }
 
 /**
- * JSON.stringify with `<` replaced by `<` so the output is safe to
- * embed inside a `<script>` block. JSON.parse on the result yields the
+ * JSON.stringify with `<` replaced by the unicode escape `<`, so the
+ * output is safe to embed inside a `<script>` block — the literal byte
+ * sequence `</script>` cannot appear. JSON.parse on the result yields the
  * original value (the escape decodes back to `<`).
  *
  * HTML-escaping (`&lt;`) would corrupt the JSON — different context.
@@ -51,16 +52,37 @@ export function escapeJsonForScript(value: unknown): string {
 }
 
 /**
+ * Truthy-check that treats whitespace-only strings as absent. The schema
+ * accepts `seoTitle: ''` and `seoDescription: '   '` (no `.trim().min(1)`
+ * on those fields), but the renderer's contract is that "blank SEO fields
+ * fall back" — so blank/whitespace-only must be treated the same as
+ * undefined for resolution purposes.
+ */
+function nonBlank(s: string | undefined | null): string | undefined {
+  if (s === undefined || s === null) return undefined
+  const trimmed = s.trim()
+  return trimmed === '' ? undefined : trimmed
+}
+
+/**
+ * Resolve a post's title for SEO surfaces. Returns `seoTitle` when set
+ * (and non-blank), otherwise `post.title`. The schema guarantees
+ * `post.title` is trim+min(1), so the result is always non-empty.
+ */
+export function resolveTitle(post: Post): string {
+  return nonBlank(post.seoTitle) ?? post.title
+}
+
+/**
  * Resolve a post's description via the documented chain:
  *   post.seoDescription → post.excerpt → extractDescription(post.body)
+ * Each candidate is treated as absent when blank/whitespace-only.
  * Returns '' if all three resolve to empty. Used by both buildSeoMeta
  * and buildJsonLd in this phase, and re-used by Phase 2's `.md`/RSS/
  * `llms.txt` generators. Single source of truth for description-fallback.
  */
 export function resolveDescription(post: Post): string {
-  if (post.seoDescription) return post.seoDescription
-  if (post.excerpt) return post.excerpt
-  return extractDescription(post.body)
+  return nonBlank(post.seoDescription) ?? nonBlank(post.excerpt) ?? extractDescription(post.body)
 }
 
 /**
@@ -101,7 +123,7 @@ export function buildJsonLd(input: SeoInput): string {
   const data: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
-    headline: post.seoTitle ?? post.title,
+    headline: resolveTitle(post),
     datePublished: post.publishedAt ?? post.createdAt,
     mainEntityOfPage: canonicalUrl,
   }
@@ -109,8 +131,9 @@ export function buildJsonLd(input: SeoInput): string {
   if (post.updatedAt && post.publishedAt && post.updatedAt !== post.publishedAt) {
     data.dateModified = post.updatedAt
   }
-  if (post.author) {
-    data.author = { '@type': 'Person', name: post.author }
+  const author = nonBlank(post.author)
+  if (author) {
+    data.author = { '@type': 'Person', name: author }
   }
   if (post.coverImage) {
     data.image = post.coverImage
@@ -138,9 +161,10 @@ export function buildSeoMeta(input: SeoInput): string {
   const { post, blog, canonicalUrl } = input
   const lines: string[] = []
 
-  const title = post.seoTitle ?? post.title
+  const title = resolveTitle(post)
   const description = resolveDescription(post)
-  const siteName = blog.name ?? blog.id
+  const author = nonBlank(post.author)
+  const siteName = nonBlank(blog.name) ?? blog.id
   const hasImage = Boolean(post.coverImage)
   const hasModified = Boolean(
     post.updatedAt && post.publishedAt && post.updatedAt !== post.publishedAt,
@@ -150,8 +174,8 @@ export function buildSeoMeta(input: SeoInput): string {
   if (description) {
     lines.push(`<meta name="description" content="${escapeHtml(description)}">`)
   }
-  if (post.author) {
-    lines.push(`<meta name="author" content="${escapeHtml(post.author)}">`)
+  if (author) {
+    lines.push(`<meta name="author" content="${escapeHtml(author)}">`)
   }
 
   // Open Graph
@@ -174,8 +198,8 @@ export function buildSeoMeta(input: SeoInput): string {
   if (hasModified && post.updatedAt) {
     lines.push(`<meta property="article:modified_time" content="${escapeHtml(post.updatedAt)}">`)
   }
-  if (post.author) {
-    lines.push(`<meta property="article:author" content="${escapeHtml(post.author)}">`)
+  if (author) {
+    lines.push(`<meta property="article:author" content="${escapeHtml(author)}">`)
   }
   if (post.tags) {
     for (const tag of post.tags) {
