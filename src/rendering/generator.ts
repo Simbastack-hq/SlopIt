@@ -5,6 +5,7 @@ import type { Store } from '../db/store.js'
 import { listPublishedPostsForBlog } from '../posts.js'
 import type { Blog, Post } from '../schema/index.js'
 import { renderMarkdown } from './markdown.js'
+import { buildJsonLd, buildSeoMeta, normalizeBaseUrl } from './seo.js'
 import { escapeHtml, loadTheme, render } from './templates.js'
 
 export interface RendererConfig {
@@ -121,30 +122,6 @@ export function renderPoweredBy(): string {
 }
 
 /**
- * Build the SEO meta-tag block. Returns '' when both title and
- * description are missing. All user content escaped at the boundary.
- *
- * @internal
- */
-export function renderSeoMeta(
-  seoTitle: string | undefined,
-  seoDescription: string | undefined,
-): string {
-  if (!seoTitle && !seoDescription) return ''
-  const parts: string[] = []
-  if (seoDescription) {
-    parts.push(`<meta name="description" content="${escapeHtml(seoDescription)}">`)
-  }
-  if (seoTitle) {
-    parts.push(`<meta property="og:title" content="${escapeHtml(seoTitle)}">`)
-  }
-  if (seoDescription) {
-    parts.push(`<meta property="og:description" content="${escapeHtml(seoDescription)}">`)
-  }
-  return parts.join('')
-}
-
-/**
  * Copy the theme's style.css into a blog's output directory. Always
  * overwrites (not copy-if-missing) so blogs pick up style.css changes
  * on the next publish after a package upgrade. Creates the blog dir
@@ -177,6 +154,14 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const postDir = join(blogDir, post.slug)
       mkdirSync(postDir, { recursive: true })
 
+      // Single source of truth for this post's URL. Used by:
+      //   - <link rel="canonical">
+      //   - og:url + JSON-LD mainEntityOfPage (via buildSeoMeta + buildJsonLd)
+      // normalizeBaseUrl strips a trailing slash so concatenation is unambiguous
+      // regardless of whether the caller (platform vs self-hosted) passes
+      // `https://x.com` or `https://x.com/`.
+      const canonicalUrl = normalizeBaseUrl(config.baseUrl) + '/' + post.slug + '/'
+
       const html = render(theme.post, {
         blogName: displayName(blog),
         postTitle: post.title,
@@ -184,8 +169,9 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         postPublishedAtDisplay: formatDate(post.publishedAt),
         themeCssHref: '../style.css',
         blogHomeHref: '..',
-        canonicalUrl: config.baseUrl + '/' + post.slug + '/',
-        seoMeta: renderSeoMeta(post.seoTitle, post.seoDescription),
+        canonicalUrl,
+        seoMeta: buildSeoMeta({ post, blog, canonicalUrl }),
+        jsonLd: buildJsonLd({ post, blog, canonicalUrl }),
         coverImage: renderCoverImage(post.coverImage, post.title),
         postBody: renderMarkdown(post.body),
         tagList: renderTagList(post.tags),

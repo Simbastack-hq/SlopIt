@@ -8,7 +8,6 @@ import {
   renderPostList,
   renderTagList,
   renderPoweredBy,
-  renderSeoMeta,
   renderCoverImage,
   createRenderer,
 } from '../src/rendering/generator.js'
@@ -213,29 +212,6 @@ describe('renderPoweredBy', () => {
     const out = renderPoweredBy()
     expect(out).toContain('https://slopit.io')
     expect(out).toContain('Powered by')
-  })
-})
-
-describe('renderSeoMeta', () => {
-  it('returns empty string when both seoTitle and seoDescription are absent', () => {
-    expect(renderSeoMeta(undefined, undefined)).toBe('')
-  })
-
-  it('emits a description meta when seoDescription is present', () => {
-    const out = renderSeoMeta(undefined, 'A description')
-    expect(out).toContain('<meta name="description"')
-    expect(out).toContain('content="A description"')
-  })
-
-  it('escapes user-derived content', () => {
-    const out = renderSeoMeta(undefined, '<script>alert(1)</script>')
-    expect(out).not.toContain('<script>alert(1)</script>')
-    expect(out).toContain('&lt;script&gt;')
-  })
-
-  it('emits a title meta (og:title) when seoTitle is present', () => {
-    const out = renderSeoMeta('My Title', undefined)
-    expect(out).toContain('My Title')
   })
 })
 
@@ -526,6 +502,72 @@ describe('createRenderer — renderPost', () => {
     const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
     expect(html).toContain('<h1>Heading</h1>')
     expect(html).toContain('<p>Paragraph.</p>')
+  })
+
+  // SEO surface — integration tests covering the buildSeoMeta + buildJsonLd
+  // pipeline end-to-end through the rendered HTML on disk.
+  it('emits canonical link, OG meta, Twitter Card, and JSON-LD for a published post', () => {
+    const { blog } = createBlog(store, { name: 'test-blog' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 'my-post', title: 'My Post', body: 'Hello world.' }),
+    )
+
+    const html = readFileSync(join(outputDir, blog.id, 'my-post', 'index.html'), 'utf8')
+    expect(html).toContain('<link rel="canonical"')
+    expect(html).toContain('<meta property="og:title" content="My Post">')
+    expect(html).toContain('<meta property="og:type" content="article">')
+    expect(html).toContain('<meta name="twitter:card"')
+    expect(html).toContain('<script type="application/ld+json">')
+    expect(html).toContain('"@type":"BlogPosting"')
+  })
+
+  it('uses seoTitle and seoDescription when present', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({
+        blogId: blog.id,
+        slug: 's',
+        title: 'Default',
+        body: 'Body.',
+        seoTitle: 'Override',
+        seoDescription: 'Custom.',
+      }),
+    )
+
+    const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
+    expect(html).toContain('<meta property="og:title" content="Override">')
+    expect(html).toContain('<meta name="description" content="Custom.">')
+  })
+
+  it('produces single-slash canonical URL regardless of baseUrl trailing slash', () => {
+    // Platform passes named-blog base URLs with a trailing slash; the renderer
+    // must normalize so canonical/og:url/JSON-LD mainEntityOfPage are
+    // identical for slashed and non-slashed input.
+    const { blog: blogA } = createBlog(store, { name: 'aa' })
+    const rendererA = createRenderer({ store, outputDir, baseUrl: 'https://a.example.com' })
+    rendererA.renderPost(blogA.id, makePost({ blogId: blogA.id, slug: 'p' }))
+    const htmlA = readFileSync(join(outputDir, blogA.id, 'p', 'index.html'), 'utf8')
+
+    // Fresh outputDir for the trailing-slash variant — same blog id collision otherwise.
+    const outputDirB = join(dir, 'out2')
+    const { blog: blogB } = createBlog(store, { name: 'bb' })
+    const rendererB = createRenderer({
+      store,
+      outputDir: outputDirB,
+      baseUrl: 'https://a.example.com/',
+    })
+    rendererB.renderPost(blogB.id, makePost({ blogId: blogB.id, slug: 'p' }))
+    const htmlB = readFileSync(join(outputDirB, blogB.id, 'p', 'index.html'), 'utf8')
+
+    // Both must contain the single-slash canonical, never `//p/`.
+    expect(htmlA).toContain('href="https://a.example.com/p/"')
+    expect(htmlB).toContain('href="https://a.example.com/p/"')
+    expect(htmlA).not.toContain('//p/')
+    expect(htmlB).not.toContain('//p/')
   })
 })
 
