@@ -29,7 +29,7 @@ Single source of truth: `resolveTitle(post)` and `resolveDescription(post)` in `
 
 ## JSON-LD script-tag safety
 
-User-controlled strings (title, author, tags) can contain `</script>`. HTML-escaping inside `<script>` is the wrong tool — it would corrupt the JSON. Instead, `escapeJsonForScript` does `JSON.stringify(...)` then replaces every `<` with the unicode escape `<`. JSON.parse decodes `<` back to `<`, so consumers see the original string; the literal byte sequence `</script>` never appears in HTML output, so the parser cannot be tricked into closing the script block.
+User-controlled strings (title, author, tags) can contain `</script>`. HTML-escaping inside `<script>` is the wrong tool — it would corrupt the JSON. Instead, `escapeJsonForScript` does `JSON.stringify(...)` then replaces every `<` with the unicode escape `\u003c`. JSON.parse decodes `\u003c` back to `<`, so consumers see the original string; the literal byte sequence `</script>` never appears in HTML output, so the parser cannot be tricked into closing the script block.
 
 ## Trailing-slash baseUrl normalization
 

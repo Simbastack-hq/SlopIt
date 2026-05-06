@@ -40,7 +40,7 @@ export function extractDescription(body: string, max = 160): string {
 }
 
 /**
- * JSON.stringify with `<` replaced by the unicode escape `<`, so the
+ * JSON.stringify with `<` replaced by the unicode escape `\u003c`, so the
  * output is safe to embed inside a `<script>` block — the literal byte
  * sequence `</script>` cannot appear. JSON.parse on the result yields the
  * original value (the escape decodes back to `<`).
