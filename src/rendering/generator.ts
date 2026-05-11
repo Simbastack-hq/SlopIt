@@ -14,6 +14,19 @@ export interface RendererConfig {
   store: Store
   outputDir: string
   baseUrl: string
+  /**
+   * Optional post-processor that receives fully-rendered HTML and
+   * returns transformed HTML before it's written to disk. Called from
+   * `renderPost` (per-post HTML) and `renderBlog` (per-blog index HTML).
+   * NOT called for non-HTML outputs (.md, llms.txt, feed.xml, sitemap.xml).
+   *
+   * `blogId` is passed so the caller can look up per-blog config like
+   * `blog.analytics` without re-resolving it. Identity is the default.
+   *
+   * Platform uses this to inject analytics `<script>` tags into <head>
+   * (Phase 3c). Self-hosted callers pass nothing and get unchanged behavior.
+   */
+  postprocessHtml?: (html: string, blogId: string) => string
 }
 
 export interface Renderer {
@@ -184,6 +197,11 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
   const blogOutputDir = (blogId: string) => join(config.outputDir, blogId)
 
+  // Identity-default postprocess hook. Platform passes a real transform
+  // (analytics injection); self-hosted callers don't, and pay nothing.
+  const applyPostprocess = (html: string, blogId: string): string =>
+    config.postprocessHtml ? config.postprocessHtml(html, blogId) : html
+
   // Single source of truth for a post's canonical URL. normalizeBaseUrl
   // strips a trailing slash so concatenation is unambiguous regardless of
   // whether the caller (platform vs self-hosted) passes `https://x.com`
@@ -313,7 +331,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         poweredBy: renderPoweredBy(),
       })
 
-      writeFileAtomic(join(postDir, 'index.html'), html)
+      writeFileAtomic(join(postDir, 'index.html'), applyPostprocess(html, blogId))
 
       // Phase 2 — emit the .md sibling and refresh the per-blog manifests
       // whenever a published post is rendered. Drafts skip both (no
@@ -340,7 +358,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         poweredBy: renderPoweredBy(),
       })
 
-      writeFileAtomic(join(blogDir, 'index.html'), html)
+      writeFileAtomic(join(blogDir, 'index.html'), applyPostprocess(html, blogId))
     },
 
     removePostFiles(blogId, slug) {
