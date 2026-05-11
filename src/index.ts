@@ -7,7 +7,14 @@ export type { Store, StoreConfig } from './db/store.js'
 export * from './schema/index.js'
 
 // Blog primitives
-export { createBlog, createApiKey, getBlog, getBlogByName, getBlogsByEmail } from './blogs.js'
+export {
+  createBlog,
+  createApiKey,
+  getBlog,
+  getBlogByName,
+  getBlogsByEmail,
+  updateBlog,
+} from './blogs.js'
 
 // Signup orchestration — single source of truth for REST + MCP signup.
 export { signupBlog } from './signup.js'
