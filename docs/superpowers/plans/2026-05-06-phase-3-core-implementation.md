@@ -1000,8 +1000,6 @@ Notes:
 - The handler returns `{ blog }` (plain object), not `{ structuredContent: { blog } }`. The `wrapTool` wrapper handles the MCP envelope shape; `update_post` does the same.
 - Importing `BlogAnalyticsSchema` is optional — only needed if a sub-tool wants to validate a partial in isolation.
 
-`BlogAnalyticsJsonSchema` is `zodToJsonSchema(BlogAnalyticsSchema.unwrap())` if a converter is already in use, or hand-built if not. Match whatever convention the existing tools follow.
-
 - [ ] **Step 2: Tests**
 
 Mirror the shape of `tests/mcp/posts.test.ts` (or whichever file covers the existing post tools): one happy-path test for setting analytics, one for clearing, one for invalid args.
