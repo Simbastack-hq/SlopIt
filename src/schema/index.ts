@@ -3,15 +3,68 @@ import { PostInputBaseSchema, slugTitleRefinement } from './post-input-base.js'
 
 // NOT re-exported — stays internal. MCP imports from ./post-input-base.js directly.
 
+// Phase 3 — bring-your-own analytics. Each provider is its own optional
+// sub-object so a single blog can configure multiple (e.g. Umami for live
+// ops + GA for marketing reporting). NULL on the blog row means "no
+// analytics configured". Strict outer object rejects unknown provider
+// keys at the boundary so a typo'd `googleanalytics` (lowercase) doesn't
+// silently no-op.
+export const BlogAnalyticsSchema = z
+  .object({
+    umami: z
+      .object({
+        scriptUrl: z.url(),
+        siteId: z.string().min(1).max(100),
+      })
+      .strict()
+      .optional(),
+    plausible: z
+      .object({
+        scriptUrl: z.url(),
+        domain: z.string().min(1).max(253),
+      })
+      .strict()
+      .optional(),
+    googleAnalytics: z
+      .object({
+        measurementId: z.string().regex(/^G-[A-Z0-9]+$/),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .optional()
+export type BlogAnalytics = z.infer<typeof BlogAnalyticsSchema>
+
 // Blog — the top-level container. name is nullable because unnamed /b/:slug
 // blogs are allowed (see strategy: "instant" tier, path-based URLs).
+// `analytics` is optional and undefined for blogs that haven't configured
+// any third-party analytics — back-compat with pre-Phase-3 rows where the
+// column is NULL.
 export const BlogSchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
   theme: z.enum(['minimal']),
   createdAt: z.string(),
+  analytics: BlogAnalyticsSchema,
 })
 export type Blog = z.infer<typeof BlogSchema>
+
+// Patch schema for updateBlog. v1 allows mutation of `analytics` only —
+// theme is immutable (no theme switcher UI yet), name changes have their
+// own flow (TBD), id is permanent. Strict rejects unknown keys at the
+// boundary.
+//
+// `analytics: null` is the documented way to clear analytics; the PATCH
+// body distinguishes "omit analytics from patch" (no-op) vs "set analytics
+// to null" (clear column) via Object.keys(parsed) in updateBlog, same
+// pattern as PostPatchSchema.
+export const BlogPatchSchema = z
+  .object({
+    analytics: BlogAnalyticsSchema.unwrap().nullable().optional(),
+  })
+  .strict()
+export type BlogPatchInput = z.input<typeof BlogPatchSchema>
 
 // PostInput — what the API/MCP caller provides. The schema is opinionated
 // and fixed in v1; do not grow it without a very good reason.

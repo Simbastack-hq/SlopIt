@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { PostPatchSchema, type PostPatchInput } from '../src/schema/index.js'
+import {
+  BlogAnalyticsSchema,
+  BlogPatchSchema,
+  BlogSchema,
+  PostPatchSchema,
+  type PostPatchInput,
+} from '../src/schema/index.js'
 
 describe('PostPatchSchema', () => {
   it('accepts an empty object (no-op patch)', () => {
@@ -37,5 +43,103 @@ describe('PostPatchSchema', () => {
   it('PostPatchInput type is compatible', () => {
     const patch: PostPatchInput = { title: 'x' }
     expect(patch.title).toBe('x')
+  })
+})
+
+describe('BlogAnalyticsSchema', () => {
+  it('accepts a Umami-only config', () => {
+    const parsed = BlogAnalyticsSchema.parse({
+      umami: { scriptUrl: 'https://analytics.example.com/script.js', siteId: 'abc-123' },
+    })
+    expect(parsed?.umami?.siteId).toBe('abc-123')
+  })
+
+  it('accepts a Plausible-only config', () => {
+    const parsed = BlogAnalyticsSchema.parse({
+      plausible: { scriptUrl: 'https://plausible.io/js/script.js', domain: 'example.com' },
+    })
+    expect(parsed?.plausible?.domain).toBe('example.com')
+  })
+
+  it('accepts a Google Analytics config with G- prefix measurement id', () => {
+    const parsed = BlogAnalyticsSchema.parse({ googleAnalytics: { measurementId: 'G-ABC123XYZ' } })
+    expect(parsed?.googleAnalytics?.measurementId).toBe('G-ABC123XYZ')
+  })
+
+  it('accepts multiple providers in one config', () => {
+    const parsed = BlogAnalyticsSchema.parse({
+      umami: { scriptUrl: 'https://u.example/s.js', siteId: 'u' },
+      plausible: { scriptUrl: 'https://p.example/s.js', domain: 'p.example' },
+    })
+    expect(parsed?.umami?.siteId).toBe('u')
+    expect(parsed?.plausible?.domain).toBe('p.example')
+  })
+
+  it('rejects unknown provider keys (strict)', () => {
+    expect(() =>
+      BlogAnalyticsSchema.parse({ fathom: { scriptUrl: 'https://x/y.js', siteId: 'y' } }),
+    ).toThrow()
+  })
+
+  it('rejects malformed measurement id', () => {
+    expect(() =>
+      BlogAnalyticsSchema.parse({ googleAnalytics: { measurementId: 'UA-123' } }),
+    ).toThrow()
+  })
+
+  it('rejects non-URL script URLs', () => {
+    expect(() =>
+      BlogAnalyticsSchema.parse({ umami: { scriptUrl: 'not-a-url', siteId: 'x' } }),
+    ).toThrow()
+  })
+
+  it('accepts undefined (no analytics configured)', () => {
+    expect(BlogAnalyticsSchema.parse(undefined)).toBeUndefined()
+  })
+})
+
+describe('BlogSchema with analytics', () => {
+  it('parses a blog with analytics set', () => {
+    const blog = BlogSchema.parse({
+      id: 'b1',
+      name: 'x',
+      theme: 'minimal',
+      createdAt: '2026-05-06T00:00:00Z',
+      analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
+    })
+    expect(blog.analytics?.umami).toBeDefined()
+  })
+
+  it('parses a blog without analytics (backwards-compat)', () => {
+    const blog = BlogSchema.parse({
+      id: 'b1',
+      name: 'x',
+      theme: 'minimal',
+      createdAt: '2026-05-06T00:00:00Z',
+    })
+    expect(blog.analytics).toBeUndefined()
+  })
+})
+
+describe('BlogPatchSchema', () => {
+  it('accepts an analytics patch', () => {
+    const parsed = BlogPatchSchema.parse({
+      analytics: { plausible: { scriptUrl: 'https://p/s.js', domain: 'd' } },
+    })
+    expect(parsed.analytics?.plausible?.domain).toBe('d')
+  })
+
+  it('accepts an explicit null to clear analytics', () => {
+    const parsed = BlogPatchSchema.parse({ analytics: null })
+    expect(parsed.analytics).toBeNull()
+  })
+
+  it('accepts an empty patch (no-op)', () => {
+    const parsed = BlogPatchSchema.parse({})
+    expect(Object.keys(parsed)).toHaveLength(0)
+  })
+
+  it('rejects unknown patch fields (strict)', () => {
+    expect(() => BlogPatchSchema.parse({ theme: 'minimal', extra: 1 })).toThrow()
   })
 })
