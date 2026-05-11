@@ -199,17 +199,17 @@ Blog deletion is out of scope: core has no `deleteBlog` function or `DELETE /blo
 | Blog with zero published posts | `llms.txt` shows the heading + intro line + an empty `## Posts` section. `feed.xml` emits a valid RSS envelope with zero `<item>` elements. `sitemap.xml` lists only the blog root. |
 | Post with characters that need XML-escaping (`<`, `&`, `"`) | All user-controlled strings pass through `escapeXml`. |
 | Post with `</script>` or `]]>` in body | Body is CDATA-wrapped in `<content:encoded>`. The CDATA-end sequence `]]>` in body is split as `]]]]><![CDATA[>` — same standard pattern as `escapeJsonForScript` in Phase 1. |
-| YAML special chars in title (`:`, `#`, multi-line) | `buildFrontmatter` always quotes string values with double quotes and escapes `\` and `"`. |
-| Post with very long title (200 chars) | YAML quoted strings handle any length; RSS `<title>` capped at no length limit by spec; sitemap `<loc>` is bounded by URL length (which is bounded by the slug). |
+| YAML special chars in title (`:`, `#`, multi-line, tabs, control chars) | `buildFrontmatter` always emits string values as YAML double-quoted scalars via `JSON.stringify(s)`. YAML 1.2 §7.3.1 specifies double-quoted scalars accept the JSON-compatible escape set (`\n`, `\r`, `\t`, `\\`, `\"`, `\uXXXX` for other control characters), so the output round-trips correctly through any standard YAML parser for any string the schema accepts. |
+| Post with very long title (200 chars) | YAML double-quoted scalars handle any length; RSS `<title>` capped at no length limit by spec; sitemap `<loc>` is bounded by URL length (which is bounded by the slug). |
 | `publishedAt === updatedAt` | `.md` frontmatter omits `updated:`. RSS `<pubDate>` only. Sitemap `<lastmod>` uses `updatedAt` (which equals publishedAt). |
-| Custom domain blog | `canonicalUrl` already resolves correctly (Phase 1 wiring). All four templates use the same `canonicalUrl` source. |
+| Custom domain blog | `canonicalUrl` already resolves correctly (Phase 1 wiring). All four builders use the same `canonicalUrl` source. |
 
 ---
 
 ## Testing strategy
 
 **`tests/frontmatter.test.ts`:**
-- Quotes string values; escapes `\` and `"`; emits ISO 8601 dates verbatim; emits empty arrays as omitted; emits null/undefined keys as omitted.
+- Emits string values as YAML double-quoted scalars via `JSON.stringify` (handles `\\`, `"`, `\n`, `\r`, `\t`, and other control characters as `\uXXXX` so the output is valid for any input the schema accepts); emits ISO 8601 dates verbatim; emits empty arrays as omitted; emits null/undefined keys as omitted; explicit tests cover multi-line/tab/CR strings, embedded quotes, and `\uXXXX` round-tripping.
 
 **`tests/feeds.test.ts`:**
 - `escapeXml` covers the five canonical chars.

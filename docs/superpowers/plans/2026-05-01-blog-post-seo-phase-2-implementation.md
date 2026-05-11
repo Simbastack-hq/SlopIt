@@ -4,7 +4,7 @@
 
 **Goal:** Every published post is accessible at `<slug>.md` (raw markdown source). Every blog has an `llms.txt` manifest, a `feed.xml` RSS 2.0 feed, and a `sitemap.xml`. All four files written at publish time alongside the existing HTML output. Caddy serves them; Node never reads them.
 
-**Architecture:** Two new pure modules: `src/rendering/frontmatter.ts` (YAML frontmatter builder) and `src/rendering/feeds.ts` (RSS/sitemap/llms.txt builders, plus `escapeXml`). A new `writeFileAtomic(path, content)` private helper in `generator.ts` (current renderer uses direct `writeFileSync`; reviewer caught this misclaim). Four new templates in `src/themes/minimal/`. `MutationRenderer` interface gains four methods; `createRenderer` implements them and wires emission into the existing `renderPost` flow. The published→draft transition inside `updatePost` (`src/posts.ts:376`) and `deletePost` (`src/posts.ts:519`) invoke the cleanup methods. There is no `unpublishPost` function in core. No new deps.
+**Architecture:** Two new pure modules: `src/rendering/frontmatter.ts` (YAML frontmatter builder) and `src/rendering/feeds.ts` (RSS/sitemap/llms.txt builders, plus `escapeXml`). A new `writeFileAtomic(path, content)` private helper in `generator.ts` (current renderer uses direct `writeFileSync`; reviewer caught this misclaim). **No new theme templates** — all four outputs are pure string builders. The existing `render(template, vars)` machinery handles `post.html` + `index.html` and has no loop support, which RSS/sitemap/`llms.txt` need; pure builders are the cleaner fit. `MutationRenderer` interface gains three methods (`renderPostMarkdown`, `deletePostMarkdown`, `renderManifests`); `createRenderer` implements them and wires emission into the existing `renderPost` flow. The published→draft transition inside `updatePost` (`src/posts.ts:376`) and `deletePost` (`src/posts.ts:519`) invoke the cleanup methods. There is no `unpublishPost` function in core. No new deps.
 
 **Tech Stack:** TypeScript (strict), Node.js, Vitest, existing `escapeHtml` and template rendering. No XML or YAML library.
 
@@ -19,11 +19,7 @@
 | `src/rendering/frontmatter.ts` | Create | `buildFrontmatter(record)` |
 | `src/rendering/feeds.ts` | Create | `escapeXml`, `buildRssFeed`, `buildSitemap`, `buildLlmsTxt` |
 | `src/rendering/generator.ts` | Modify | Add `writeFileAtomic(path, content)` helper, migrate existing direct writes (lines ~195, ~214) to it. Extend `MutationRenderer` interface + `createRenderer` factory. |
-| `src/themes/minimal/post.md.template` | Create | YAML frontmatter + body |
-| `src/themes/minimal/llms.txt.template` | Create | Manifest format |
-| `src/themes/minimal/feed.xml.template` | Create | RSS 2.0 envelope |
-| `src/themes/minimal/sitemap.xml.template` | Create | Standard sitemap |
-| `src/posts.ts` | Modify | Wire cleanup into the `prior.status === 'published'` → `parsed.status === 'draft'` branch of `updatePost` (`src/posts.ts:376`) and into `deletePost` (`src/posts.ts:519`). No `unpublishPost` function exists in core. |
+| `src/posts.ts` | Modify | Wire cleanup into the `prior.status === 'published'` → `parsed.status === 'draft'` branch of `updatePost` (`src/posts.ts:376`) and into `deletePost` (`src/posts.ts:519`). Ordering invariant: `renderManifests` runs before destructive per-post cleanup. No `unpublishPost` function exists in core. |
 | `src/skill.ts` | Modify | Document new endpoints |
 | `examples/self-hosted/Caddyfile` | Modify | `Content-Type` rules |
 | `tests/feeds.test.ts` | Create | Unit tests for `feeds.ts` exports |
@@ -328,7 +324,7 @@ it('escapes embedded double-quotes and backslashes', () => {
 
 it('escapes other control characters via \\uXXXX', () => {
   const out = buildFrontmatter({ title: 'bell\x07and null\x00here', slug: 's' })
-  // JSON.stringify emits  and   for these
+  // JSON.stringify emits \u0007 and \u0000 for these
   expect(out).toContain('\\u0007')
   expect(out).toContain('\\u0000')
 })
