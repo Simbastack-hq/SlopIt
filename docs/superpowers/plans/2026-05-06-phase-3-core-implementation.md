@@ -21,6 +21,7 @@
 | `src/db/migrations/006_blog_analytics.sql` | Create | `ALTER TABLE blogs ADD COLUMN analytics_json TEXT`. |
 | `src/schema/index.ts` | Modify | Add `BlogAnalyticsSchema` (Umami/Plausible/GA), extend `BlogSchema` with optional `analytics`, add `BlogPatchSchema`. |
 | `src/blogs.ts` | Modify | `getBlog`/`getBlogInternal` deserialize `analytics_json`. New `updateBlog(store, renderer, blogId, patch): Blog`. Re-render trigger on `analytics` change. |
+| `src/index.ts` | Modify | Add `updateBlog` to the existing blogs barrel export (consumer parity with `updatePost` from posts). |
 | `src/rendering/generator.ts` | Modify | Add `postprocessHtml?: (html, blogId) => string` to `RendererConfig`. Invoke in `renderPost` and `renderBlog` before `writeFileAtomic`. |
 | `src/api/routes.ts` | Modify | `PATCH /blogs/:id` route — auth + body parse + call `updateBlog`. |
 | `src/mcp/tools.ts` | Modify | `update_blog` MCP tool — same shape. |
@@ -590,6 +591,21 @@ describe('updateBlog', () => {
     expect(updated.analytics).toBeUndefined()
   })
 
+  it('explicit { analytics: undefined } is treated as omitted (does NOT clear)', () => {
+    const { blog } = createBlog(store, { name: 'expund' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    // Pre-set analytics so the test can detect accidental clearing
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run(JSON.stringify({ umami: { scriptUrl: 'https://u/s.js', siteId: 's' } }), blog.id)
+
+    // Zod's .optional() preserves explicit undefined on the parsed object.
+    // updateBlog must treat this case as no-change, NOT as "clear".
+    const updated = updateBlog(store, renderer, blog.id, { analytics: undefined })
+    expect(updated.analytics?.umami?.siteId).toBe('s')
+    expect(getBlog(store, blog.id).analytics?.umami?.siteId).toBe('s')
+  })
+
   it('throws BLOG_NOT_FOUND on unknown blog id', () => {
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
     expect(() => updateBlog(store, renderer, 'no-such-blog', { analytics: null })).toThrow()
@@ -712,32 +728,39 @@ export function updateBlog(
   const patchKeys = Object.keys(parsed)
   if (patchKeys.length === 0) return prior
 
-  // Detect analytics-change semantics. Three cases:
-  //   patch has no `analytics` key       → leave column untouched
-  //   patch.analytics === null           → clear column to NULL
-  //   patch.analytics is an object       → set column to JSON.stringify(value)
-  const patchTouchesAnalytics = 'analytics' in parsed
-  const newAnalyticsJson: string | null | undefined = patchTouchesAnalytics
+  // Detect analytics-change semantics. Four cases:
+  //   patch has no `analytics` key                → leave column untouched
+  //   patch.analytics === undefined (explicit)    → treat as omitted, leave column untouched
+  //   patch.analytics === null                    → clear column to NULL
+  //   patch.analytics is an object                → set column to JSON.stringify(value)
+  //
+  // The explicit-undefined case matters because Zod's `.optional()` preserves
+  // `{ analytics: undefined }` in the parsed output (the key is present,
+  // value is undefined). Without this guard, the JSON.stringify branch
+  // produces the literal string "undefined" — JSON.parse rejects it,
+  // and the column gets cleared on every undefined patch, which silently
+  // wipes a configured blog's analytics. Treat explicit undefined as
+  // "no change" — same effective semantics as omitting the key.
+  const patchTouchesAnalytics = 'analytics' in parsed && parsed.analytics !== undefined
+  const newAnalyticsJson: string | null = patchTouchesAnalytics
     ? parsed.analytics === null
       ? null
       : JSON.stringify(parsed.analytics)
-    : undefined // undefined sentinel means "don't change the column"
+    : null // unused when patchTouchesAnalytics is false
+
+  // Empty-after-undefined-filter no-op
+  if (!patchTouchesAnalytics) return prior
 
   // Same-value short-circuit: serialize prior.analytics and compare. If
   // the patch is functionally a no-op (e.g. setting analytics to the
   // same value it already has), skip the DB write and the re-render.
-  if (patchTouchesAnalytics) {
-    const priorJson = prior.analytics === undefined ? null : JSON.stringify(prior.analytics)
-    if (newAnalyticsJson === priorJson) return prior
-  }
+  const priorJson = prior.analytics === undefined ? null : JSON.stringify(prior.analytics)
+  if (newAnalyticsJson === priorJson) return prior
 
-  // Apply DB UPDATE for the fields the patch touches. Only `analytics`
-  // is supported in v1, so this is straightforward.
-  if (patchTouchesAnalytics) {
-    store.db
-      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
-      .run(newAnalyticsJson === undefined ? null : newAnalyticsJson, blogId)
-  }
+  // Apply DB UPDATE. Only `analytics` is supported in v1.
+  store.db
+    .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+    .run(newAnalyticsJson, blogId)
 
   // Hydrate the updated row
   const updated = getBlogInternal(store, blogId)
@@ -748,25 +771,23 @@ export function updateBlog(
     store.db.prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?').run(priorJson, blogId)
   }
 
-  // Re-render side effects. Currently only analytics changes warrant
-  // a re-render (the postprocessHtml hook in Phase 3c reads
-  // blog.analytics every time it runs, so existing rendered HTML
-  // becomes stale the moment analytics changes).
-  if (patchTouchesAnalytics) {
-    try {
-      const posts = listPublishedPostsForBlog(store, blogId)
-      for (const post of posts) {
-        renderer.renderPost(blogId, post)
-      }
-      renderer.renderBlog(blogId)
-    } catch (renderErr) {
-      try {
-        compensate()
-      } catch {
-        /* best-effort; weakened invariant per updatePost precedent */
-      }
-      throw renderErr
+  // Re-render side effects. analytics changed (we already short-circuited
+  // the no-op cases above); the postprocessHtml hook in Phase 3c reads
+  // blog.analytics on every call, so rendered HTML on disk is stale
+  // until we re-run it.
+  try {
+    const posts = listPublishedPostsForBlog(store, blogId)
+    for (const post of posts) {
+      renderer.renderPost(blogId, post)
     }
+    renderer.renderBlog(blogId)
+  } catch (renderErr) {
+    try {
+      compensate()
+    } catch {
+      /* best-effort; weakened invariant per updatePost precedent */
+    }
+    throw renderErr
   }
 
   return updated
@@ -936,36 +957,48 @@ git commit -m "feat(api): add PATCH /blogs/:id for analytics config"
 
 - [ ] **Step 1: Implement**
 
-Mirror the existing `update_post` MCP tool registration (around line 77 of `src/mcp/tools.ts`). The tool accepts `{ blog_id, analytics }`, runs through `BlogPatchSchema`, and calls `updateBlog`.
+Mirror the existing `update_post` registration in `src/mcp/tools.ts` (around line 87). The actual `wrapTool` signature in this codebase is `wrapTool<TArgs>(config, name, opts, business)`; handlers receive `(args, ctx)` where `ctx.blog` is the authenticated blog, `ctx.store` is the SQLite store, and the renderer is obtained via `config.rendererFor(ctx.blog!)`. `inputSchema` is a Zod schema, NOT hand-written JSON Schema. The `crossBlogGuard: true` flag in `wrapTool` opts enforces that `args.blog_id` matches `ctx.blog.id`.
 
 ```ts
-// (paste alongside the other tool registrations)
+// In src/mcp/tools.ts — paste alongside the other tool registrations.
+// `updateBlog`, `BlogPatchSchema`, and `BlogAnalyticsSchema` are imported
+// from '../blogs.js' and '../schema/index.js' respectively.
+
+const UpdateBlogInputSchema = z
+  .object({
+    blog_id: z.string(),
+    // Mirror PostPatchInput's "patch" envelope so MCP shape matches the
+    // existing tools. patch.analytics: object | null clears the column;
+    // omitted patch.analytics is a no-op.
+    patch: BlogPatchSchema,
+    idempotency_key: z.string().min(1).max(255).optional(),
+  })
+  .strict()
+
 server.registerTool(
   'update_blog',
   {
-    title: 'Update blog config',
-    description: 'Patch a blog. v1 surface allows setting/clearing analytics.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        blog_id: { type: 'string' },
-        analytics: {
-          oneOf: [{ type: 'null' }, BlogAnalyticsJsonSchema],
-        },
-      },
-      required: ['blog_id'],
-      additionalProperties: false,
-    },
+    description:
+      'Edit a blog. v1 patch surface allows setting/clearing the analytics config (Umami, Plausible, or Google Analytics). Send `patch: { analytics: null }` to remove analytics.',
+    inputSchema: UpdateBlogInputSchema,
   },
-  wrapTool('update_blog', async (args, { store, renderer }) => {
-    const patch = BlogPatchSchema.parse({
-      ...(args.analytics !== undefined ? { analytics: args.analytics } : {}),
-    })
-    const blog = updateBlog(store, renderer, args.blog_id, patch)
-    return { structuredContent: { blog } }
-  }),
+  wrapTool<z.infer<typeof UpdateBlogInputSchema>>(
+    config,
+    'update_blog',
+    { auth: 'required', idempotent: true, crossBlogGuard: true },
+    (args, ctx) => {
+      const renderer = config.rendererFor(ctx.blog!)
+      const blog = updateBlog(config.store, renderer, ctx.blog!.id, args.patch)
+      return { blog }
+    },
+  ),
 )
 ```
+
+Notes:
+- `crossBlogGuard: true` rejects requests where `args.blog_id !== ctx.blog.id` — same cross-blog isolation other tools use; the comparison is done inside `wrapTool`, not in the business function.
+- The handler returns `{ blog }` (plain object), not `{ structuredContent: { blog } }`. The `wrapTool` wrapper handles the MCP envelope shape; `update_post` does the same.
+- Importing `BlogAnalyticsSchema` is optional — only needed if a sub-tool wants to validate a partial in isolation.
 
 `BlogAnalyticsJsonSchema` is `zodToJsonSchema(BlogAnalyticsSchema.unwrap())` if a converter is already in use, or hand-built if not. Match whatever convention the existing tools follow.
 
@@ -978,6 +1011,45 @@ Mirror the shape of `tests/mcp/posts.test.ts` (or whichever file covers the exis
 ```bash
 git add src/mcp/tools.ts tests/mcp/blogs.test.ts
 git commit -m "feat(mcp): add update_blog tool"
+```
+
+---
+
+## Task 6.5: Public barrel export
+
+**Files:**
+- Modify: `src/index.ts`
+
+- [ ] **Step 1: Add `updateBlog` to the existing blogs export**
+
+In `src/index.ts`, find the line:
+
+```ts
+export { createBlog, createApiKey, getBlog, getBlogByName, getBlogsByEmail } from './blogs.js'
+```
+
+and add `updateBlog`:
+
+```ts
+export { createBlog, createApiKey, getBlog, getBlogByName, getBlogsByEmail, updateBlog } from './blogs.js'
+```
+
+Reviewer caught this gap in the original plan — `updatePost` is exported from the barrel (so platform can call it from `apiConfig.rendererFor`-adjacent code), and `updateBlog` needs the same surface for parity, especially because Phase 3c's analytics-injection wrapper will need to be able to call `updateBlog` or at least read the type. The implementation PR for Phase 3c can also assert `import { updateBlog } from '@slopit/core'` works.
+
+Also re-export the new types so consumers don't have to dig into the schema barrel directly for these:
+
+```ts
+// (already covered by `export * from './schema/index.js'`, so BlogAnalytics
+// and BlogPatchInput types land in the public surface automatically — no
+// extra line needed. Verify by checking that `Blog` was already covered
+// the same way pre-this-PR.)
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/index.ts
+git commit -m "feat(blogs): export updateBlog from public barrel"
 ```
 
 ---
