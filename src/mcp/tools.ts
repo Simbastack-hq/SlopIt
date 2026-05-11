@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { updateBlog } from '../blogs.js'
 import { SlopItError } from '../errors.js'
 import { uploadMedia, listMedia, deleteMedia } from '../media.js'
 import type { MediaLimits } from '../media.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
-import { CreateBlogInputSchema, PostPatchSchema } from '../schema/index.js'
+import { BlogPatchSchema, CreateBlogInputSchema, PostPatchSchema } from '../schema/index.js'
 import { PostInputBaseSchema, slugTitleRefinement } from '../schema/post-input-base.js'
 import { signupBlog } from '../signup.js'
 import type { McpServerConfig } from './server.js'
@@ -138,7 +139,37 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     ),
   )
 
-  // 5. get_blog — return the authenticated blog's metadata.
+  // 5. update_blog — patch the authenticated blog. v1 patch surface is
+  // analytics-only; theme/name/id stay immutable through this entry
+  // point. crossBlogGuard rejects mismatched blog_id.
+  const UpdateBlogInputSchema = z
+    .object({
+      blog_id: z.string(),
+      patch: BlogPatchSchema,
+      idempotency_key: z.string().optional(),
+    })
+    .strict()
+
+  server.registerTool(
+    'update_blog',
+    {
+      description:
+        'Edit a blog. v1 patch surface allows setting/clearing the analytics config (Umami, Plausible, or Google Analytics). Send `patch: { analytics: null }` to remove analytics.',
+      inputSchema: UpdateBlogInputSchema,
+    },
+    wrapTool<z.infer<typeof UpdateBlogInputSchema>>(
+      config,
+      'update_blog',
+      { auth: 'required', idempotent: true, crossBlogGuard: true },
+      (args, ctx) => {
+        const renderer = config.rendererFor(ctx.blog!)
+        const blog = updateBlog(config.store, renderer, ctx.blog!.id, args.patch)
+        return { blog }
+      },
+    ),
+  )
+
+  // 6. get_blog — return the authenticated blog's metadata.
   server.registerTool(
     'get_blog',
     {
