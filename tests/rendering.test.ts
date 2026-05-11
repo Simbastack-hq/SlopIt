@@ -571,6 +571,99 @@ describe('createRenderer — renderPost', () => {
     expect(htmlB).not.toContain('//p/')
   })
 
+  // Phase 3 — postprocessHtml hook on RendererConfig. Platform uses
+  // this to inject analytics <script> tags; self-hosted callers pass
+  // nothing and get identity behavior.
+  it('postprocessHtml: invokes with the rendered HTML and blog id, writes the return value', () => {
+    const { blog } = createBlog(store, { name: 'pp' })
+    const calls: Array<{ html: string; blogId: string }> = []
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html, blogId) => {
+        calls.push({ html, blogId })
+        return html.replace('</head>', '<script>injected</script>\n</head>')
+      },
+    })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'pp', title: 'PP' }))
+
+    expect(calls.length).toBeGreaterThanOrEqual(1)
+    expect(calls[0].blogId).toBe(blog.id)
+    expect(calls[0].html).toContain('<title>PP — pp</title>')
+
+    const html = readFileSync(join(outputDir, blog.id, 'pp', 'index.html'), 'utf8')
+    expect(html).toContain('<script>injected</script>')
+    expect(html).toContain('</head>')
+  })
+
+  it('postprocessHtml: identity (no transform) when absent', () => {
+    const { blog } = createBlog(store, { name: 'noid' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'noid' }))
+
+    const html = readFileSync(join(outputDir, blog.id, 'noid', 'index.html'), 'utf8')
+    expect(html).not.toContain('<script>injected</script>')
+    expect(html).toContain('<link rel="canonical"')
+  })
+
+  it('postprocessHtml: invoked from renderBlog as well as renderPost', () => {
+    const { blog } = createBlog(store, { name: 'ppb' })
+    let count = 0
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html) => {
+        count++
+        return html
+      },
+    })
+    // Use a draft so we get exactly one renderPost call (no manifest pass)
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 'one', status: 'draft', publishedAt: null }),
+    )
+    const afterPost = count
+    renderer.renderBlog(blog.id)
+
+    // renderPost on a draft → 1 HTML write; renderBlog → 1 HTML write.
+    expect(afterPost).toBe(1)
+    expect(count - afterPost).toBe(1)
+  })
+
+  it('postprocessHtml: NOT invoked for .md / feed.xml / sitemap.xml / llms.txt', () => {
+    const { blog } = createBlog(store, { name: 'ppm' })
+    const seen: string[] = []
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html) => {
+        seen.push(html.slice(0, 30))
+        return html
+      },
+    })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'mdtest' }))
+
+    // Every captured snippet must be HTML, not markdown / XML.
+    expect(seen.length).toBeGreaterThanOrEqual(1)
+    for (const head of seen) {
+      expect(head.toLowerCase()).toMatch(/^<!doctype html/)
+    }
+
+    // And the .md / manifest files themselves never contain the marker
+    // a hook could plausibly leave behind.
+    const md = readFileSync(join(outputDir, blog.id, 'mdtest.md'), 'utf8')
+    expect(md.startsWith('---')).toBe(true) // frontmatter, not HTML
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed.startsWith('<?xml')).toBe(true)
+    const sitemap = readFileSync(join(outputDir, blog.id, 'sitemap.xml'), 'utf8')
+    expect(sitemap.startsWith('<?xml')).toBe(true)
+    const llms = readFileSync(join(outputDir, blog.id, 'llms.txt'), 'utf8')
+    expect(llms.startsWith('#')).toBe(true)
+  })
+
   // Phase 2 — agent-readable file outputs (.md, llms.txt, feed.xml, sitemap.xml)
   it('writes <slug>.md, llms.txt, feed.xml, sitemap.xml on publish', () => {
     const { blog } = createBlog(store, { name: 'phase2-pub' })
