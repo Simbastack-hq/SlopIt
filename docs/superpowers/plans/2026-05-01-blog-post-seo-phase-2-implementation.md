@@ -254,8 +254,18 @@ Expected: FAIL — module doesn't exist.
  * author, description, canonical, tags. Null/undefined/empty-array
  * values are omitted (not emitted as `key: null`).
  *
- * String values are double-quoted and escape `\` → `\\` and `"` → `\"`.
- * Tags emit as flow-style lists.
+ * String values are emitted as YAML double-quoted scalars. YAML 1.2
+ * §7.3.1 specifies that double-quoted scalars support JSON-compatible
+ * escapes (`\n`, `\r`, `\t`, `\\`, `\"`, `\uXXXX`), so `JSON.stringify(s)`
+ * produces a valid YAML double-quoted scalar for any input — including
+ * titles, descriptions, or authors that contain newlines, tabs, CR, or
+ * other control characters. This avoids the bug where a naive
+ * backslash-and-quote-only escape produces frontmatter that doesn't
+ * round-trip through any standard YAML parser when the value has
+ * multi-line content.
+ *
+ * Tags emit as flow-style lists where each element is also a YAML
+ * double-quoted scalar via the same JSON.stringify rule.
  */
 export interface FrontmatterFields {
   title: string
@@ -270,8 +280,12 @@ export interface FrontmatterFields {
 
 const KEYS = ['title', 'slug', 'date', 'updated', 'author', 'description', 'canonical'] as const
 
+// YAML 1.2 double-quoted scalars are a superset of JSON string literals
+// for the JSON-compatible escape set. JSON.stringify handles `"`, `\`,
+// `\n`, `\r`, `\t`, `\b`, `\f`, and emits `\uXXXX` for other control
+// characters — exactly what YAML accepts in double-quoted style.
 function quote(s: string): string {
-  return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  return JSON.stringify(s)
 }
 
 export function buildFrontmatter(fields: FrontmatterFields): string {
@@ -289,6 +303,38 @@ export function buildFrontmatter(fields: FrontmatterFields): string {
   return lines.join('\n')
 }
 ```
+
+Add a multi-line / control-character test to `tests/frontmatter.test.ts` so the JSON.stringify contract is asserted, not just assumed:
+
+```ts
+it('escapes newlines, tabs, and CR in string values so the output is valid YAML', () => {
+  const out = buildFrontmatter({
+    title: 'Line one\nline two\twith tab\rand CR',
+    slug: 's',
+  })
+  // The newline / tab / CR must not appear literally between the --- fences
+  // (that would break YAML — the value would span multiple lines as separate
+  // keys). Each control char survives as a backslash-escape inside the
+  // double-quoted scalar.
+  expect(out).toContain('title: "Line one\\nline two\\twith tab\\rand CR"')
+  // And a real YAML parse round-trips it (sanity — uses node:yaml or
+  // similar if added; otherwise assert string-shape only).
+})
+
+it('escapes embedded double-quotes and backslashes', () => {
+  const out = buildFrontmatter({ title: 'has "quotes" and \\ backslash', slug: 's' })
+  expect(out).toContain('title: "has \\"quotes\\" and \\\\ backslash"')
+})
+
+it('escapes other control characters via \\uXXXX', () => {
+  const out = buildFrontmatter({ title: 'bell\x07and null\x00here', slug: 's' })
+  // JSON.stringify emits  and   for these
+  expect(out).toContain('\\u0007')
+  expect(out).toContain('\\u0000')
+})
+```
+
+The decision in the spec (row #11 — "Schema is fixed (8 keys), all values escape to YAML-safe strings") now has a concrete escape contract: YAML double-quoted scalar via `JSON.stringify`. The spec's claim that multi-line values are safe is now actually true.
 
 - [ ] **Step 4: Verify pass**
 
@@ -791,20 +837,37 @@ this.renderManifests(blogId)
 
 In `src/posts.ts`, two existing functions need cleanup wiring. **There is no `unpublishPost` function — the unpublish flow is the published→draft transition inside `updatePost`.**
 
-a) **`updatePost`** (`src/posts.ts:376`): find the existing `prior.status === 'published'` branch around line 394 (which already removes the rendered HTML when transitioning to draft). At that branch, add:
+a) **`updatePost`** (`src/posts.ts:376`): find the existing `prior.status === 'published'` branch around line 394. The current code path removes the rendered HTML before the DB transaction's catch could compensate; this plan extends it carefully to preserve "files match the post-call DB state" under failure.
+
+**Ordering matters.** The DB transition to `draft` happens first; then per-blog manifests are regenerated from the now-updated DB (they will exclude this post because it's already `draft`); then — and only then — the per-post HTML directory and `.md` sibling are removed. This ordering guarantees: if `renderManifests` throws, no destructive file ops have happened yet, the catch block restores the DB to `published`, and the next `renderPost` call (the catch's compensation, or the next user write) reconverges files with DB.
 
 ```ts
-// Post was published, now becoming draft — remove .md sibling and
-// regenerate per-blog manifests minus this post.
-renderer.deletePostMarkdown(blogId, prior.slug)
+// Post was published, now becoming draft.
+//
+// Order:
+//   1. DB transition has already moved status to 'draft' above.
+//   2. renderManifests — queries the (now-updated) DB and rewrites
+//      llms.txt/feed.xml/sitemap.xml minus this post. Atomic per-file
+//      via writeFileAtomic; if it throws, the DB-compensation catch
+//      restores prior.status and per-post files are still untouched.
+//   3. removePostFiles + deletePostMarkdown — destructive. Done LAST
+//      because we cannot recover them from the catch.
 renderer.renderManifests(blogId)
+renderer.removePostFiles(blogId, prior.slug) // existing HTML cleanup
+renderer.deletePostMarkdown(blogId, prior.slug)
 ```
 
-(Place after the existing HTML-removal call so the manifest regeneration runs once everything is gone.)
+(Move the existing `removePostFiles` call so it runs **after** `renderManifests`, not before. Existing code that places HTML removal before manifest emission must be relocated.)
 
-b) **`deletePost`** (`src/posts.ts:519`): in the existing `prior.status === 'published'` branch around line 538, add the same two calls.
+b) **`deletePost`** (`src/posts.ts:519`): in the existing `prior.status === 'published'` branch around line 538, apply the same ordering — manifests first, destructive cleanup last:
 
-Read the actual function bodies before editing — this plan describes the intent, not a copy-paste patch, because the surrounding code in `posts.ts` has additional bookkeeping the implementer should integrate cleanly with.
+```ts
+renderer.renderManifests(blogId)
+renderer.removePostFiles(blogId, prior.slug)
+renderer.deletePostMarkdown(blogId, prior.slug)
+```
+
+Read the actual function bodies before editing — this plan describes the intent, not a copy-paste patch, because the surrounding code in `posts.ts` has additional bookkeeping the implementer should integrate cleanly with. The non-negotiable invariant is the ordering: **manifests before destructive per-post cleanup**, in both functions.
 
 - [ ] **Step 3: Add lifecycle integration tests**
 
