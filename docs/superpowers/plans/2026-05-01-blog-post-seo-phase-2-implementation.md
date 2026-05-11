@@ -652,7 +652,10 @@ describe('buildRssFeed', () => {
     expect(out).toContain('<title>A Post</title>')
     expect(out).toContain('<link>https://b.slopit.io/a/</link>')
     expect(out).toContain('<guid isPermaLink="true">https://b.slopit.io/a/</guid>')
-    expect(out).toContain('<author>NJ</author>')
+    // RSS 2.0 `<author>` is an email-address field per spec; we use
+    // dc:creator (Dublin Core) for display names instead.
+    expect(out).toContain('<dc:creator>NJ</dc:creator>')
+    expect(out).not.toContain('<author>NJ</author>')
     expect(out).toContain('<description>A description.</description>')
   })
 
@@ -677,9 +680,10 @@ describe('buildRssFeed', () => {
     )
   })
 
-  it('falls back to blog.name as author when post.author absent', () => {
+  it('falls back to blog.name as dc:creator when post.author absent', () => {
     const out = buildRssFeed({ blog, blogRoot, feedUrl, posts: [{ ...sample, author: undefined }] })
-    expect(out).toContain('<author>My Blog</author>')
+    expect(out).toContain('<dc:creator>My Blog</dc:creator>')
+    expect(out).not.toContain('<author>')
   })
 
   it('omits <description> when empty', () => {
@@ -740,14 +744,19 @@ function escapeCdata(s: string): string {
 }
 
 function rssItem(p: RssPost, channelTitle: string): string {
-  const author = escapeXml(p.author ?? channelTitle)
+  // RSS 2.0 `<author>` is specifically an email-address field per
+  // https://www.rssboard.org/rss-specification — emitting a display
+  // name there produces a non-compliant feed. Use Dublin Core's
+  // `<dc:creator>` for display-name authorship; that namespace is
+  // declared on `<rss>` below.
+  const creator = escapeXml(p.author ?? channelTitle)
   const lines = [
     '    <item>',
     `      <title>${escapeXml(p.title)}</title>`,
     `      <link>${escapeXml(p.canonicalUrl)}</link>`,
     `      <guid isPermaLink="true">${escapeXml(p.canonicalUrl)}</guid>`,
     `      <pubDate>${rfc822(p.publishedAt)}</pubDate>`,
-    `      <author>${author}</author>`,
+    `      <dc:creator>${creator}</dc:creator>`,
   ]
   if (p.description) {
     lines.push(`      <description>${escapeXml(p.description)}</description>`)
@@ -762,7 +771,7 @@ export function buildRssFeed(input: RssFeedInput): string {
   const items = input.posts.map((p) => rssItem(p, channelTitle)).join('\n')
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">',
+    '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">',
     '  <channel>',
     `    <title>${escapeXml(channelTitle)}</title>`,
     `    <link>${escapeXml(input.blogRoot)}</link>`,
