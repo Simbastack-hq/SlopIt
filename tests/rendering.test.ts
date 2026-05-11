@@ -14,6 +14,7 @@ import {
 import { renderMarkdown } from '../src/rendering/markdown.js'
 import { createStore, type Store } from '../src/db/store.js'
 import { createBlog } from '../src/blogs.js'
+import { createPost } from '../src/posts.js'
 import type { Post } from '../src/schema/index.js'
 
 describe('escapeHtml', () => {
@@ -568,6 +569,155 @@ describe('createRenderer — renderPost', () => {
     expect(htmlB).toContain('href="https://a.example.com/p/"')
     expect(htmlA).not.toContain('//p/')
     expect(htmlB).not.toContain('//p/')
+  })
+
+  // Phase 2 — agent-readable file outputs (.md, llms.txt, feed.xml, sitemap.xml)
+  it('writes <slug>.md, llms.txt, feed.xml, sitemap.xml on publish', () => {
+    const { blog } = createBlog(store, { name: 'phase2-pub' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'hello' }))
+
+    expect(existsSync(join(outputDir, blog.id, 'hello.md'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'llms.txt'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'feed.xml'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'sitemap.xml'))).toBe(true)
+  })
+
+  it('emits frontmatter + raw body in <slug>.md, not the rendered HTML', () => {
+    const { blog } = createBlog(store, { name: 'phase2-md' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({
+        blogId: blog.id,
+        slug: 'raw',
+        title: 'Raw Source',
+        body: '# Heading\n\nParagraph.',
+      }),
+    )
+
+    const md = readFileSync(join(outputDir, blog.id, 'raw.md'), 'utf8')
+    expect(md).toContain('---\ntitle: "Raw Source"')
+    expect(md).toContain('slug: "raw"')
+    expect(md).toContain('canonical: "https://b.example.com/raw/"')
+    expect(md).toContain('# Heading\n\nParagraph.')
+    // Frontmatter ends with closing --- before the body
+    const fenceEnd = md.indexOf('---', 4) // skip the opening ---
+    const body = md.slice(fenceEnd + 3).trim()
+    expect(body).toBe('# Heading\n\nParagraph.')
+  })
+
+  it('lists the post in llms.txt with canonical URL and resolved description', () => {
+    const { blog } = createBlog(store, { name: 'phase2-llms' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, {
+      title: 'First Post',
+      slug: 'first',
+      body: 'A short body.',
+      seoDescription: 'Hand-curated SEO desc.',
+    })
+
+    const llms = readFileSync(join(outputDir, blog.id, 'llms.txt'), 'utf8')
+    expect(llms).toContain('# phase2-llms')
+    expect(llms).toContain('## Posts')
+    expect(llms).toContain('- [First Post](https://b.example.com/first/): Hand-curated SEO desc.')
+  })
+
+  it('emits a valid RSS feed with one item per published post', () => {
+    const { blog } = createBlog(store, { name: 'phase2-rss' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, {
+      title: 'X Post',
+      slug: 'xp',
+      body: 'Body.',
+    })
+
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed).toContain('<?xml version="1.0" encoding="UTF-8"?>')
+    expect(feed).toContain('<rss version="2.0"')
+    expect(feed).toContain('<title>phase2-rss</title>')
+    expect(feed).toContain('<title>X Post</title>')
+    expect(feed).toContain('<link>https://b.example.com/xp/</link>')
+    expect(feed).toContain('<content:encoded><![CDATA[')
+  })
+
+  it('emits a sitemap with the blog root plus every published post URL', () => {
+    const { blog } = createBlog(store, { name: 'phase2-sm' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+    createPost(store, renderer, blog.id, { title: 'B', slug: 'bb', body: 'body' })
+
+    const sm = readFileSync(join(outputDir, blog.id, 'sitemap.xml'), 'utf8')
+    expect(sm).toContain('<loc>https://b.example.com/</loc>')
+    expect(sm).toContain('<loc>https://b.example.com/aa/</loc>')
+    expect(sm).toContain('<loc>https://b.example.com/bb/</loc>')
+    expect((sm.match(/<url>/g) ?? []).length).toBe(3) // root + 2 posts
+  })
+
+  it('skips .md emission for drafts (no canonical URL)', () => {
+    const { blog } = createBlog(store, { name: 'phase2-draft' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 'dd', status: 'draft', publishedAt: null }),
+    )
+    expect(existsSync(join(outputDir, blog.id, 'dd.md'))).toBe(false)
+  })
+})
+
+describe('createRenderer — Phase 2 lifecycle teardown', () => {
+  let dir: string
+  let store: Store
+  let outputDir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+    outputDir = join(dir, 'out')
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('removes <slug>.md and regenerates manifests when post is deleted', async () => {
+    const { blog } = createBlog(store, { name: 'tdown' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+    createPost(store, renderer, blog.id, { title: 'B', slug: 'bb', body: 'body' })
+
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'bb.md'))).toBe(true)
+
+    const { deletePost } = await import('../src/posts.js')
+    deletePost(store, renderer, blog.id, 'aa')
+
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(false)
+    expect(existsSync(join(outputDir, blog.id, 'aa', 'index.html'))).toBe(false)
+    // Manifests regenerated minus the deleted post
+    const sm = readFileSync(join(outputDir, blog.id, 'sitemap.xml'), 'utf8')
+    expect(sm).not.toContain('<loc>https://b.example.com/aa/</loc>')
+    expect(sm).toContain('<loc>https://b.example.com/bb/</loc>')
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed).not.toContain('<link>https://b.example.com/aa/</link>')
+  })
+
+  it('removes <slug>.md when a published post transitions to draft', async () => {
+    const { blog } = createBlog(store, { name: 'unpub' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(true)
+
+    const { updatePost } = await import('../src/posts.js')
+    updatePost(store, renderer, blog.id, 'aa', { status: 'draft' })
+
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(false)
+    expect(existsSync(join(outputDir, blog.id, 'aa', 'index.html'))).toBe(false)
+    // sitemap no longer lists the now-draft post
+    const sm = readFileSync(join(outputDir, blog.id, 'sitemap.xml'), 'utf8')
+    expect(sm).not.toContain('<loc>https://b.example.com/aa/</loc>')
   })
 })
 

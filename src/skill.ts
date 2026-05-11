@@ -50,6 +50,19 @@ All routes are absolute URLs against the API base **\`${baseUrl}\`**. Copy them 
 | GET ${baseUrl}/blogs/:id/media/:mid | Get a single media record. |
 | DELETE ${baseUrl}/blogs/:id/media/:mid | Permanently delete an image. |
 
+## Agent-readable endpoints
+
+Every blog hosted on this SlopIt instance exposes four read-only files for agent consumption at the blog's render base (not the API base). No authentication required. Caddy serves them as static files; they regenerate automatically when posts publish, update, unpublish, or delete.
+
+| Path (relative to blog root) | Format | Purpose |
+|---|---|---|
+| /llms.txt | Markdown | Manifest of every published post (newest first), one description line each. Start here if you're indexing a blog. |
+| /<slug>.md | Markdown (YAML frontmatter + raw body) | Source markdown for any published post. The frontmatter has \`title\`, \`slug\`, \`date\`, \`updated\` (when changed), \`author\`, \`description\`, \`canonical\`, \`tags\`. The body below the closing \`---\` is exactly what the author submitted. |
+| /feed.xml | RSS 2.0 + content:encoded | The 20 most recent published posts, full HTML in \`<content:encoded>\`. Stable feed for syndication. |
+| /sitemap.xml | XML sitemap | Every published post URL with \`<lastmod>\`. |
+
+For a post HTML page like \`https://example-blog.example.com/some-post/\`, the raw markdown source is at \`https://example-blog.example.com/some-post.md\` (append \`.md\` to the slug, no trailing slash on this one). The HTML page also advertises this via \`<link rel="alternate" type="text/markdown">\` in its \`<head>\`.
+
 ## Schema
 
 Call \`GET ${baseUrl}/schema\` for the machine-readable JSONSchema of \`PostInput\`. Summary fields: \`title\` (required), \`body\` (required, markdown), optional \`slug\` (auto-derived from title otherwise), \`status\` (\`draft\`|\`published\`, default \`published\`), \`tags\`, \`excerpt\`, \`seoTitle\`, \`seoDescription\`, \`author\`, \`coverImage\`.
