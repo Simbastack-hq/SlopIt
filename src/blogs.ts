@@ -2,7 +2,27 @@ import { generateApiKey, hashApiKey } from './auth/api-key.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId } from './ids.js'
-import { CreateBlogInputSchema, type Blog, type CreateBlogInput } from './schema/index.js'
+import {
+  BlogAnalyticsSchema,
+  CreateBlogInputSchema,
+  type Blog,
+  type BlogAnalytics,
+  type CreateBlogInput,
+} from './schema/index.js'
+
+/**
+ * Deserialize the `analytics_json` column. NULL → undefined; valid JSON
+ * runs through BlogAnalyticsSchema (rejects unknown providers and
+ * malformed shapes). A row that fails parse is a corrupted DB write,
+ * not user input — fail loud rather than silently returning undefined.
+ *
+ * @internal
+ */
+function parseAnalytics(json: string | null): BlogAnalytics | undefined {
+  if (json === null) return undefined
+  const raw = JSON.parse(json) as unknown
+  return BlogAnalyticsSchema.parse(raw)
+}
 
 /**
  * Pure predicate so the narrow match logic is testable without running the DB.
@@ -39,6 +59,9 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
     throw e
   }
 
+  // Newly-created blog never has analytics configured — column defaults
+  // to NULL. Skip the SELECT round-trip for analytics_json and build the
+  // Blog shape directly from the in-memory inputs.
   const row = store.db
     .prepare('SELECT id, name, theme, created_at FROM blogs WHERE id = ?')
     .get(id) as {
@@ -126,13 +149,14 @@ export function getBlog(store: Store, blogId: string): Blog {
  */
 export function getBlogByName(store: Store, name: string): Blog | null {
   const row = store.db
-    .prepare('SELECT id, name, theme, created_at FROM blogs WHERE name = ?')
+    .prepare('SELECT id, name, theme, created_at, analytics_json FROM blogs WHERE name = ?')
     .get(name) as
     | {
         id: string
         name: string
         theme: 'minimal'
         created_at: string
+        analytics_json: string | null
       }
     | undefined
 
@@ -143,6 +167,7 @@ export function getBlogByName(store: Store, name: string): Blog | null {
     name: row.name,
     theme: row.theme,
     createdAt: row.created_at,
+    analytics: parseAnalytics(row.analytics_json),
   }
 }
 
@@ -156,13 +181,14 @@ export function getBlogByName(store: Store, name: string): Blog | null {
  */
 export function getBlogInternal(store: Store, blogId: string): Blog {
   const row = store.db
-    .prepare('SELECT id, name, theme, created_at FROM blogs WHERE id = ?')
+    .prepare('SELECT id, name, theme, created_at, analytics_json FROM blogs WHERE id = ?')
     .get(blogId) as
     | {
         id: string
         name: string | null
         theme: 'minimal'
         created_at: string
+        analytics_json: string | null
       }
     | undefined
 
@@ -175,5 +201,6 @@ export function getBlogInternal(store: Store, blogId: string): Blog {
     name: row.name,
     theme: row.theme,
     createdAt: row.created_at,
+    analytics: parseAnalytics(row.analytics_json),
   }
 }

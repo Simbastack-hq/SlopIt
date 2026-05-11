@@ -16,6 +16,10 @@ import { hashApiKey } from '../src/auth/api-key.js'
 import { SlopItError } from '../src/errors.js'
 import { CreateBlogInputSchema } from '../src/schema/index.js'
 
+// Cast helper for direct INSERTs/UPDATEs in DB-state setup blocks.
+// Tests need to seed `analytics_json` directly to exercise the read
+// path; in production code the column is written through updateBlog.
+
 function sqliteUniqueError(constraint: string): Error {
   const e = new Error(`UNIQUE constraint failed: ${constraint}`) as NodeJS.ErrnoException
   e.code = 'SQLITE_CONSTRAINT_UNIQUE'
@@ -421,5 +425,52 @@ describe('getBlog', () => {
     expect(() => getBlog(store, 'missing')).toThrow(
       expect.objectContaining({ code: 'BLOG_NOT_FOUND', details: { blogId: 'missing' } }),
     )
+  })
+})
+
+describe('getBlog with analytics_json', () => {
+  let dir: string
+  let store: Store
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-getblog-analytics-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('returns analytics: undefined when column is NULL', () => {
+    const { blog } = createBlog(store, { name: 'noan' })
+    const fetched = getBlog(store, blog.id)
+    expect(fetched.analytics).toBeUndefined()
+  })
+
+  it('returns the parsed analytics object when column is set', () => {
+    const { blog } = createBlog(store, { name: 'wian' })
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run(JSON.stringify({ umami: { scriptUrl: 'https://u/s.js', siteId: 's-1' } }), blog.id)
+    const fetched = getBlog(store, blog.id)
+    expect(fetched.analytics?.umami?.siteId).toBe('s-1')
+  })
+
+  it('throws on corrupted analytics_json (fail loud)', () => {
+    const { blog } = createBlog(store, { name: 'bad' })
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run('{not valid json', blog.id)
+    expect(() => getBlog(store, blog.id)).toThrow()
+  })
+
+  it('getBlogByName also deserializes analytics_json', () => {
+    const { blog } = createBlog(store, { name: 'name-route' })
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run(JSON.stringify({ plausible: { scriptUrl: 'https://p/s.js', domain: 'd' } }), blog.id)
+    const fetched = getBlogByName(store, 'name-route')
+    expect(fetched?.analytics?.plausible?.domain).toBe('d')
   })
 })
