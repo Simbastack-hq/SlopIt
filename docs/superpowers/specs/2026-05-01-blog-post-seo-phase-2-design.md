@@ -16,7 +16,7 @@
 
 ## Why this is one phase, not four
 
-`.md`, `llms.txt`, `feed.xml`, `sitemap.xml` look like four features. They're actually one shape — files written next to the existing HTML at publish time, regenerated when the post or blog metadata changes — with four content templates. Splitting them into four PRs would mean four nearly-identical copies of the file-emission plumbing, each with its own test fixture. One PR with one plumbing change and four template implementations is the cleaner unit of work.
+`.md`, `llms.txt`, `feed.xml`, `sitemap.xml` look like four features. They're actually one shape — files written next to the existing HTML at publish time, regenerated when the post or blog metadata changes — with four content builders. Splitting them into four PRs would mean four nearly-identical copies of the file-emission plumbing, each with its own test fixture. One PR with one plumbing change and four builder implementations is the cleaner unit of work.
 
 Phase 1's `<link rel="alternate">` placeholders (decision 13a in the Phase 1 spec) point at the targets created here. Phase 1 and Phase 2 should ship in tight succession to minimize the window where those alternate links 404.
 
@@ -34,7 +34,7 @@ Phase 1's `<link rel="alternate">` placeholders (decision 13a in the Phase 1 spe
 ## Non-goals
 
 - **Per-blog `robots.txt`.** Defer. Caddy can serve a default site-wide `robots.txt` that allows everything; per-blog overrides aren't valuable until users complain.
-- **Atom feed format.** RSS 2.0 only. Wider reader support; one less template.
+- **Atom feed format.** RSS 2.0 only. Wider reader support; one less builder.
 - **OPML output for blog discovery.** Out of scope.
 - **Generated cover images for OG cards.** Out of scope.
 
@@ -51,7 +51,7 @@ Every output that needs a one-line post description uses the **same chain establ
 
 This logic is already implemented in Phase 1's `src/rendering/seo.ts`. Phase 2 imports and reuses it. **No second resolution helper.**
 
-For blog-level descriptions in `llms.txt`, no schema change in Phase 2 — `blog.name` plus a static one-liner is the manifest header (decision per the brainstorming round). If `blog.description` is added later, the `llms.txt` template picks it up automatically.
+For blog-level descriptions in `llms.txt`, no schema change in Phase 2 — `blog.name` plus a static one-liner is the manifest header (decision per the brainstorming round). If `blog.description` is added later, the `llms.txt` builder picks it up automatically.
 
 ---
 
@@ -244,7 +244,7 @@ Blog deletion is out of scope: core has no `deleteBlog` function or `DELETE /blo
 ## Out of scope (for follow-up PRs)
 
 - **Caddyfile updates in `slopit-platform`** for `Content-Type` headers on the new file types. Will land as a follow-up PR after this lands in core.
-- **`blog.description` schema field** — flagged as optional future work. Today's `llms.txt` template has a static intro line; if/when `blog.description` lands, the template picks it up.
+- **`blog.description` schema field** — flagged as optional future work. Today's `llms.txt` builder emits a static intro line; if/when `blog.description` lands, the builder picks it up.
 - **Phase 3a/3b** request logging on these new endpoints. Specified separately.
 
 ---
