@@ -105,6 +105,7 @@ describe('BlogSchema with analytics', () => {
       name: 'x',
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
+      parentSiteUrl: null,
       analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
     })
     expect(blog.analytics?.umami).toBeDefined()
@@ -116,8 +117,45 @@ describe('BlogSchema with analytics', () => {
       name: 'x',
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
+      parentSiteUrl: null,
     })
     expect(blog.analytics).toBeUndefined()
+  })
+})
+
+describe('BlogSchema with parentSiteUrl', () => {
+  it('parses null parentSiteUrl as the unset state', () => {
+    const blog = BlogSchema.parse({
+      id: 'b1',
+      name: 'x',
+      theme: 'minimal',
+      createdAt: '2026-05-06T00:00:00Z',
+      parentSiteUrl: null,
+    })
+    expect(blog.parentSiteUrl).toBeNull()
+  })
+
+  it('parses a configured parentSiteUrl', () => {
+    const blog = BlogSchema.parse({
+      id: 'b1',
+      name: 'x',
+      theme: 'minimal',
+      createdAt: '2026-05-06T00:00:00Z',
+      parentSiteUrl: 'https://example.com',
+    })
+    expect(blog.parentSiteUrl).toBe('https://example.com')
+  })
+
+  it('rejects a non-URL parentSiteUrl', () => {
+    expect(() =>
+      BlogSchema.parse({
+        id: 'b1',
+        name: 'x',
+        theme: 'minimal',
+        createdAt: '2026-05-06T00:00:00Z',
+        parentSiteUrl: 'not-a-url',
+      }),
+    ).toThrow()
   })
 })
 
@@ -132,6 +170,20 @@ describe('BlogPatchSchema', () => {
   it('accepts an explicit null to clear analytics', () => {
     const parsed = BlogPatchSchema.parse({ analytics: null })
     expect(parsed.analytics).toBeNull()
+  })
+
+  it('accepts a parentSiteUrl patch', () => {
+    const parsed = BlogPatchSchema.parse({ parentSiteUrl: 'https://example.com' })
+    expect(parsed.parentSiteUrl).toBe('https://example.com')
+  })
+
+  it('accepts an explicit null to clear parentSiteUrl', () => {
+    const parsed = BlogPatchSchema.parse({ parentSiteUrl: null })
+    expect(parsed.parentSiteUrl).toBeNull()
+  })
+
+  it('rejects a non-URL parentSiteUrl in the patch', () => {
+    expect(() => BlogPatchSchema.parse({ parentSiteUrl: 'not-a-url' })).toThrow()
   })
 
   it('accepts an empty patch (no-op)', () => {

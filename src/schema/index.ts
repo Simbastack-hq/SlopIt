@@ -47,21 +47,26 @@ export const BlogSchema = z.object({
   theme: z.enum(['minimal']),
   createdAt: z.string(),
   analytics: BlogAnalyticsSchema,
+  // Optional link back to the blog author's main site (e.g. a custom-
+  // domain blog at blog.example.com pointing to example.com). NULL =
+  // omit the link in rendered output.
+  parentSiteUrl: z.url().nullable(),
 })
 export type Blog = z.infer<typeof BlogSchema>
 
-// Patch schema for updateBlog. v1 allows mutation of `analytics` only —
-// theme is immutable (no theme switcher UI yet), name changes have their
-// own flow (TBD), id is permanent. Strict rejects unknown keys at the
-// boundary.
+// Patch schema for updateBlog. v1 allows mutation of `analytics` and
+// `parentSiteUrl` — theme is immutable (no theme switcher UI yet), name
+// changes have their own flow (TBD), id is permanent. Strict rejects
+// unknown keys at the boundary.
 //
-// `analytics: null` is the documented way to clear analytics; the PATCH
-// body distinguishes "omit analytics from patch" (no-op) vs "set analytics
-// to null" (clear column) via Object.keys(parsed) in updateBlog, same
-// pattern as PostPatchSchema.
+// `analytics: null` and `parentSiteUrl: null` are the documented ways to
+// clear those columns; the PATCH body distinguishes "omit field from
+// patch" (no-op) vs "set field to null" (clear column) via
+// Object.keys(parsed) in updateBlog, same pattern as PostPatchSchema.
 export const BlogPatchSchema = z
   .object({
     analytics: BlogAnalyticsSchema.unwrap().nullable().optional(),
+    parentSiteUrl: z.url().nullable().optional(),
   })
   .strict()
 export type BlogPatchInput = z.input<typeof BlogPatchSchema>
