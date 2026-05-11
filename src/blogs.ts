@@ -176,14 +176,6 @@ export function getBlogByName(store: Store, name: string): Blog | null {
 }
 
 /**
- * Fetch a blog by id, throwing SlopItError(BLOG_NOT_FOUND) if missing.
- * Used by the renderer (for display name / theme) and by createPost's
- * existence check. Not in the public barrel — callers must import from
- * './blogs.js' directly.
- *
- * @internal
- */
-/**
  * Patch fields on a blog row. v1 surface allows mutation only of
  * `analytics`. Theme/name/id remain immutable through this function.
  *
@@ -241,9 +233,7 @@ export function updateBlog(
   if (newAnalyticsJson === priorJson) return prior
 
   // Apply DB UPDATE. Only `analytics` is supported in v1.
-  store.db
-    .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
-    .run(newAnalyticsJson, blogId)
+  store.db.prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?').run(newAnalyticsJson, blogId)
 
   // Hydrate the updated row
   const updated = getBlogInternal(store, blogId)
@@ -275,6 +265,14 @@ export function updateBlog(
   return updated
 }
 
+/**
+ * Fetch a blog by id, throwing SlopItError(BLOG_NOT_FOUND) if missing.
+ * Used by the renderer (for display name / theme) and by createPost's
+ * existence check. Not in the public barrel — callers must import from
+ * './blogs.js' directly.
+ *
+ * @internal
+ */
 export function getBlogInternal(store: Store, blogId: string): Blog {
   const row = store.db
     .prepare('SELECT id, name, theme, created_at, analytics_json FROM blogs WHERE id = ?')
