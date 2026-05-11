@@ -318,13 +318,14 @@ describe('createApiKey', () => {
 })
 
 describe('public barrel exports', () => {
-  it('exposes createBlog, createApiKey, getBlog, getBlogByName, getBlogsByEmail, signupBlog, recovery primitives, SlopItError, CreateBlogInputSchema', async () => {
+  it('exposes createBlog, createApiKey, getBlog, getBlogByName, getBlogsByEmail, updateBlog, signupBlog, recovery primitives, SlopItError, CreateBlogInputSchema', async () => {
     const mod = await import('../src/index.js')
     expect(typeof mod.createBlog).toBe('function')
     expect(typeof mod.createApiKey).toBe('function')
     expect(typeof mod.getBlog).toBe('function')
     expect(typeof mod.getBlogByName).toBe('function')
     expect(typeof mod.getBlogsByEmail).toBe('function')
+    expect(typeof mod.updateBlog).toBe('function')
     expect(typeof mod.signupBlog).toBe('function')
     expect(typeof mod.requestRecoveryByEmail).toBe('function')
     expect(typeof mod.consumeRecoveryToken).toBe('function')
