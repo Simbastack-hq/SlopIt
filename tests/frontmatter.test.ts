@@ -1,0 +1,86 @@
+import { describe, it, expect } from 'vitest'
+import { buildFrontmatter } from '../src/rendering/frontmatter.js'
+
+describe('buildFrontmatter', () => {
+  it('emits a delimited YAML block with quoted string values', () => {
+    const out = buildFrontmatter({ title: 'Hello', slug: 'hello' })
+    expect(out).toBe('---\ntitle: "Hello"\nslug: "hello"\n---')
+  })
+
+  it('omits null and undefined values entirely', () => {
+    const out = buildFrontmatter({
+      title: 'A',
+      slug: 'a',
+      author: undefined,
+      updated: null,
+    })
+    expect(out).not.toContain('author')
+    expect(out).not.toContain('updated')
+  })
+
+  it('omits empty arrays', () => {
+    const out = buildFrontmatter({ title: 'A', slug: 'a', tags: [] })
+    expect(out).not.toContain('tags')
+  })
+
+  it('emits non-empty arrays as flow-style lists', () => {
+    const out = buildFrontmatter({ title: 'A', slug: 'a', tags: ['ai', 'agents'] })
+    expect(out).toContain('tags: ["ai", "agents"]')
+  })
+
+  it('escapes backslashes and double quotes inside string values', () => {
+    const out = buildFrontmatter({ title: 'a "quoted" \\ slash', slug: 's' })
+    expect(out).toContain('title: "a \\"quoted\\" \\\\ slash"')
+  })
+
+  it('preserves ISO 8601 date strings verbatim', () => {
+    const out = buildFrontmatter({ title: 'A', slug: 'a', date: '2026-05-01T12:34:56Z' })
+    expect(out).toContain('date: "2026-05-01T12:34:56Z"')
+  })
+
+  it('handles all 8 documented keys in canonical order', () => {
+    const out = buildFrontmatter({
+      title: 'T',
+      slug: 's',
+      date: '2026-05-01T00:00:00Z',
+      updated: '2026-05-02T00:00:00Z',
+      author: 'A',
+      description: 'D',
+      canonical: 'https://example.com/s/',
+      tags: ['x'],
+    })
+    const lines = out.split('\n')
+    expect(lines[0]).toBe('---')
+    expect(lines[1]).toBe('title: "T"')
+    expect(lines[2]).toBe('slug: "s"')
+    expect(lines[3]).toBe('date: "2026-05-01T00:00:00Z"')
+    expect(lines[4]).toBe('updated: "2026-05-02T00:00:00Z"')
+    expect(lines[5]).toBe('author: "A"')
+    expect(lines[6]).toBe('description: "D"')
+    expect(lines[7]).toBe('canonical: "https://example.com/s/"')
+    expect(lines[8]).toBe('tags: ["x"]')
+    expect(lines[9]).toBe('---')
+  })
+
+  it('escapes newlines, tabs, and CR in string values so the output is valid YAML', () => {
+    const out = buildFrontmatter({
+      title: 'Line one\nline two\twith tab\rand CR',
+      slug: 's',
+    })
+    // The newline / tab / CR must not appear literally between the --- fences.
+    // Each control char survives as a backslash-escape inside the double-quoted scalar.
+    expect(out).toContain('title: "Line one\\nline two\\twith tab\\rand CR"')
+  })
+
+  it('escapes embedded double-quotes and backslashes', () => {
+    const out = buildFrontmatter({ title: 'has "quotes" and \\ backslash', slug: 's' })
+    expect(out).toContain('title: "has \\"quotes\\" and \\\\ backslash"')
+  })
+
+  it('escapes other control characters via \\uXXXX', () => {
+    const out = buildFrontmatter({ title: 'bell\x07and null\x00here', slug: 's' })
+    // JSON.stringify emits \u0007 and \u0000 for these
+    expect(out).toContain('\\u0007')
+    expect(out).toContain('\\u0000')
+  })
+})

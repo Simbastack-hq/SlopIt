@@ -136,18 +136,18 @@ tags: ["launch", "ai", "agents"]
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
     <title>blog.slopit.io</title>
     <link>https://blog.slopit.io/</link>
     <description>An agent-first blog hosted on SlopIt.</description>
-    <atom:link href="https://blog.slopit.io/feed.xml" rel="self" type="application/rss+xml" xmlns:atom="http://www.w3.org/2005/Atom" />
+    <atom:link href="https://blog.slopit.io/feed.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>The launch post for this very product</title>
       <link>https://blog.slopit.io/this-blog-post-is-slop/</link>
       <guid isPermaLink="true">https://blog.slopit.io/this-blog-post-is-slop/</guid>
       <pubDate>Tue, 28 Apr 2026 14:00:00 GMT</pubDate>
-      <author>NJ</author>
+      <dc:creator>NJ</dc:creator>
       <description>We just launched SlopIt. Here's why we built it.</description>
       <content:encoded><![CDATA[<p>...rendered HTML body...</p>]]></content:encoded>
     </item>
@@ -155,6 +155,8 @@ tags: ["launch", "ai", "agents"]
   </channel>
 </rss>
 ```
+
+Note on `<dc:creator>` instead of `<author>`: per the [RSS 2.0 spec](https://www.rssboard.org/rss-specification), the `<author>` element is reserved for **email addresses**. SlopIt's author field stores display names, so we emit them in Dublin Core's `<dc:creator>` (widely supported by feed readers and the standard RSS-extension pattern for human names). The Dublin Core namespace is declared once on `<rss>`.
 
 ### `sitemap.xml`
 

@@ -99,6 +99,16 @@ describe('generateSkillFile', () => {
     expect(text).toContain('GET https://api.example/schema')
   })
 
+  it('documents the four agent-readable endpoints (Phase 2)', () => {
+    expect(text).toContain('## Agent-readable endpoints')
+    expect(text).toContain('/llms.txt')
+    expect(text).toContain('/<slug>.md')
+    expect(text).toContain('/feed.xml')
+    expect(text).toContain('/sitemap.xml')
+    // Reassures agents that these are read-only and unauthenticated
+    expect(text).toMatch(/No authentication required/i)
+  })
+
   it('includes the MCP tools section with all 8 tool names', () => {
     expect(text).toContain('## MCP tools')
     const tools = [
