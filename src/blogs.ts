@@ -2,11 +2,15 @@ import { generateApiKey, hashApiKey } from './auth/api-key.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId } from './ids.js'
+import { listPublishedPostsForBlog } from './posts.js'
+import type { MutationRenderer } from './rendering/generator.js'
 import {
   BlogAnalyticsSchema,
+  BlogPatchSchema,
   CreateBlogInputSchema,
   type Blog,
   type BlogAnalytics,
+  type BlogPatchInput,
   type CreateBlogInput,
 } from './schema/index.js'
 
@@ -179,6 +183,98 @@ export function getBlogByName(store: Store, name: string): Blog | null {
  *
  * @internal
  */
+/**
+ * Patch fields on a blog row. v1 surface allows mutation only of
+ * `analytics`. Theme/name/id remain immutable through this function.
+ *
+ * Side effects:
+ *  - When `analytics` changes (set, cleared, or modified), every
+ *    published post in the blog is re-rendered via `renderer.renderPost`
+ *    so any postprocessHtml hook (Phase 3c's injection wrapper) sees
+ *    the new value. `renderer.renderBlog` is also called once.
+ *  - Empty patch, patches with explicit `analytics: undefined`, and
+ *    patches that leave analytics functionally unchanged are no-ops:
+ *    no DB write, no re-render.
+ *
+ * Compensation: same shape as updatePost. DB UPDATE runs first; on
+ * render failure the prior `analytics_json` is restored via a reverse
+ * UPDATE and the render error bubbles to the caller. The reverse
+ * UPDATE itself is best-effort — same weakened invariant as updatePost.
+ */
+export function updateBlog(
+  store: Store,
+  renderer: MutationRenderer,
+  blogId: string,
+  patch: BlogPatchInput,
+): Blog {
+  const parsed = BlogPatchSchema.parse(patch)
+
+  // Throws BLOG_NOT_FOUND with details.blogId
+  const prior = getBlogInternal(store, blogId)
+
+  // Empty patch → no-op fast path
+  if (Object.keys(parsed).length === 0) return prior
+
+  // Detect analytics-change semantics. Four cases:
+  //   patch has no `analytics` key                → leave column untouched
+  //   patch.analytics === undefined (explicit)    → treat as omitted, leave column untouched
+  //   patch.analytics === null                    → clear column to NULL
+  //   patch.analytics is an object                → set column to JSON.stringify(value)
+  //
+  // The explicit-undefined case matters because Zod's `.optional()` preserves
+  // `{ analytics: undefined }` in the parsed output (the key is present,
+  // value is undefined). Without this guard, the JSON.stringify branch
+  // would produce the literal string "undefined" — JSON.parse rejects it
+  // and the column gets cleared on every undefined patch, which silently
+  // wipes a configured blog's analytics. Treat explicit undefined as
+  // "no change" — same effective semantics as omitting the key.
+  const patchTouchesAnalytics = 'analytics' in parsed && parsed.analytics !== undefined
+  if (!patchTouchesAnalytics) return prior
+
+  const newAnalyticsJson: string | null =
+    parsed.analytics === null ? null : JSON.stringify(parsed.analytics)
+
+  // Same-value short-circuit: serialize prior.analytics and compare. If
+  // the patch is functionally a no-op (e.g. setting analytics to the
+  // same value it already has), skip the DB write and the re-render.
+  const priorJson = prior.analytics === undefined ? null : JSON.stringify(prior.analytics)
+  if (newAnalyticsJson === priorJson) return prior
+
+  // Apply DB UPDATE. Only `analytics` is supported in v1.
+  store.db
+    .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+    .run(newAnalyticsJson, blogId)
+
+  // Hydrate the updated row
+  const updated = getBlogInternal(store, blogId)
+
+  // Compensation: restore prior analytics_json on render failure.
+  const compensate = () => {
+    store.db.prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?').run(priorJson, blogId)
+  }
+
+  // Re-render side effects. analytics changed (we already short-circuited
+  // the no-op cases above); the postprocessHtml hook in Phase 3c reads
+  // blog.analytics on every call, so rendered HTML on disk is stale
+  // until we re-run it.
+  try {
+    const posts = listPublishedPostsForBlog(store, blogId)
+    for (const post of posts) {
+      renderer.renderPost(blogId, post)
+    }
+    renderer.renderBlog(blogId)
+  } catch (renderErr) {
+    try {
+      compensate()
+    } catch {
+      /* best-effort; weakened invariant per updatePost precedent */
+    }
+    throw renderErr
+  }
+
+  return updated
+}
+
 export function getBlogInternal(store: Store, blogId: string): Blog {
   const row = store.db
     .prepare('SELECT id, name, theme, created_at, analytics_json FROM blogs WHERE id = ?')
