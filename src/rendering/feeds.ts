@@ -121,14 +121,21 @@ function escapeCdata(s: string): string {
 }
 
 function rssItem(p: RssPost, channelTitle: string): string {
-  const author = escapeXml(p.author ?? channelTitle)
+  // RSS 2.0 `<author>` is specifically an email-address field per
+  // https://www.rssboard.org/rss-specification — emitting a display name
+  // there produces a non-compliant feed (W3C feed validator flags it).
+  // For display-name authorship we use `<dc:creator>` (Dublin Core),
+  // which is widely supported and is the standard RSS-extension pattern
+  // for human names. Fall back to the channel title when the post has
+  // no explicit author.
+  const creator = escapeXml(p.author ?? channelTitle)
   const lines = [
     '    <item>',
     `      <title>${escapeXml(p.title)}</title>`,
     `      <link>${escapeXml(p.canonicalUrl)}</link>`,
     `      <guid isPermaLink="true">${escapeXml(p.canonicalUrl)}</guid>`,
     `      <pubDate>${rfc822(p.publishedAt)}</pubDate>`,
-    `      <author>${author}</author>`,
+    `      <dc:creator>${creator}</dc:creator>`,
   ]
   if (p.description) {
     lines.push(`      <description>${escapeXml(p.description)}</description>`)
@@ -143,7 +150,7 @@ export function buildRssFeed(input: RssFeedInput): string {
   const items = input.posts.map((p) => rssItem(p, channelTitle)).join('\n')
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">',
+    '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">',
     '  <channel>',
     `    <title>${escapeXml(channelTitle)}</title>`,
     `    <link>${escapeXml(input.blogRoot)}</link>`,

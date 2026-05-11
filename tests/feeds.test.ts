@@ -158,11 +158,12 @@ describe('buildRssFeed', () => {
     bodyHtml: '<p>Hello.</p>',
   }
 
-  it('emits a valid RSS 2.0 envelope with content namespace', () => {
+  it('emits a valid RSS 2.0 envelope with content + dc namespaces', () => {
     const out = buildRssFeed({ blog, blogRoot, feedUrl, posts: [] })
     expect(out).toContain('<?xml version="1.0" encoding="UTF-8"?>')
     expect(out).toContain('<rss version="2.0"')
     expect(out).toContain('xmlns:content="http://purl.org/rss/1.0/modules/content/"')
+    expect(out).toContain('xmlns:dc="http://purl.org/dc/elements/1.1/"')
     expect(out).toContain('<channel>')
     expect(out).toContain('</channel>')
     expect(out).toContain('</rss>')
@@ -181,7 +182,10 @@ describe('buildRssFeed', () => {
     expect(out).toContain('<title>A Post</title>')
     expect(out).toContain('<link>https://b.slopit.io/a/</link>')
     expect(out).toContain('<guid isPermaLink="true">https://b.slopit.io/a/</guid>')
-    expect(out).toContain('<author>NJ</author>')
+    // RSS 2.0 `<author>` is an email-address field per spec; we use
+    // dc:creator for display names instead. See feeds.ts for the rationale.
+    expect(out).toContain('<dc:creator>NJ</dc:creator>')
+    expect(out).not.toContain('<author>NJ</author>')
     expect(out).toContain('<description>A description.</description>')
   })
 
@@ -204,14 +208,15 @@ describe('buildRssFeed', () => {
     expect((out.match(/<!\[CDATA\[/g) ?? []).length).toBe((out.match(/\]\]>/g) ?? []).length)
   })
 
-  it('falls back to blog.name as author when post.author absent', () => {
+  it('falls back to blog.name as dc:creator when post.author absent', () => {
     const out = buildRssFeed({
       blog,
       blogRoot,
       feedUrl,
       posts: [{ ...sample, author: undefined }],
     })
-    expect(out).toContain('<author>My Blog</author>')
+    expect(out).toContain('<dc:creator>My Blog</dc:creator>')
+    expect(out).not.toContain('<author>')
   })
 
   it('omits <description> when empty', () => {
