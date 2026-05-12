@@ -46,6 +46,7 @@ describe('generateSkillFile', () => {
       `GET ${base}/schema`,
       `POST ${base}/bridge/report_bug`,
       `GET ${base}/blogs/:id`,
+      `PATCH ${base}/blogs/:id`,
       `POST ${base}/blogs/:id/posts`,
       `GET ${base}/blogs/:id/posts`,
       `GET ${base}/blogs/:id/posts/:slug`,
@@ -99,13 +100,24 @@ describe('generateSkillFile', () => {
     expect(text).toContain('GET https://api.example/schema')
   })
 
-  it('includes the MCP tools section with all 8 tool names', () => {
+  it('documents the four agent-readable endpoints (Phase 2)', () => {
+    expect(text).toContain('## Agent-readable endpoints')
+    expect(text).toContain('/llms.txt')
+    expect(text).toContain('/<slug>.md')
+    expect(text).toContain('/feed.xml')
+    expect(text).toContain('/sitemap.xml')
+    // Reassures agents that these are read-only and unauthenticated
+    expect(text).toMatch(/No authentication required/i)
+  })
+
+  it('includes the MCP tools section with all tool names', () => {
     expect(text).toContain('## MCP tools')
     const tools = [
       'signup',
       'create_post',
       'update_post',
       'delete_post',
+      'update_blog',
       'get_blog',
       'get_post',
       'list_posts',
@@ -114,6 +126,14 @@ describe('generateSkillFile', () => {
     for (const tool of tools) {
       expect(text, `MCP section missing tool: ${tool}`).toContain(tool)
     }
+  })
+
+  it('documents the analytics field on Blog (Phase 3)', () => {
+    expect(text).toMatch(/analytics/)
+    // At least one of the three supported providers must be mentioned by name.
+    expect(text).toMatch(/Umami|Plausible|Google Analytics|googleAnalytics/i)
+    // And the canonical clearing pattern must be documented.
+    expect(text).toMatch(/analytics.{0,10}null/)
   })
 })
 

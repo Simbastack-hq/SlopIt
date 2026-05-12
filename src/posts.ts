@@ -483,18 +483,23 @@ export function updatePost(
     if (oldStatus === 'draft' && newStatus === 'draft') {
       // no file ops
     } else if (newStatus === 'published') {
+      // renderPost emits per-post HTML + .md + per-blog manifests (Phase 2),
+      // renderBlog refreshes the human-facing index.
       renderer.renderPost(blogId, updated)
       renderer.renderBlog(blogId)
     } else if (oldStatus === 'published' && newStatus === 'draft') {
-      // IMPORTANT ordering (P1 fix): renderBlog FIRST. It reads the DB
-      // where status is now 'draft', so the post is excluded from the
-      // index. Then delete the post files. If renderBlog fails, the
-      // catch compensates (DB back to 'published') and files still
-      // exist → consistent pre-call state. If file deletion fails after
-      // a successful renderBlog, the orphan file is tolerable per spec
-      // (it 404s on the direct URL but isn't in the index).
+      // Published → draft. Ordering matters (reviewer P2 from Phase 2 review):
+      //   1. renderBlog + renderManifests run FIRST against the now-draft DB
+      //      so the post is excluded from index + manifests. If either
+      //      throws, the catch compensates DB back to 'published' and the
+      //      per-post files are still on disk → consistent pre-call state.
+      //   2. removePostFiles + deletePostMarkdown run LAST. They're
+      //      destructive; we cannot recover them from the catch, so we only
+      //      reach them after the safe re-render side has succeeded.
       renderer.renderBlog(blogId)
+      renderer.renderManifests(blogId)
       renderer.removePostFiles(blogId, slug)
+      renderer.deletePostMarkdown(blogId, slug)
     }
   } catch (renderErr) {
     try {
@@ -535,8 +540,13 @@ export function deletePost(
   // `MutationRenderer` requires removePostFiles at the type level — no
   // optional chaining, no silent skip. Shipped createRenderer implements
   // it; custom renderers that reach this primitive must provide it too.
+  // Same manifests-before-destructive-cleanup ordering as the updatePost
+  // published→draft branch. Index refresh + manifest regen first; per-post
+  // file removal last.
   if (prior.status === 'published') {
     renderer.renderBlog(blogId)
+    renderer.renderManifests(blogId)
+    renderer.deletePostMarkdown(blogId, slug)
   }
   renderer.removePostFiles(blogId, slug)
 

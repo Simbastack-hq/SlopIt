@@ -8,13 +8,14 @@ import {
   renderPostList,
   renderTagList,
   renderPoweredBy,
-  renderSeoMeta,
   renderCoverImage,
+  renderParentSiteLink,
   createRenderer,
 } from '../src/rendering/generator.js'
 import { renderMarkdown } from '../src/rendering/markdown.js'
 import { createStore, type Store } from '../src/db/store.js'
 import { createBlog } from '../src/blogs.js'
+import { createPost } from '../src/posts.js'
 import type { Post } from '../src/schema/index.js'
 
 describe('escapeHtml', () => {
@@ -216,26 +217,36 @@ describe('renderPoweredBy', () => {
   })
 })
 
-describe('renderSeoMeta', () => {
-  it('returns empty string when both seoTitle and seoDescription are absent', () => {
-    expect(renderSeoMeta(undefined, undefined)).toBe('')
+describe('renderParentSiteLink', () => {
+  it('returns empty string when parentSiteUrl is null', () => {
+    expect(renderParentSiteLink(null)).toBe('')
   })
 
-  it('emits a description meta when seoDescription is present', () => {
-    const out = renderSeoMeta(undefined, 'A description')
-    expect(out).toContain('<meta name="description"')
-    expect(out).toContain('content="A description"')
+  it('returns empty string when parentSiteUrl is undefined', () => {
+    expect(renderParentSiteLink(undefined)).toBe('')
   })
 
-  it('escapes user-derived content', () => {
-    const out = renderSeoMeta(undefined, '<script>alert(1)</script>')
-    expect(out).not.toContain('<script>alert(1)</script>')
-    expect(out).toContain('&lt;script&gt;')
+  it('emits a nav with the bare hostname when set', () => {
+    const out = renderParentSiteLink('https://example.com')
+    expect(out).toContain('<nav class="parent-site">')
+    expect(out).toContain('href="https://example.com"')
+    expect(out).toContain('← example.com')
   })
 
-  it('emits a title meta (og:title) when seoTitle is present', () => {
-    const out = renderSeoMeta('My Title', undefined)
-    expect(out).toContain('My Title')
+  it('strips a leading www. for the visible label only', () => {
+    const out = renderParentSiteLink('https://www.example.com/about')
+    expect(out).toContain('href="https://www.example.com/about"')
+    expect(out).toContain('← example.com')
+    expect(out).not.toContain('← www.')
+  })
+
+  it('escapes the href when the URL contains attribute metacharacters', () => {
+    // z.url() at the schema boundary blocks most of this in practice, but
+    // the renderer must still escape — we never trust input shape inside
+    // the rendering layer.
+    const out = renderParentSiteLink('https://example.com/?q="><script>')
+    expect(out).not.toContain('"><script>')
+    expect(out).toContain('&quot;')
   })
 })
 
@@ -546,6 +557,314 @@ describe('createRenderer — renderPost', () => {
     const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
     expect(html).toContain('<h1>Heading</h1>')
     expect(html).toContain('<p>Paragraph.</p>')
+  })
+
+  // SEO surface — integration tests covering the buildSeoMeta + buildJsonLd
+  // pipeline end-to-end through the rendered HTML on disk.
+  it('emits canonical link, OG meta, Twitter Card, and JSON-LD for a published post', () => {
+    const { blog } = createBlog(store, { name: 'test-blog' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 'my-post', title: 'My Post', body: 'Hello world.' }),
+    )
+
+    const html = readFileSync(join(outputDir, blog.id, 'my-post', 'index.html'), 'utf8')
+    expect(html).toContain('<link rel="canonical"')
+    expect(html).toContain('<meta property="og:title" content="My Post">')
+    expect(html).toContain('<meta property="og:type" content="article">')
+    expect(html).toContain('<meta name="twitter:card"')
+    expect(html).toContain('<script type="application/ld+json">')
+    expect(html).toContain('"@type":"BlogPosting"')
+  })
+
+  it('uses seoTitle and seoDescription when present', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({
+        blogId: blog.id,
+        slug: 's',
+        title: 'Default',
+        body: 'Body.',
+        seoTitle: 'Override',
+        seoDescription: 'Custom.',
+      }),
+    )
+
+    const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
+    expect(html).toContain('<meta property="og:title" content="Override">')
+    expect(html).toContain('<meta name="description" content="Custom.">')
+  })
+
+  it('produces single-slash canonical URL regardless of baseUrl trailing slash', () => {
+    // Platform passes named-blog base URLs with a trailing slash; the renderer
+    // must normalize so canonical/og:url/JSON-LD mainEntityOfPage are
+    // identical for slashed and non-slashed input.
+    const { blog: blogA } = createBlog(store, { name: 'aa' })
+    const rendererA = createRenderer({ store, outputDir, baseUrl: 'https://a.example.com' })
+    rendererA.renderPost(blogA.id, makePost({ blogId: blogA.id, slug: 'p' }))
+    const htmlA = readFileSync(join(outputDir, blogA.id, 'p', 'index.html'), 'utf8')
+
+    // Fresh outputDir for the trailing-slash variant — same blog id collision otherwise.
+    const outputDirB = join(dir, 'out2')
+    const { blog: blogB } = createBlog(store, { name: 'bb' })
+    const rendererB = createRenderer({
+      store,
+      outputDir: outputDirB,
+      baseUrl: 'https://a.example.com/',
+    })
+    rendererB.renderPost(blogB.id, makePost({ blogId: blogB.id, slug: 'p' }))
+    const htmlB = readFileSync(join(outputDirB, blogB.id, 'p', 'index.html'), 'utf8')
+
+    // Both must contain the single-slash canonical, never `//p/`.
+    expect(htmlA).toContain('href="https://a.example.com/p/"')
+    expect(htmlB).toContain('href="https://a.example.com/p/"')
+    expect(htmlA).not.toContain('//p/')
+    expect(htmlB).not.toContain('//p/')
+  })
+
+  // Phase 3 — postprocessHtml hook on RendererConfig. Platform uses
+  // this to inject analytics <script> tags; self-hosted callers pass
+  // nothing and get identity behavior.
+  it('postprocessHtml: invokes with the rendered HTML and blog id, writes the return value', () => {
+    const { blog } = createBlog(store, { name: 'pp' })
+    const calls: Array<{ html: string; blogId: string }> = []
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html, blogId) => {
+        calls.push({ html, blogId })
+        return html.replace('</head>', '<script>injected</script>\n</head>')
+      },
+    })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'pp', title: 'PP' }))
+
+    expect(calls.length).toBeGreaterThanOrEqual(1)
+    expect(calls[0].blogId).toBe(blog.id)
+    expect(calls[0].html).toContain('<title>PP — pp</title>')
+
+    const html = readFileSync(join(outputDir, blog.id, 'pp', 'index.html'), 'utf8')
+    expect(html).toContain('<script>injected</script>')
+    expect(html).toContain('</head>')
+  })
+
+  it('postprocessHtml: identity (no transform) when absent', () => {
+    const { blog } = createBlog(store, { name: 'noid' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'noid' }))
+
+    const html = readFileSync(join(outputDir, blog.id, 'noid', 'index.html'), 'utf8')
+    expect(html).not.toContain('<script>injected</script>')
+    expect(html).toContain('<link rel="canonical"')
+  })
+
+  it('postprocessHtml: invoked from renderBlog as well as renderPost', () => {
+    const { blog } = createBlog(store, { name: 'ppb' })
+    let count = 0
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html) => {
+        count++
+        return html
+      },
+    })
+    // Use a draft so we get exactly one renderPost call (no manifest pass)
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 'one', status: 'draft', publishedAt: null }),
+    )
+    const afterPost = count
+    renderer.renderBlog(blog.id)
+
+    // renderPost on a draft → 1 HTML write; renderBlog → 1 HTML write.
+    expect(afterPost).toBe(1)
+    expect(count - afterPost).toBe(1)
+  })
+
+  it('postprocessHtml: NOT invoked for .md / feed.xml / sitemap.xml / llms.txt', () => {
+    const { blog } = createBlog(store, { name: 'ppm' })
+    const seen: string[] = []
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html) => {
+        seen.push(html.slice(0, 30))
+        return html
+      },
+    })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'mdtest' }))
+
+    // Every captured snippet must be HTML, not markdown / XML.
+    expect(seen.length).toBeGreaterThanOrEqual(1)
+    for (const head of seen) {
+      expect(head.toLowerCase()).toMatch(/^<!doctype html/)
+    }
+
+    // And the .md / manifest files themselves never contain the marker
+    // a hook could plausibly leave behind.
+    const md = readFileSync(join(outputDir, blog.id, 'mdtest.md'), 'utf8')
+    expect(md.startsWith('---')).toBe(true) // frontmatter, not HTML
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed.startsWith('<?xml')).toBe(true)
+    const sitemap = readFileSync(join(outputDir, blog.id, 'sitemap.xml'), 'utf8')
+    expect(sitemap.startsWith('<?xml')).toBe(true)
+    const llms = readFileSync(join(outputDir, blog.id, 'llms.txt'), 'utf8')
+    expect(llms.startsWith('#')).toBe(true)
+  })
+
+  // Phase 2 — agent-readable file outputs (.md, llms.txt, feed.xml, sitemap.xml)
+  it('writes <slug>.md, llms.txt, feed.xml, sitemap.xml on publish', () => {
+    const { blog } = createBlog(store, { name: 'phase2-pub' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 'hello' }))
+
+    expect(existsSync(join(outputDir, blog.id, 'hello.md'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'llms.txt'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'feed.xml'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'sitemap.xml'))).toBe(true)
+  })
+
+  it('emits frontmatter + raw body in <slug>.md, not the rendered HTML', () => {
+    const { blog } = createBlog(store, { name: 'phase2-md' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({
+        blogId: blog.id,
+        slug: 'raw',
+        title: 'Raw Source',
+        body: '# Heading\n\nParagraph.',
+      }),
+    )
+
+    const md = readFileSync(join(outputDir, blog.id, 'raw.md'), 'utf8')
+    expect(md).toContain('---\ntitle: "Raw Source"')
+    expect(md).toContain('slug: "raw"')
+    expect(md).toContain('canonical: "https://b.example.com/raw/"')
+    expect(md).toContain('# Heading\n\nParagraph.')
+    // Frontmatter ends with closing --- before the body
+    const fenceEnd = md.indexOf('---', 4) // skip the opening ---
+    const body = md.slice(fenceEnd + 3).trim()
+    expect(body).toBe('# Heading\n\nParagraph.')
+  })
+
+  it('lists the post in llms.txt with canonical URL and resolved description', () => {
+    const { blog } = createBlog(store, { name: 'phase2-llms' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, {
+      title: 'First Post',
+      slug: 'first',
+      body: 'A short body.',
+      seoDescription: 'Hand-curated SEO desc.',
+    })
+
+    const llms = readFileSync(join(outputDir, blog.id, 'llms.txt'), 'utf8')
+    expect(llms).toContain('# phase2-llms')
+    expect(llms).toContain('## Posts')
+    expect(llms).toContain('- [First Post](https://b.example.com/first/): Hand-curated SEO desc.')
+  })
+
+  it('emits a valid RSS feed with one item per published post', () => {
+    const { blog } = createBlog(store, { name: 'phase2-rss' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, {
+      title: 'X Post',
+      slug: 'xp',
+      body: 'Body.',
+    })
+
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed).toContain('<?xml version="1.0" encoding="UTF-8"?>')
+    expect(feed).toContain('<rss version="2.0"')
+    expect(feed).toContain('<title>phase2-rss</title>')
+    expect(feed).toContain('<title>X Post</title>')
+    expect(feed).toContain('<link>https://b.example.com/xp/</link>')
+    expect(feed).toContain('<content:encoded><![CDATA[')
+  })
+
+  it('emits a sitemap with the blog root plus every published post URL', () => {
+    const { blog } = createBlog(store, { name: 'phase2-sm' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+    createPost(store, renderer, blog.id, { title: 'B', slug: 'bb', body: 'body' })
+
+    const sm = readFileSync(join(outputDir, blog.id, 'sitemap.xml'), 'utf8')
+    expect(sm).toContain('<loc>https://b.example.com/</loc>')
+    expect(sm).toContain('<loc>https://b.example.com/aa/</loc>')
+    expect(sm).toContain('<loc>https://b.example.com/bb/</loc>')
+    expect((sm.match(/<url>/g) ?? []).length).toBe(3) // root + 2 posts
+  })
+
+  it('skips .md emission for drafts (no canonical URL)', () => {
+    const { blog } = createBlog(store, { name: 'phase2-draft' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 'dd', status: 'draft', publishedAt: null }),
+    )
+    expect(existsSync(join(outputDir, blog.id, 'dd.md'))).toBe(false)
+  })
+})
+
+describe('createRenderer — Phase 2 lifecycle teardown', () => {
+  let dir: string
+  let store: Store
+  let outputDir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+    outputDir = join(dir, 'out')
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('removes <slug>.md and regenerates manifests when post is deleted', async () => {
+    const { blog } = createBlog(store, { name: 'tdown' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+    createPost(store, renderer, blog.id, { title: 'B', slug: 'bb', body: 'body' })
+
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'bb.md'))).toBe(true)
+
+    const { deletePost } = await import('../src/posts.js')
+    deletePost(store, renderer, blog.id, 'aa')
+
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(false)
+    expect(existsSync(join(outputDir, blog.id, 'aa', 'index.html'))).toBe(false)
+    // Manifests regenerated minus the deleted post
+    const sm = readFileSync(join(outputDir, blog.id, 'sitemap.xml'), 'utf8')
+    expect(sm).not.toContain('<loc>https://b.example.com/aa/</loc>')
+    expect(sm).toContain('<loc>https://b.example.com/bb/</loc>')
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed).not.toContain('<link>https://b.example.com/aa/</link>')
+  })
+
+  it('removes <slug>.md when a published post transitions to draft', async () => {
+    const { blog } = createBlog(store, { name: 'unpub' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(true)
+
+    const { updatePost } = await import('../src/posts.js')
+    updatePost(store, renderer, blog.id, 'aa', { status: 'draft' })
+
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(false)
+    expect(existsSync(join(outputDir, blog.id, 'aa', 'index.html'))).toBe(false)
+    // sitemap no longer lists the now-draft post
+    const sm = readFileSync(join(outputDir, blog.id, 'sitemap.xml'), 'utf8')
+    expect(sm).not.toContain('<loc>https://b.example.com/aa/</loc>')
   })
 })
 

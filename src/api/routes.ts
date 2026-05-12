@@ -1,10 +1,11 @@
 import type { Context, Hono } from 'hono'
 import { z } from 'zod'
 import { PostInputSchema } from '../schema/index.js'
-import type { Blog, PostPatchInput } from '../schema/index.js'
+import type { Blog, BlogPatchInput, PostPatchInput } from '../schema/index.js'
 import type { ApiRouterConfig } from './index.js'
 import { SlopItError } from '../errors.js'
 import { buildLinks } from './links.js'
+import { updateBlog } from '../blogs.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { parseMarkdownBody } from './markdown-body.js'
 import { signupBlog } from '../signup.js'
@@ -117,6 +118,18 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       blog: c.var.blog,
       _links: buildLinks(c.var.blog, config),
     })
+  })
+
+  // Patch blog metadata. v1 surface allows mutation of `analytics` only;
+  // BlogPatchSchema.strict() rejects unknown keys (theme/name/id are
+  // immutable through this entry point).
+  app.patch('/blogs/:id', async (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    // updateBlog re-parses via BlogPatchSchema.strict(); cast is honest —
+    // Zod is the source of truth, this layer only guarantees JSON parsed.
+    const raw = (await readJsonBodyOptional(c)) as BlogPatchInput
+    const blog = updateBlog(config.store, renderer, c.var.blog.id, raw)
+    return c.json({ blog, _links: buildLinks(c.var.blog, config) })
   })
 
   // Create a post

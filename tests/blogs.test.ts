@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -11,10 +11,17 @@ import {
   getBlog,
   getBlogByName,
   getBlogsByEmail,
+  updateBlog,
 } from '../src/blogs.js'
+import { createPost } from '../src/posts.js'
+import { createRenderer } from '../src/rendering/generator.js'
 import { hashApiKey } from '../src/auth/api-key.js'
 import { SlopItError } from '../src/errors.js'
 import { CreateBlogInputSchema } from '../src/schema/index.js'
+
+// Cast helper for direct INSERTs/UPDATEs in DB-state setup blocks.
+// Tests need to seed `analytics_json` directly to exercise the read
+// path; in production code the column is written through updateBlog.
 
 function sqliteUniqueError(constraint: string): Error {
   const e = new Error(`UNIQUE constraint failed: ${constraint}`) as NodeJS.ErrnoException
@@ -311,13 +318,14 @@ describe('createApiKey', () => {
 })
 
 describe('public barrel exports', () => {
-  it('exposes createBlog, createApiKey, getBlog, getBlogByName, getBlogsByEmail, signupBlog, recovery primitives, SlopItError, CreateBlogInputSchema', async () => {
+  it('exposes createBlog, createApiKey, getBlog, getBlogByName, getBlogsByEmail, updateBlog, signupBlog, recovery primitives, SlopItError, CreateBlogInputSchema', async () => {
     const mod = await import('../src/index.js')
     expect(typeof mod.createBlog).toBe('function')
     expect(typeof mod.createApiKey).toBe('function')
     expect(typeof mod.getBlog).toBe('function')
     expect(typeof mod.getBlogByName).toBe('function')
     expect(typeof mod.getBlogsByEmail).toBe('function')
+    expect(typeof mod.updateBlog).toBe('function')
     expect(typeof mod.signupBlog).toBe('function')
     expect(typeof mod.requestRecoveryByEmail).toBe('function')
     expect(typeof mod.consumeRecoveryToken).toBe('function')
@@ -421,5 +429,280 @@ describe('getBlog', () => {
     expect(() => getBlog(store, 'missing')).toThrow(
       expect.objectContaining({ code: 'BLOG_NOT_FOUND', details: { blogId: 'missing' } }),
     )
+  })
+})
+
+describe('getBlog with analytics_json', () => {
+  let dir: string
+  let store: Store
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-getblog-analytics-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('returns analytics: undefined when column is NULL', () => {
+    const { blog } = createBlog(store, { name: 'noan' })
+    const fetched = getBlog(store, blog.id)
+    expect(fetched.analytics).toBeUndefined()
+  })
+
+  it('returns the parsed analytics object when column is set', () => {
+    const { blog } = createBlog(store, { name: 'wian' })
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run(JSON.stringify({ umami: { scriptUrl: 'https://u/s.js', siteId: 's-1' } }), blog.id)
+    const fetched = getBlog(store, blog.id)
+    expect(fetched.analytics?.umami?.siteId).toBe('s-1')
+  })
+
+  it('throws on corrupted analytics_json (fail loud)', () => {
+    const { blog } = createBlog(store, { name: 'bad' })
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run('{not valid json', blog.id)
+    expect(() => getBlog(store, blog.id)).toThrow()
+  })
+
+  it('getBlogByName also deserializes analytics_json', () => {
+    const { blog } = createBlog(store, { name: 'name-route' })
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run(JSON.stringify({ plausible: { scriptUrl: 'https://p/s.js', domain: 'd' } }), blog.id)
+    const fetched = getBlogByName(store, 'name-route')
+    expect(fetched?.analytics?.plausible?.domain).toBe('d')
+  })
+})
+
+describe('updateBlog', () => {
+  let dir: string
+  let store: Store
+  let outputDir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-update-blog-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+    outputDir = join(dir, 'out')
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('sets analytics from null when patch.analytics is provided', () => {
+    const { blog } = createBlog(store, { name: 'setan' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+
+    const updated = updateBlog(store, renderer, blog.id, {
+      analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
+    })
+
+    expect(updated.analytics?.umami?.siteId).toBe('s')
+    expect(getBlog(store, blog.id).analytics?.umami?.siteId).toBe('s')
+  })
+
+  it('clears analytics when patch.analytics is null', () => {
+    const { blog } = createBlog(store, { name: 'clear' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run(JSON.stringify({ umami: { scriptUrl: 'https://u/s.js', siteId: 's' } }), blog.id)
+
+    const updated = updateBlog(store, renderer, blog.id, { analytics: null })
+    expect(updated.analytics).toBeUndefined()
+    expect(getBlog(store, blog.id).analytics).toBeUndefined()
+  })
+
+  it('no-op on empty patch returns the prior blog unchanged', () => {
+    const { blog } = createBlog(store, { name: 'noop' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+
+    const updated = updateBlog(store, renderer, blog.id, {})
+    expect(updated.id).toBe(blog.id)
+    expect(updated.analytics).toBeUndefined()
+  })
+
+  it('explicit { analytics: undefined } is treated as omitted (does NOT clear)', () => {
+    const { blog } = createBlog(store, { name: 'expund' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run(JSON.stringify({ umami: { scriptUrl: 'https://u/s.js', siteId: 's' } }), blog.id)
+
+    // Zod's .optional() preserves explicit undefined on parsed output.
+    // updateBlog must treat this case as no-change, NOT as "clear".
+    const updated = updateBlog(store, renderer, blog.id, { analytics: undefined })
+    expect(updated.analytics?.umami?.siteId).toBe('s')
+    expect(getBlog(store, blog.id).analytics?.umami?.siteId).toBe('s')
+  })
+
+  it('throws BLOG_NOT_FOUND on unknown blog id', () => {
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    let caught: unknown
+    try {
+      updateBlog(store, renderer, 'no-such-blog', { analytics: null })
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(SlopItError)
+    expect((caught as SlopItError).code).toBe('BLOG_NOT_FOUND')
+  })
+
+  it('rejects unknown patch fields via Zod strict()', () => {
+    const { blog } = createBlog(store, { name: 'strict' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    // @ts-expect-error testing runtime rejection of unknown keys
+    expect(() => updateBlog(store, renderer, blog.id, { theme: 'minimal' })).toThrow()
+  })
+
+  it('re-renders every published post when analytics changes', () => {
+    const { blog } = createBlog(store, { name: 'rerend' })
+    const calls: Array<{ html: string; blogId: string }> = []
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html, blogId) => {
+        calls.push({ html, blogId })
+        return html.replace('</head>', '<!-- pp -->\n</head>')
+      },
+    })
+
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+    createPost(store, renderer, blog.id, { title: 'B', slug: 'bb', body: 'body' })
+    const beforeCount = calls.length
+
+    updateBlog(store, renderer, blog.id, {
+      analytics: { plausible: { scriptUrl: 'https://p/s.js', domain: 'd' } },
+    })
+
+    // Re-render produced at least 2 HTML writes (one per published post).
+    expect(calls.length - beforeCount).toBeGreaterThanOrEqual(2)
+
+    // The post HTML on disk now carries the new postprocess marker.
+    const aaHtml = readFileSync(join(outputDir, blog.id, 'aa', 'index.html'), 'utf8')
+    expect(aaHtml).toContain('<!-- pp -->')
+    const bbHtml = readFileSync(join(outputDir, blog.id, 'bb', 'index.html'), 'utf8')
+    expect(bbHtml).toContain('<!-- pp -->')
+  })
+
+  it('does NOT re-render when the patch is functionally a no-op (same value)', () => {
+    const { blog } = createBlog(store, { name: 'samean' })
+    let count = 0
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html) => {
+        count++
+        return html
+      },
+    })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    // Set analytics for the first time → re-render fires
+    updateBlog(store, renderer, blog.id, {
+      analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
+    })
+    const afterSet = count
+
+    // Re-apply the same analytics → no re-render
+    updateBlog(store, renderer, blog.id, {
+      analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
+    })
+    expect(count).toBe(afterSet)
+  })
+
+  it('does NOT re-render on empty patch', () => {
+    const { blog } = createBlog(store, { name: 'emptyp' })
+    let count = 0
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html) => {
+        count++
+        return html
+      },
+    })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+    const beforeUpdate = count
+
+    updateBlog(store, renderer, blog.id, {})
+    expect(count).toBe(beforeUpdate)
+  })
+
+  it('sets parentSiteUrl and re-renders so the link appears on disk', () => {
+    const { blog } = createBlog(store, { name: 'setparent' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    // Pre-update: no parent-site link in rendered HTML.
+    expect(readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')).not.toContain(
+      'class="parent-site"',
+    )
+
+    const updated = updateBlog(store, renderer, blog.id, {
+      parentSiteUrl: 'https://example.com',
+    })
+    expect(updated.parentSiteUrl).toBe('https://example.com')
+    expect(getBlog(store, blog.id).parentSiteUrl).toBe('https://example.com')
+
+    const indexHtml = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
+    expect(indexHtml).toContain('class="parent-site"')
+    expect(indexHtml).toContain('href="https://example.com"')
+    expect(indexHtml).toContain('← example.com')
+
+    const postHtml = readFileSync(join(outputDir, blog.id, 'aa', 'index.html'), 'utf8')
+    expect(postHtml).toContain('class="parent-site"')
+  })
+
+  it('clears parentSiteUrl when patch sets it to null', () => {
+    const { blog } = createBlog(store, { name: 'clearparent' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    store.db
+      .prepare('UPDATE blogs SET parent_site_url = ? WHERE id = ?')
+      .run('https://example.com', blog.id)
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    const updated = updateBlog(store, renderer, blog.id, { parentSiteUrl: null })
+    expect(updated.parentSiteUrl).toBeNull()
+    expect(getBlog(store, blog.id).parentSiteUrl).toBeNull()
+    expect(readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')).not.toContain(
+      'class="parent-site"',
+    )
+  })
+
+  it('does NOT re-render when parentSiteUrl is patched to the same value', () => {
+    const { blog } = createBlog(store, { name: 'sameparent' })
+    let count = 0
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html) => {
+        count++
+        return html
+      },
+    })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    updateBlog(store, renderer, blog.id, { parentSiteUrl: 'https://example.com' })
+    const afterSet = count
+
+    updateBlog(store, renderer, blog.id, { parentSiteUrl: 'https://example.com' })
+    expect(count).toBe(afterSet)
+  })
+
+  it('rejects a non-URL parentSiteUrl in the patch', () => {
+    const { blog } = createBlog(store, { name: 'badurl' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    expect(() => updateBlog(store, renderer, blog.id, { parentSiteUrl: 'not-a-url' })).toThrow()
   })
 })

@@ -1,16 +1,32 @@
-import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getBlogInternal } from '../blogs.js'
 import type { Store } from '../db/store.js'
 import { listPublishedPostsForBlog } from '../posts.js'
 import type { Blog, Post } from '../schema/index.js'
+import { buildLlmsTxt, buildRssFeed, buildSitemap } from './feeds.js'
+import { buildFrontmatter } from './frontmatter.js'
 import { renderMarkdown } from './markdown.js'
+import { buildJsonLd, buildSeoMeta, normalizeBaseUrl, resolveDescription } from './seo.js'
 import { escapeHtml, loadTheme, render } from './templates.js'
 
 export interface RendererConfig {
   store: Store
   outputDir: string
   baseUrl: string
+  /**
+   * Optional post-processor that receives fully-rendered HTML and
+   * returns transformed HTML before it's written to disk. Called from
+   * `renderPost` (per-post HTML) and `renderBlog` (per-blog index HTML).
+   * NOT called for non-HTML outputs (.md, llms.txt, feed.xml, sitemap.xml).
+   *
+   * `blogId` is passed so the caller can look up per-blog config like
+   * `blog.analytics` without re-resolving it. Identity is the default.
+   *
+   * Platform uses this to inject analytics `<script>` tags into <head>
+   * (Phase 3c). Self-hosted callers pass nothing and get unchanged behavior.
+   */
+  postprocessHtml?: (html: string, blogId: string) => string
 }
 
 export interface Renderer {
@@ -42,6 +58,26 @@ export interface MutationRenderer extends Renderer {
    * on first write.
    */
   mediaDir(blogId: string): string
+  /**
+   * Write the per-post `<slug>.md` source file (YAML frontmatter + raw
+   * body) alongside the existing `<slug>/index.html`. Atomic via
+   * `writeFileAtomic`. Called from `renderPost` for published posts.
+   */
+  renderPostMarkdown(blogId: string, post: Post): void
+  /**
+   * Remove the per-post `<slug>.md` source file. ENOENT-tolerant.
+   * Called from the published→draft branch of `updatePost` and from
+   * `deletePost`.
+   */
+  deletePostMarkdown(blogId: string, slug: string): void
+  /**
+   * (Re)emit the three per-blog manifest files together — `llms.txt`,
+   * `feed.xml`, `sitemap.xml`. They share the same per-blog published-
+   * posts query so one method is cheaper than three separate ones.
+   * Atomic per file. Called whenever any post in the blog changes
+   * lifecycle (publish, update, unpublish, delete).
+   */
+  renderManifests(blogId: string): void
 }
 
 /**
@@ -121,27 +157,46 @@ export function renderPoweredBy(): string {
 }
 
 /**
- * Build the SEO meta-tag block. Returns '' when both title and
- * description are missing. All user content escaped at the boundary.
+ * Build the optional "back to parent site" nav fragment. Empty string
+ * when `parentSiteUrl` is null/undefined — the templates inline the
+ * result via `{{{parentSiteLink}}}` so absent config renders no markup
+ * at all (not an empty `<nav>`). URL is validated by `z.url()` at the
+ * schema boundary; we parse the hostname here for display and strip a
+ * leading `www.` so the link reads naturally ("← example.com" not
+ * "← www.example.com"). The href is escaped because it lands inside
+ * an HTML attribute; the visible label is escaped too even though a
+ * parsed hostname can't contain HTML metacharacters.
  *
  * @internal
  */
-export function renderSeoMeta(
-  seoTitle: string | undefined,
-  seoDescription: string | undefined,
-): string {
-  if (!seoTitle && !seoDescription) return ''
-  const parts: string[] = []
-  if (seoDescription) {
-    parts.push(`<meta name="description" content="${escapeHtml(seoDescription)}">`)
-  }
-  if (seoTitle) {
-    parts.push(`<meta property="og:title" content="${escapeHtml(seoTitle)}">`)
-  }
-  if (seoDescription) {
-    parts.push(`<meta property="og:description" content="${escapeHtml(seoDescription)}">`)
-  }
-  return parts.join('')
+export function renderParentSiteLink(parentSiteUrl: string | null | undefined): string {
+  if (!parentSiteUrl) return ''
+  const host = new URL(parentSiteUrl).host.replace(/^www\./, '')
+  return (
+    `<nav class="parent-site"><a href="${escapeHtml(parentSiteUrl)}">` +
+    `← ${escapeHtml(host)}</a></nav>`
+  )
+}
+
+/**
+ * Write `content` to `path` atomically: write to `${path}.tmp` first,
+ * then rename. POSIX rename is atomic, so a concurrent reader (Caddy)
+ * never sees a partially-written file.
+ *
+ * Used by all renderer write paths: per-post `<slug>/index.html` and
+ * `<slug>.md`, plus per-blog `index.html`, `llms.txt`, `feed.xml`,
+ * `sitemap.xml`.
+ *
+ * Caller is responsible for `mkdirSync(dirname(path), { recursive: true })`
+ * if the parent directory doesn't exist (matches the existing pattern in
+ * `ensureCss` and `renderPost`).
+ *
+ * @internal
+ */
+function writeFileAtomic(path: string, content: string): void {
+  const tmp = `${path}.tmp`
+  writeFileSync(tmp, content, 'utf8')
+  renameSync(tmp, path)
 }
 
 /**
@@ -173,6 +228,109 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
   const blogOutputDir = (blogId: string) => join(config.outputDir, blogId)
 
+  // Identity-default postprocess hook. Platform passes a real transform
+  // (analytics injection); self-hosted callers don't, and pay nothing.
+  const applyPostprocess = (html: string, blogId: string): string =>
+    config.postprocessHtml ? config.postprocessHtml(html, blogId) : html
+
+  // Single source of truth for a post's canonical URL. normalizeBaseUrl
+  // strips a trailing slash so concatenation is unambiguous regardless of
+  // whether the caller (platform vs self-hosted) passes `https://x.com`
+  // or `https://x.com/`.
+  const canonicalFor = (slug: string): string => normalizeBaseUrl(config.baseUrl) + '/' + slug + '/'
+
+  const blogRootUrl = (): string => normalizeBaseUrl(config.baseUrl) + '/'
+
+  // Emit the `<slug>.md` source file for a published post: YAML frontmatter
+  // (8 fixed keys, blanks omitted) + the author's raw markdown body.
+  function renderPostMarkdown(blogId: string, post: Post): void {
+    const blogDir = blogOutputDir(blogId)
+    mkdirSync(blogDir, { recursive: true })
+    const canonical = canonicalFor(post.slug)
+    const sameDay = post.publishedAt && post.updatedAt === post.publishedAt ? null : post.updatedAt
+    const frontmatter = buildFrontmatter({
+      title: post.title,
+      slug: post.slug,
+      date: post.publishedAt ?? null,
+      updated: sameDay,
+      author: post.author ?? null,
+      description: resolveDescription(post) || null,
+      canonical,
+      tags: post.tags,
+    })
+    const content = `${frontmatter}\n\n${post.body}\n`
+    writeFileAtomic(join(blogDir, `${post.slug}.md`), content)
+  }
+
+  function deletePostMarkdown(blogId: string, slug: string): void {
+    // ENOENT-tolerant: missing file is the desired end state.
+    rmSync(join(config.outputDir, blogId, `${slug}.md`), { force: true })
+  }
+
+  // Emit the three per-blog manifest files together. They all read the same
+  // published-posts list, so one method is cheaper than three.
+  function renderManifests(blogId: string): void {
+    const blog = getBlogInternal(config.store, blogId)
+    const blogDir = blogOutputDir(blogId)
+    mkdirSync(blogDir, { recursive: true })
+
+    // Newest-first by publishedAt — same order users see in the blog index.
+    const all = listPublishedPostsForBlog(config.store, blogId)
+      .slice()
+      .sort((a, b) => {
+        const ap = a.publishedAt ?? a.createdAt
+        const bp = b.publishedAt ?? b.createdAt
+        return bp.localeCompare(ap)
+      })
+
+    const root = blogRootUrl()
+    const latestUpdatedAt =
+      all.length > 0
+        ? all.map((p) => p.updatedAt).sort((a, b) => b.localeCompare(a))[0]
+        : blog.createdAt
+
+    // llms.txt
+    const llmsTxt = buildLlmsTxt({
+      blog,
+      posts: all.map((p) => ({
+        title: p.title,
+        canonicalUrl: canonicalFor(p.slug),
+        description: resolveDescription(p),
+        publishedAt: p.publishedAt ?? p.createdAt,
+      })),
+    })
+    writeFileAtomic(join(blogDir, 'llms.txt'), llmsTxt)
+
+    // feed.xml — cap RSS at 20 most recent
+    const rssPosts = all.slice(0, 20).map((p) => ({
+      title: p.title,
+      canonicalUrl: canonicalFor(p.slug),
+      description: resolveDescription(p),
+      publishedAt: p.publishedAt ?? p.createdAt,
+      author: p.author,
+      bodyHtml: renderMarkdown(p.body),
+    }))
+    const feedXml = buildRssFeed({
+      blog,
+      blogRoot: root,
+      feedUrl: root + 'feed.xml',
+      posts: rssPosts,
+    })
+    writeFileAtomic(join(blogDir, 'feed.xml'), feedXml)
+
+    // sitemap.xml — every published post, no cap
+    const sitemapPosts = all.map((p) => ({
+      canonicalUrl: canonicalFor(p.slug),
+      updatedAt: p.updatedAt,
+    }))
+    const sitemapXml = buildSitemap({
+      blogRoot: root,
+      posts: sitemapPosts,
+      updatedAt: latestUpdatedAt,
+    })
+    writeFileAtomic(join(blogDir, 'sitemap.xml'), sitemapXml)
+  }
+
   return {
     baseUrl,
 
@@ -186,6 +344,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const postDir = join(blogDir, post.slug)
       mkdirSync(postDir, { recursive: true })
 
+      const canonicalUrl = canonicalFor(post.slug)
+
       const html = render(theme.post, {
         blogName: displayName(blog),
         postTitle: post.title,
@@ -193,15 +353,25 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         postPublishedAtDisplay: formatDate(post.publishedAt),
         themeCssHref: '../style.css',
         blogHomeHref: '..',
-        canonicalUrl: baseUrl + post.slug + '/',
-        seoMeta: renderSeoMeta(post.seoTitle, post.seoDescription),
+        canonicalUrl,
+        seoMeta: buildSeoMeta({ post, blog, canonicalUrl }),
+        jsonLd: buildJsonLd({ post, blog, canonicalUrl }),
         coverImage: renderCoverImage(post.coverImage, post.title),
         postBody: renderMarkdown(post.body),
         tagList: renderTagList(post.tags),
         poweredBy: renderPoweredBy(),
+        parentSiteLink: renderParentSiteLink(blog.parentSiteUrl),
       })
 
-      writeFileSync(join(postDir, 'index.html'), html, 'utf8')
+      writeFileAtomic(join(postDir, 'index.html'), applyPostprocess(html, blogId))
+
+      // Phase 2 — emit the .md sibling and refresh the per-blog manifests
+      // whenever a published post is rendered. Drafts skip both (no
+      // canonical URL, would break feed.xml).
+      if (post.status === 'published') {
+        renderPostMarkdown(blogId, post)
+        renderManifests(blogId)
+      }
     },
 
     renderBlog(blogId) {
@@ -218,14 +388,18 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         themeCssHref: 'style.css',
         postList: renderPostList(posts),
         poweredBy: renderPoweredBy(),
+        parentSiteLink: renderParentSiteLink(blog.parentSiteUrl),
       })
 
-      writeFileSync(join(blogDir, 'index.html'), html, 'utf8')
+      writeFileAtomic(join(blogDir, 'index.html'), applyPostprocess(html, blogId))
     },
 
     removePostFiles(blogId, slug) {
       rmSync(join(config.outputDir, blogId, slug), { recursive: true, force: true })
     },
+    renderPostMarkdown,
+    deletePostMarkdown,
+    renderManifests,
     mediaDir(blogId) {
       return join(config.outputDir, blogId, '_media')
     },

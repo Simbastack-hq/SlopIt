@@ -40,7 +40,7 @@ describe('createStore', () => {
     const second = createStore({ dbPath: path })
 
     const rows = second.db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()
-    expect((rows as { n: number }).n).toBe(5)
+    expect((rows as { n: number }).n).toBe(7)
 
     second.close()
     rmSync(dir, { recursive: true, force: true })
@@ -54,6 +54,21 @@ describe('api-key', () => {
     expect(key.startsWith('sk_slop_')).toBe(true)
     expect(hashApiKey(key)).toBe(hashApiKey(key))
     expect(hashApiKey(key)).not.toBe(key)
+  })
+
+  // The key body must be alphanumeric only (no `-` or `_`) — those chars
+  // are visually ambiguous next to the `-----` separators in the
+  // onboarding credential block and silently truncated by consumers.
+  // The full body is checked, not just the trailing position, because the
+  // alphabet is constrained at the source — there is no scenario where
+  // any position should be punctuation.
+  it('produces keys whose body is alphanumeric only', () => {
+    for (let i = 0; i < 1000; i++) {
+      const key = generateApiKey()
+      const body = key.slice('sk_slop_'.length)
+      expect(body).toMatch(/^[A-Za-z0-9]+$/)
+      expect(body).toHaveLength(32)
+    }
   })
 })
 
