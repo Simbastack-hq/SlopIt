@@ -43,6 +43,18 @@ nav a:hover {
   color: var(--accent);
 }
 
+nav.parent-site {
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+nav.parent-site a {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+nav.parent-site a:hover {
+  color: var(--accent);
+}
+
 article header h1 {
   font-size: 32px;
   font-weight: 900;

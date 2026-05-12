@@ -157,6 +157,28 @@ export function renderPoweredBy(): string {
 }
 
 /**
+ * Build the optional "back to parent site" nav fragment. Empty string
+ * when `parentSiteUrl` is null/undefined — the templates inline the
+ * result via `{{{parentSiteLink}}}` so absent config renders no markup
+ * at all (not an empty `<nav>`). URL is validated by `z.url()` at the
+ * schema boundary; we parse the hostname here for display and strip a
+ * leading `www.` so the link reads naturally ("← example.com" not
+ * "← www.example.com"). The href is escaped because it lands inside
+ * an HTML attribute; the visible label is escaped too even though a
+ * parsed hostname can't contain HTML metacharacters.
+ *
+ * @internal
+ */
+export function renderParentSiteLink(parentSiteUrl: string | null | undefined): string {
+  if (!parentSiteUrl) return ''
+  const host = new URL(parentSiteUrl).host.replace(/^www\./, '')
+  return (
+    `<nav class="parent-site"><a href="${escapeHtml(parentSiteUrl)}">` +
+    `← ${escapeHtml(host)}</a></nav>`
+  )
+}
+
+/**
  * Write `content` to `path` atomically: write to `${path}.tmp` first,
  * then rename. POSIX rename is atomic, so a concurrent reader (Caddy)
  * never sees a partially-written file.
@@ -329,6 +351,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         postBody: renderMarkdown(post.body),
         tagList: renderTagList(post.tags),
         poweredBy: renderPoweredBy(),
+        parentSiteLink: renderParentSiteLink(blog.parentSiteUrl),
       })
 
       writeFileAtomic(join(postDir, 'index.html'), applyPostprocess(html, blogId))
@@ -356,6 +379,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         themeCssHref: 'style.css',
         postList: renderPostList(posts),
         poweredBy: renderPoweredBy(),
+        parentSiteLink: renderParentSiteLink(blog.parentSiteUrl),
       })
 
       writeFileAtomic(join(blogDir, 'index.html'), applyPostprocess(html, blogId))

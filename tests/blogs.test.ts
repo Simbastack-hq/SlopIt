@@ -637,4 +637,72 @@ describe('updateBlog', () => {
     updateBlog(store, renderer, blog.id, {})
     expect(count).toBe(beforeUpdate)
   })
+
+  it('sets parentSiteUrl and re-renders so the link appears on disk', () => {
+    const { blog } = createBlog(store, { name: 'setparent' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    // Pre-update: no parent-site link in rendered HTML.
+    expect(readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')).not.toContain(
+      'class="parent-site"',
+    )
+
+    const updated = updateBlog(store, renderer, blog.id, {
+      parentSiteUrl: 'https://example.com',
+    })
+    expect(updated.parentSiteUrl).toBe('https://example.com')
+    expect(getBlog(store, blog.id).parentSiteUrl).toBe('https://example.com')
+
+    const indexHtml = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
+    expect(indexHtml).toContain('class="parent-site"')
+    expect(indexHtml).toContain('href="https://example.com"')
+    expect(indexHtml).toContain('← example.com')
+
+    const postHtml = readFileSync(join(outputDir, blog.id, 'aa', 'index.html'), 'utf8')
+    expect(postHtml).toContain('class="parent-site"')
+  })
+
+  it('clears parentSiteUrl when patch sets it to null', () => {
+    const { blog } = createBlog(store, { name: 'clearparent' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    store.db
+      .prepare('UPDATE blogs SET parent_site_url = ? WHERE id = ?')
+      .run('https://example.com', blog.id)
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    const updated = updateBlog(store, renderer, blog.id, { parentSiteUrl: null })
+    expect(updated.parentSiteUrl).toBeNull()
+    expect(getBlog(store, blog.id).parentSiteUrl).toBeNull()
+    expect(readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')).not.toContain(
+      'class="parent-site"',
+    )
+  })
+
+  it('does NOT re-render when parentSiteUrl is patched to the same value', () => {
+    const { blog } = createBlog(store, { name: 'sameparent' })
+    let count = 0
+    const renderer = createRenderer({
+      store,
+      outputDir,
+      baseUrl: 'https://b.example.com',
+      postprocessHtml: (html) => {
+        count++
+        return html
+      },
+    })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    updateBlog(store, renderer, blog.id, { parentSiteUrl: 'https://example.com' })
+    const afterSet = count
+
+    updateBlog(store, renderer, blog.id, { parentSiteUrl: 'https://example.com' })
+    expect(count).toBe(afterSet)
+  })
+
+  it('rejects a non-URL parentSiteUrl in the patch', () => {
+    const { blog } = createBlog(store, { name: 'badurl' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    expect(() => updateBlog(store, renderer, blog.id, { parentSiteUrl: 'not-a-url' })).toThrow()
+  })
 })

@@ -9,6 +9,7 @@ import {
   renderTagList,
   renderPoweredBy,
   renderCoverImage,
+  renderParentSiteLink,
   createRenderer,
 } from '../src/rendering/generator.js'
 import { renderMarkdown } from '../src/rendering/markdown.js'
@@ -213,6 +214,39 @@ describe('renderPoweredBy', () => {
     const out = renderPoweredBy()
     expect(out).toContain('https://slopit.io')
     expect(out).toContain('Powered by')
+  })
+})
+
+describe('renderParentSiteLink', () => {
+  it('returns empty string when parentSiteUrl is null', () => {
+    expect(renderParentSiteLink(null)).toBe('')
+  })
+
+  it('returns empty string when parentSiteUrl is undefined', () => {
+    expect(renderParentSiteLink(undefined)).toBe('')
+  })
+
+  it('emits a nav with the bare hostname when set', () => {
+    const out = renderParentSiteLink('https://example.com')
+    expect(out).toContain('<nav class="parent-site">')
+    expect(out).toContain('href="https://example.com"')
+    expect(out).toContain('← example.com')
+  })
+
+  it('strips a leading www. for the visible label only', () => {
+    const out = renderParentSiteLink('https://www.example.com/about')
+    expect(out).toContain('href="https://www.example.com/about"')
+    expect(out).toContain('← example.com')
+    expect(out).not.toContain('← www.')
+  })
+
+  it('escapes the href when the URL contains attribute metacharacters', () => {
+    // z.url() at the schema boundary blocks most of this in practice, but
+    // the renderer must still escape — we never trust input shape inside
+    // the rendering layer.
+    const out = renderParentSiteLink('https://example.com/?q="><script>')
+    expect(out).not.toContain('"><script>')
+    expect(out).toContain('&quot;')
   })
 })
 

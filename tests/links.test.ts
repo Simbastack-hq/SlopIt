@@ -3,7 +3,13 @@ import { buildLinks } from '../src/api/links.js'
 import type { Blog } from '../src/schema/index.js'
 import type { Renderer } from '../src/rendering/generator.js'
 
-const blog: Blog = { id: 'b1', name: 'test', theme: 'minimal', createdAt: '2026-04-23T00:00:00Z' }
+const blog: Blog = {
+  id: 'b1',
+  name: 'test',
+  theme: 'minimal',
+  createdAt: '2026-04-23T00:00:00Z',
+  parentSiteUrl: null,
+}
 
 const API = 'https://slopit.io/api'
 

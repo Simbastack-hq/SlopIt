@@ -24,7 +24,13 @@ function makeFixtures() {
       "INSERT INTO blogs (id, name, theme, created_at) VALUES (?, ?, 'minimal', datetime('now'))",
     )
     .run('blog_test', 'test')
-  const blog: Blog = { id: 'blog_test', name: 'test', theme: 'minimal', createdAt: '' }
+  const blog: Blog = {
+    id: 'blog_test',
+    name: 'test',
+    theme: 'minimal',
+    createdAt: '',
+    parentSiteUrl: null,
+  }
   const renderer = createRenderer({
     store,
     outputDir: join(dir, 'out'),
@@ -108,7 +114,13 @@ describe('uploadMedia', () => {
         "INSERT INTO blogs (id, name, theme, created_at) VALUES (?, ?, 'minimal', datetime('now'))",
       )
       .run('blog_test', 'test')
-    const blog: Blog = { id: 'blog_test', name: 'test', theme: 'minimal', createdAt: '' }
+    const blog: Blog = {
+      id: 'blog_test',
+      name: 'test',
+      theme: 'minimal',
+      createdAt: '',
+      parentSiteUrl: null,
+    }
     const renderer = createRenderer({
       store,
       outputDir: join(dir, 'out'),
