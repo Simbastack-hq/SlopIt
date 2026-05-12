@@ -59,7 +59,7 @@ describe('rendererFor(blog): no cross-blog URL leakage', () => {
       _links: Record<string, string>
     }
     expect(bodyA.post_url).toMatch(/^https:\/\/alpha\.example\//)
-    expect(bodyA._links.view).toBe('https://alpha.example')
+    expect(bodyA._links.view).toBe('https://alpha.example/')
 
     const resB = await app.request(`/blogs/${beta.id}/posts`, {
       method: 'POST',
@@ -72,7 +72,7 @@ describe('rendererFor(blog): no cross-blog URL leakage', () => {
       _links: Record<string, string>
     }
     expect(bodyB.post_url).toMatch(/^https:\/\/beta\.example\//)
-    expect(bodyB._links.view).toBe('https://beta.example')
+    expect(bodyB._links.view).toBe('https://beta.example/')
 
     // Confirm rendered files: each blog's post HTML references only its own canonical URL
     const alphaPostHtml = readFileSync(
@@ -94,13 +94,13 @@ describe('rendererFor(blog): no cross-blog URL leakage', () => {
       headers: { Authorization: `Bearer ${keyA}` },
     })
     const getABody = (await getA.json()) as { _links: Record<string, string> }
-    expect(getABody._links.view).toBe('https://alpha.example')
+    expect(getABody._links.view).toBe('https://alpha.example/')
 
     const getB = await app.request(`/blogs/${beta.id}`, {
       headers: { Authorization: `Bearer ${keyB}` },
     })
     const getBBody = (await getB.json()) as { _links: Record<string, string> }
-    expect(getBBody._links.view).toBe('https://beta.example')
+    expect(getBBody._links.view).toBe('https://beta.example/')
   })
 
   it('cross-blog access: alpha key used for beta id → 404 (no URL leaks either way)', async () => {

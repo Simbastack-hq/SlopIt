@@ -43,7 +43,7 @@ describe('DELETE /blogs/:id/posts/:slug', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as { deleted: boolean; _links: Record<string, string> }
     expect(body.deleted).toBe(true)
-    expect(body._links.view).toBe('https://b.example')
+    expect(body._links.view).toBe('https://b.example/')
     expect(existsSync(join(outDir, blogId, slug))).toBe(false)
   })
 

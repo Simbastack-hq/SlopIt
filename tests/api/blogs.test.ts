@@ -44,7 +44,7 @@ describe('GET /blogs/:id', () => {
     }
     expect(body.blog.id).toBe(blog.id)
     expect(body.blog.name).toBe('b1')
-    expect(body._links.view).toBe('https://b1.example')
+    expect(body._links.view).toBe('https://b1.example/')
   })
 
   it('401 without a key', async () => {

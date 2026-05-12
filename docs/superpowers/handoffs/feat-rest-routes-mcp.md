@@ -8,7 +8,7 @@
 
 SlopIt is an open-core MIT library (`@slopit/core`) for "instant blogs for AI agents." Strategy: agents call a handful of functions and get back a live URL with ~zero friction. No CMS UI, one theme (v1), minimal HTML templates, static file output, Caddy serves.
 
-Public repo `Wipiway/SlopIt` (currently private). Private platform repo `Wipiway/slopit-platform`. Stack: TypeScript strict ESM, Hono, better-sqlite3, Zod v4, vitest, marked, `@modelcontextprotocol/sdk`. Node ≥22. pnpm + `feat/*` → `dev` → `main` workflow.
+Public repo `Simbastack-hq/SlopIt` (currently private). Private platform repo `Simbastack-hq/slopit-platform`. Stack: TypeScript strict ESM, Hono, better-sqlite3, Zod v4, vitest, marked, `@modelcontextprotocol/sdk`. Node ≥22. pnpm + `feat/*` → `dev` → `main` workflow.
 
 ### Already on `dev` (after `feat/create-post` merges)
 
@@ -128,7 +128,7 @@ If any of that fails at the start, stop and ask — the baseline is wrong.
 2. `ARCHITECTURE.md` — core/platform boundary, factory pattern. Rule #5 has the narrow `slopit.io` exception for the Powered-By link; otherwise no `slopit.io` strings in core.
 3. `docs/superpowers/specs/2026-04-22-create-post-design.md` — reference pattern for how we structure specs, error handling, `@internal` visibility.
 4. `src/blogs.ts`, `src/posts.ts`, `src/rendering/generator.ts` — reference patterns for `@internal` helpers, transactional DB ops, narrow-match error predicates, sync interfaces.
-5. `strategy.md` in `Wipiway/slopit-platform` — the MCP tool list, the signup response shape, the onboarding-block spirit.
+5. `strategy.md` in `Simbastack-hq/slopit-platform` — the MCP tool list, the signup response shape, the onboarding-block spirit.
 6. `https://github.com/EveryInc/proof-sdk/blob/main/AGENT_CONTRACT.md` — Proof's public agent-facing contract. Our inspiration for `_links`, `Idempotency-Key`, text/markdown body, auth modes, and the onboarding block structure.
 
 ---
