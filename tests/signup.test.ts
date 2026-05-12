@@ -46,7 +46,7 @@ describe('signupBlog orchestration', () => {
     expect(result.blog.id).toMatch(/^[a-z0-9]+$/)
     expect(result.blog.name).toBe('noemail')
     expect(result.apiKey).toMatch(/^sk_slop_/)
-    expect(result.blogUrl).toBe('https://blog.example')
+    expect(result.blogUrl).toBe('https://blog.example/')
     expect(result.emailSent).toBe(false)
     expect(onSignup).not.toHaveBeenCalled()
   })

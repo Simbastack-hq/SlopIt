@@ -70,7 +70,7 @@ describe('MCP tool: signup', () => {
     }
     expect(result.isError).toBeFalsy()
     expect(result.structuredContent.blog_id).toMatch(/^[a-z0-9]+$/)
-    expect(result.structuredContent.blog_url).toBe('https://b.example')
+    expect(result.structuredContent.blog_url).toBe('https://b.example/')
     expect(result.structuredContent.api_key).toMatch(/^sk_slop_/)
     expect(result.structuredContent.onboarding_text).toContain(
       'Published my first post to SlopIt: <url>',

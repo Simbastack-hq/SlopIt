@@ -47,7 +47,7 @@ describe('POST /blogs/:id/posts', () => {
     }
     expect(body.post.title).toBe('Hello')
     expect(body.post_url).toMatch(/^https:\/\/b\.example\/.+\/$/)
-    expect(body._links.view).toBe('https://b.example')
+    expect(body._links.view).toBe('https://b.example/')
   })
 
   it('text/markdown body: raw body + query params → post', async () => {
