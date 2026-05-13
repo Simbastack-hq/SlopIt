@@ -108,7 +108,8 @@ describe('PATCH /blogs/:id', () => {
       _links: Record<string, string>
     }
     expect(body.blog.analytics?.umami?.siteId).toBe('s')
-    expect(body._links.view).toBe('https://b1.example')
+    // Trailing slash from createRenderer's baseUrl normalization (PR #18).
+    expect(body._links.view).toBe('https://b1.example/')
   })
 
   it('200 — clears analytics with explicit null', async () => {
