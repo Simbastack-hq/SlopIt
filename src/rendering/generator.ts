@@ -8,7 +8,7 @@ import { buildLlmsTxt, buildRssFeed, buildSitemap } from './feeds.js'
 import { buildFrontmatter } from './frontmatter.js'
 import { renderMarkdown } from './markdown.js'
 import { buildJsonLd, buildSeoMeta, normalizeBaseUrl, resolveDescription } from './seo.js'
-import { escapeHtml, loadTheme, render } from './templates.js'
+import { escapeHtml, loadTheme, render, type ThemeAssets } from './templates.js'
 
 export interface RendererConfig {
   store: Store
@@ -186,7 +186,7 @@ export function renderParentSiteLink(parentSiteUrl: string | null | undefined): 
  *
  * Caller is responsible for `mkdirSync(dirname(path), { recursive: true })`
  * if the parent directory doesn't exist (matches the existing pattern in
- * `ensureCss` and `renderPost`).
+ * `ensureThemeAssets` and `renderPost`).
  *
  * @internal
  */
@@ -197,16 +197,17 @@ function writeFileAtomic(path: string, content: string): void {
 }
 
 /**
- * Copy the theme's style.css into a blog's output directory. Always
- * overwrites (not copy-if-missing) so blogs pick up style.css changes
- * on the next publish after a package upgrade. Creates the blog dir
- * if it doesn't exist yet.
+ * Copy the theme's per-blog static assets (style.css, favicon.svg) into
+ * a blog's output directory. Always overwrites (not copy-if-missing) so
+ * blogs pick up theme changes on the next publish after a package
+ * upgrade. Creates the blog dir if it doesn't exist yet.
  *
  * @internal
  */
-export function ensureCss(cssSourcePath: string, blogOutputDir: string): void {
+export function ensureThemeAssets(theme: ThemeAssets, blogOutputDir: string): void {
   mkdirSync(blogOutputDir, { recursive: true })
-  copyFileSync(cssSourcePath, join(blogOutputDir, 'style.css'))
+  copyFileSync(theme.cssPath, join(blogOutputDir, 'style.css'))
+  copyFileSync(theme.faviconPath, join(blogOutputDir, 'favicon.svg'))
 }
 
 export function createRenderer(config: RendererConfig): MutationRenderer {
@@ -335,8 +336,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const blog = getBlogInternal(config.store, blogId)
       const blogDir = blogOutputDir(blogId)
 
-      // ensureCss BEFORE HTML write — see spec's Render sequencing section
-      ensureCss(theme.cssPath, blogDir)
+      // ensureThemeAssets BEFORE HTML write — see spec's Render sequencing section
+      ensureThemeAssets(theme, blogDir)
 
       const postDir = join(blogDir, post.slug)
       mkdirSync(postDir, { recursive: true })
@@ -375,7 +376,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const blog = getBlogInternal(config.store, blogId)
       const blogDir = blogOutputDir(blogId)
 
-      ensureCss(theme.cssPath, blogDir)
+      ensureThemeAssets(theme, blogDir)
 
       const posts = listPublishedPostsForBlog(config.store, blogId)
       mkdirSync(blogDir, { recursive: true })
