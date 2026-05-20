@@ -88,6 +88,7 @@ describe('loadTheme', () => {
     expect(theme.post.length).toBeGreaterThan(0)
     expect(theme.index.length).toBeGreaterThan(0)
     expect(theme.cssPath.endsWith('style.css')).toBe(true)
+    expect(theme.faviconPath.endsWith('favicon.svg')).toBe(true)
   })
 
   it('post template contains expected placeholders', () => {
@@ -463,7 +464,7 @@ describe('createRenderer — renderPost', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('writes post HTML + CSS to disk at the expected path', () => {
+  it('writes post HTML + CSS + favicon to disk at the expected path', () => {
     const { blog } = createBlog(store, { name: 'test-blog' })
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://test.example.com' })
 
@@ -472,8 +473,10 @@ describe('createRenderer — renderPost', () => {
 
     const postPath = join(outputDir, blog.id, 'hello', 'index.html')
     const cssPath = join(outputDir, blog.id, 'style.css')
+    const faviconPath = join(outputDir, blog.id, 'favicon.svg')
     expect(existsSync(postPath)).toBe(true)
     expect(existsSync(cssPath)).toBe(true)
+    expect(existsSync(faviconPath)).toBe(true)
 
     const html = readFileSync(postPath, 'utf8')
     expect(html).toContain('<title>Hello! — test-blog</title>')
@@ -487,6 +490,7 @@ describe('createRenderer — renderPost', () => {
 
     const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
     expect(html).toContain('href="../style.css"')
+    expect(html).toContain('href="../favicon.svg"')
     expect(html).toContain('href=".."')
   })
 
@@ -528,18 +532,21 @@ describe('createRenderer — renderPost', () => {
     expect(html).toContain('href="https://b.example.com/s1/"')
   })
 
-  it('ensureCss always overwrites (picks up CSS changes on re-render)', () => {
+  it('ensureThemeAssets always overwrites (picks up theme changes on re-render)', () => {
     const { blog } = createBlog(store, { name: 'bb' })
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
     renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 's' }))
 
     const cssPath = join(outputDir, blog.id, 'style.css')
-    const fresh = readFileSync(cssPath, 'utf8')
+    const faviconPath = join(outputDir, blog.id, 'favicon.svg')
+    const freshCss = readFileSync(cssPath, 'utf8')
+    const freshFavicon = readFileSync(faviconPath, 'utf8')
 
     writeFileSync(cssPath, '/* STALE */', 'utf8')
+    writeFileSync(faviconPath, '<!-- STALE -->', 'utf8')
     renderer.renderPost(blog.id, makePost({ blogId: blog.id, slug: 't' }))
-    const restored = readFileSync(cssPath, 'utf8')
-    expect(restored).toBe(fresh)
+    expect(readFileSync(cssPath, 'utf8')).toBe(freshCss)
+    expect(readFileSync(faviconPath, 'utf8')).toBe(freshFavicon)
   })
 
   it('renders the post body as HTML (markdown passes through renderMarkdown)', () => {
@@ -884,13 +891,17 @@ describe('createRenderer — renderBlog', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('writes the blog index HTML + CSS to disk', () => {
+  it('writes the blog index HTML + CSS + favicon to disk', () => {
     const { blog } = createBlog(store, { name: 'bb' })
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
     renderer.renderBlog(blog.id)
 
     expect(existsSync(join(outputDir, blog.id, 'index.html'))).toBe(true)
     expect(existsSync(join(outputDir, blog.id, 'style.css'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'favicon.svg'))).toBe(true)
+
+    const html = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
+    expect(html).toContain('href="favicon.svg"')
   })
 
   it('lists published posts newest-first in the index', () => {
