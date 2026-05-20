@@ -160,22 +160,19 @@ export function renderPoweredBy(): string {
  * Build the optional "back to parent site" nav fragment. Empty string
  * when `parentSiteUrl` is null/undefined — the templates inline the
  * result via `{{{parentSiteLink}}}` so absent config renders no markup
- * at all (not an empty `<nav>`). URL is validated by `z.url()` at the
- * schema boundary; we parse the hostname here for display and strip a
- * leading `www.` so the link reads naturally ("← example.com" not
- * "← www.example.com"). The href is escaped because it lands inside
- * an HTML attribute; the visible label is escaped too even though a
- * parsed hostname can't contain HTML metacharacters.
+ * at all (not an empty `<nav>`). The visible label is a fixed
+ * "← Main site" rather than the parent hostname: most blogs sit under
+ * the same brand as their parent (blog.acme.com → acme.com), so echoing
+ * the hostname duplicates the blog's masthead name right above it. A
+ * generic label reads cleanly in that common case and is no less clear
+ * when parent and blog are unrelated. The href is escaped because it
+ * lands inside an HTML attribute.
  *
  * @internal
  */
 export function renderParentSiteLink(parentSiteUrl: string | null | undefined): string {
   if (!parentSiteUrl) return ''
-  const host = new URL(parentSiteUrl).host.replace(/^www\./, '')
-  return (
-    `<nav class="parent-site"><a href="${escapeHtml(parentSiteUrl)}">` +
-    `← ${escapeHtml(host)}</a></nav>`
-  )
+  return `<nav class="parent-site"><a href="${escapeHtml(parentSiteUrl)}">← Main site</a></nav>`
 }
 
 /**

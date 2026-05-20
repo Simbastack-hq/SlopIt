@@ -226,18 +226,18 @@ describe('renderParentSiteLink', () => {
     expect(renderParentSiteLink(undefined)).toBe('')
   })
 
-  it('emits a nav with the bare hostname when set', () => {
+  it('emits a nav with a fixed "Main site" label when set', () => {
     const out = renderParentSiteLink('https://example.com')
     expect(out).toContain('<nav class="parent-site">')
     expect(out).toContain('href="https://example.com"')
-    expect(out).toContain('← example.com')
+    expect(out).toContain('← Main site')
   })
 
-  it('strips a leading www. for the visible label only', () => {
+  it('uses the full URL verbatim as the href, label stays generic', () => {
     const out = renderParentSiteLink('https://www.example.com/about')
     expect(out).toContain('href="https://www.example.com/about"')
-    expect(out).toContain('← example.com')
-    expect(out).not.toContain('← www.')
+    expect(out).toContain('← Main site')
+    expect(out).not.toContain('example.com<')
   })
 
   it('escapes the href when the URL contains attribute metacharacters', () => {
