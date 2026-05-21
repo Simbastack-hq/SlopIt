@@ -8,7 +8,7 @@ import { buildLlmsTxt, buildRssFeed, buildSitemap } from './feeds.js'
 import { buildFrontmatter } from './frontmatter.js'
 import { renderMarkdown } from './markdown.js'
 import { buildJsonLd, buildSeoMeta, normalizeBaseUrl, resolveDescription } from './seo.js'
-import { escapeHtml, loadTheme, render } from './templates.js'
+import { escapeHtml, loadTheme, render, type ThemeAssets } from './templates.js'
 
 export interface RendererConfig {
   store: Store
@@ -160,22 +160,19 @@ export function renderPoweredBy(): string {
  * Build the optional "back to parent site" nav fragment. Empty string
  * when `parentSiteUrl` is null/undefined — the templates inline the
  * result via `{{{parentSiteLink}}}` so absent config renders no markup
- * at all (not an empty `<nav>`). URL is validated by `z.url()` at the
- * schema boundary; we parse the hostname here for display and strip a
- * leading `www.` so the link reads naturally ("← example.com" not
- * "← www.example.com"). The href is escaped because it lands inside
- * an HTML attribute; the visible label is escaped too even though a
- * parsed hostname can't contain HTML metacharacters.
+ * at all (not an empty `<nav>`). The visible label is a fixed
+ * "← Main site" rather than the parent hostname: most blogs sit under
+ * the same brand as their parent (blog.acme.com → acme.com), so echoing
+ * the hostname duplicates the blog's masthead name right above it. A
+ * generic label reads cleanly in that common case and is no less clear
+ * when parent and blog are unrelated. The href is escaped because it
+ * lands inside an HTML attribute.
  *
  * @internal
  */
 export function renderParentSiteLink(parentSiteUrl: string | null | undefined): string {
   if (!parentSiteUrl) return ''
-  const host = new URL(parentSiteUrl).host.replace(/^www\./, '')
-  return (
-    `<nav class="parent-site"><a href="${escapeHtml(parentSiteUrl)}">` +
-    `← ${escapeHtml(host)}</a></nav>`
-  )
+  return `<nav class="parent-site"><a href="${escapeHtml(parentSiteUrl)}">← Main site</a></nav>`
 }
 
 /**
@@ -189,7 +186,7 @@ export function renderParentSiteLink(parentSiteUrl: string | null | undefined): 
  *
  * Caller is responsible for `mkdirSync(dirname(path), { recursive: true })`
  * if the parent directory doesn't exist (matches the existing pattern in
- * `ensureCss` and `renderPost`).
+ * `ensureThemeAssets` and `renderPost`).
  *
  * @internal
  */
@@ -200,16 +197,17 @@ function writeFileAtomic(path: string, content: string): void {
 }
 
 /**
- * Copy the theme's style.css into a blog's output directory. Always
- * overwrites (not copy-if-missing) so blogs pick up style.css changes
- * on the next publish after a package upgrade. Creates the blog dir
- * if it doesn't exist yet.
+ * Copy the theme's per-blog static assets (style.css, favicon.svg) into
+ * a blog's output directory. Always overwrites (not copy-if-missing) so
+ * blogs pick up theme changes on the next publish after a package
+ * upgrade. Creates the blog dir if it doesn't exist yet.
  *
  * @internal
  */
-export function ensureCss(cssSourcePath: string, blogOutputDir: string): void {
+export function ensureThemeAssets(theme: ThemeAssets, blogOutputDir: string): void {
   mkdirSync(blogOutputDir, { recursive: true })
-  copyFileSync(cssSourcePath, join(blogOutputDir, 'style.css'))
+  copyFileSync(theme.cssPath, join(blogOutputDir, 'style.css'))
+  copyFileSync(theme.faviconPath, join(blogOutputDir, 'favicon.svg'))
 }
 
 export function createRenderer(config: RendererConfig): MutationRenderer {
@@ -338,8 +336,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const blog = getBlogInternal(config.store, blogId)
       const blogDir = blogOutputDir(blogId)
 
-      // ensureCss BEFORE HTML write — see spec's Render sequencing section
-      ensureCss(theme.cssPath, blogDir)
+      // ensureThemeAssets BEFORE HTML write — see spec's Render sequencing section
+      ensureThemeAssets(theme, blogDir)
 
       const postDir = join(blogDir, post.slug)
       mkdirSync(postDir, { recursive: true })
@@ -378,7 +376,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const blog = getBlogInternal(config.store, blogId)
       const blogDir = blogOutputDir(blogId)
 
-      ensureCss(theme.cssPath, blogDir)
+      ensureThemeAssets(theme, blogDir)
 
       const posts = listPublishedPostsForBlog(config.store, blogId)
       mkdirSync(blogDir, { recursive: true })

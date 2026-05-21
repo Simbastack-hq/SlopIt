@@ -6,6 +6,7 @@ export interface ThemeAssets {
   readonly post: string
   readonly index: string
   readonly cssPath: string
+  readonly faviconPath: string
 }
 
 /**
@@ -48,8 +49,8 @@ export function render(template: string, vars: Record<string, string>): string {
 }
 
 /**
- * Load a theme's three asset files. Works in src/ during dev and in
- * dist/ after build — path is resolved relative to this module via
+ * Load a theme's asset files. Works in src/ during dev and in dist/
+ * after build — path is resolved relative to this module via
  * import.meta.url (same pattern as src/db/store.ts uses for migrations).
  */
 export function loadTheme(name: 'minimal'): ThemeAssets {
@@ -59,5 +60,6 @@ export function loadTheme(name: 'minimal'): ThemeAssets {
     post: readFileSync(join(themeDir, 'post.html'), 'utf8'),
     index: readFileSync(join(themeDir, 'index.html'), 'utf8'),
     cssPath: join(themeDir, 'style.css'),
+    faviconPath: join(themeDir, 'favicon.svg'),
   }
 }
