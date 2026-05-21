@@ -10,8 +10,10 @@
     <link rel="stylesheet" href="{{themeCssHref}}" />
   </head>
   <body>
-    {{{parentSiteLink}}}
-    <nav><a href="{{blogHomeHref}}">{{blogName}}</a></nav>
+    <header class="masthead">
+      <a class="masthead-name" href="{{blogHomeHref}}">{{blogName}}</a>
+      {{{parentSiteLink}}}
+    </header>
     <article>
       <header>
         <h1>{{postTitle}}</h1>
