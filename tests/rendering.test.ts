@@ -227,9 +227,9 @@ describe('renderParentSiteLink', () => {
     expect(renderParentSiteLink(undefined)).toBe('')
   })
 
-  it('emits a nav with a fixed "Main site" label when set', () => {
+  it('emits a link with a fixed "Main site" label when set', () => {
     const out = renderParentSiteLink('https://example.com')
-    expect(out).toContain('<nav class="parent-site">')
+    expect(out).toContain('<a class="parent-site"')
     expect(out).toContain('href="https://example.com"')
     expect(out).toContain('← Main site')
   })
@@ -492,6 +492,8 @@ describe('createRenderer — renderPost', () => {
     expect(html).toContain('href="../style.css"')
     expect(html).toContain('href="../favicon.svg"')
     expect(html).toContain('href=".."')
+    expect(html).toContain('<header class="masthead">')
+    expect(html).toContain('class="masthead-name"')
   })
 
   it('shows blog.id as blogName for unnamed blogs', () => {

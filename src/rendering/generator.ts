@@ -157,22 +157,22 @@ export function renderPoweredBy(): string {
 }
 
 /**
- * Build the optional "back to parent site" nav fragment. Empty string
- * when `parentSiteUrl` is null/undefined — the templates inline the
- * result via `{{{parentSiteLink}}}` so absent config renders no markup
- * at all (not an empty `<nav>`). The visible label is a fixed
- * "← Main site" rather than the parent hostname: most blogs sit under
- * the same brand as their parent (blog.acme.com → acme.com), so echoing
- * the hostname duplicates the blog's masthead name right above it. A
- * generic label reads cleanly in that common case and is no less clear
- * when parent and blog are unrelated. The href is escaped because it
- * lands inside an HTML attribute.
+ * Build the optional "back to parent site" link. Empty string when
+ * `parentSiteUrl` is null/undefined — the templates inline the result
+ * via `{{{parentSiteLink}}}` inside the masthead row, so absent config
+ * renders no markup at all. The visible label is a fixed "← Main site"
+ * rather than the parent hostname: most blogs sit under the same brand
+ * as their parent (blog.acme.com → acme.com), so echoing the hostname
+ * would duplicate the blog's masthead name beside it. A generic label
+ * reads cleanly in that common case and is no less clear when parent
+ * and blog are unrelated. The href is escaped because it lands inside
+ * an HTML attribute.
  *
  * @internal
  */
 export function renderParentSiteLink(parentSiteUrl: string | null | undefined): string {
   if (!parentSiteUrl) return ''
-  return `<nav class="parent-site"><a href="${escapeHtml(parentSiteUrl)}">← Main site</a></nav>`
+  return `<a class="parent-site" href="${escapeHtml(parentSiteUrl)}">← Main site</a>`
 }
 
 /**
