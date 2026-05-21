@@ -8,8 +8,10 @@
     <link rel="stylesheet" href="{{themeCssHref}}" />
   </head>
   <body>
-    {{{parentSiteLink}}}
-    <header><h1>{{blogName}}</h1></header>
+    <header class="masthead">
+      <h1 class="masthead-name">{{blogName}}</h1>
+      {{{parentSiteLink}}}
+    </header>
     <main>{{{postList}}}</main>
     <footer>{{{poweredBy}}}</footer>
   </body>
