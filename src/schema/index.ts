@@ -9,18 +9,22 @@ import { PostInputBaseSchema, slugTitleRefinement } from './post-input-base.js'
 // analytics configured". Strict outer object rejects unknown provider
 // keys at the boundary so a typo'd `googleanalytics` (lowercase) doesn't
 // silently no-op.
+//
+// No provider takes a caller-supplied script URL. The consumer hardcodes
+// the official cloud endpoint per provider (same as GA derives its URL
+// from `measurementId`). A free-form `scriptUrl` was an arbitrary-script
+// injection vector — a caller pointed it at an attacker-controlled file
+// and the renderer injected it as `<script src>`. Don't re-add it.
 export const BlogAnalyticsSchema = z
   .object({
     umami: z
       .object({
-        scriptUrl: z.url(),
         siteId: z.string().min(1).max(100),
       })
       .strict()
       .optional(),
     plausible: z
       .object({
-        scriptUrl: z.url(),
         domain: z.string().min(1).max(253),
       })
       .strict()
