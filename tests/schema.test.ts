@@ -49,14 +49,14 @@ describe('PostPatchSchema', () => {
 describe('BlogAnalyticsSchema', () => {
   it('accepts a Umami-only config', () => {
     const parsed = BlogAnalyticsSchema.parse({
-      umami: { scriptUrl: 'https://analytics.example.com/script.js', siteId: 'abc-123' },
+      umami: { siteId: 'abc-123' },
     })
     expect(parsed?.umami?.siteId).toBe('abc-123')
   })
 
   it('accepts a Plausible-only config', () => {
     const parsed = BlogAnalyticsSchema.parse({
-      plausible: { scriptUrl: 'https://plausible.io/js/script.js', domain: 'example.com' },
+      plausible: { domain: 'example.com' },
     })
     expect(parsed?.plausible?.domain).toBe('example.com')
   })
@@ -68,17 +68,15 @@ describe('BlogAnalyticsSchema', () => {
 
   it('accepts multiple providers in one config', () => {
     const parsed = BlogAnalyticsSchema.parse({
-      umami: { scriptUrl: 'https://u.example/s.js', siteId: 'u' },
-      plausible: { scriptUrl: 'https://p.example/s.js', domain: 'p.example' },
+      umami: { siteId: 'u' },
+      plausible: { domain: 'p.example' },
     })
     expect(parsed?.umami?.siteId).toBe('u')
     expect(parsed?.plausible?.domain).toBe('p.example')
   })
 
   it('rejects unknown provider keys (strict)', () => {
-    expect(() =>
-      BlogAnalyticsSchema.parse({ fathom: { scriptUrl: 'https://x/y.js', siteId: 'y' } }),
-    ).toThrow()
+    expect(() => BlogAnalyticsSchema.parse({ fathom: { siteId: 'y' } })).toThrow()
   })
 
   it('rejects malformed measurement id', () => {
@@ -87,9 +85,20 @@ describe('BlogAnalyticsSchema', () => {
     ).toThrow()
   })
 
-  it('rejects non-URL script URLs', () => {
+  // The legacy `scriptUrl` field was an arbitrary-script injection vector
+  // (a caller pointed it at an attacker-controlled file). It is removed;
+  // the strict provider objects must now reject it as an unknown key so a
+  // stale client or a hand-edited payload can't smuggle a script URL back in.
+  it('rejects the legacy scriptUrl field (strict)', () => {
     expect(() =>
-      BlogAnalyticsSchema.parse({ umami: { scriptUrl: 'not-a-url', siteId: 'x' } }),
+      BlogAnalyticsSchema.parse({
+        umami: { scriptUrl: 'https://evil.example/x.js', siteId: 'x' },
+      }),
+    ).toThrow()
+    expect(() =>
+      BlogAnalyticsSchema.parse({
+        plausible: { scriptUrl: 'https://evil.example/x.js', domain: 'd' },
+      }),
     ).toThrow()
   })
 
@@ -106,7 +115,7 @@ describe('BlogSchema with analytics', () => {
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
       parentSiteUrl: null,
-      analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
+      analytics: { umami: { siteId: 's' } },
     })
     expect(blog.analytics?.umami).toBeDefined()
   })
@@ -162,7 +171,7 @@ describe('BlogSchema with parentSiteUrl', () => {
 describe('BlogPatchSchema', () => {
   it('accepts an analytics patch', () => {
     const parsed = BlogPatchSchema.parse({
-      analytics: { plausible: { scriptUrl: 'https://p/s.js', domain: 'd' } },
+      analytics: { plausible: { domain: 'd' } },
     })
     expect(parsed.analytics?.plausible?.domain).toBe('d')
   })

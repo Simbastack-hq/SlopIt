@@ -456,7 +456,7 @@ describe('getBlog with analytics_json', () => {
     const { blog } = createBlog(store, { name: 'wian' })
     store.db
       .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
-      .run(JSON.stringify({ umami: { scriptUrl: 'https://u/s.js', siteId: 's-1' } }), blog.id)
+      .run(JSON.stringify({ umami: { siteId: 's-1' } }), blog.id)
     const fetched = getBlog(store, blog.id)
     expect(fetched.analytics?.umami?.siteId).toBe('s-1')
   })
@@ -473,9 +473,76 @@ describe('getBlog with analytics_json', () => {
     const { blog } = createBlog(store, { name: 'name-route' })
     store.db
       .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
-      .run(JSON.stringify({ plausible: { scriptUrl: 'https://p/s.js', domain: 'd' } }), blog.id)
+      .run(JSON.stringify({ plausible: { domain: 'd' } }), blog.id)
     const fetched = getBlogByName(store, 'name-route')
     expect(fetched?.analytics?.plausible?.domain).toBe('d')
+  })
+})
+
+// Migration 008 strips the removed `scriptUrl` field from any stored
+// analytics config. Without it, a legacy row { umami: { scriptUrl,
+// siteId } } fails the now-strict schema and getBlog throws on read.
+describe('migration 008 — analytics scriptUrl strip', () => {
+  let dir: string
+  let store: Store
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-migrate-008-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('strips scriptUrl from a legacy row, leaving a row that parses', () => {
+    const { blog } = createBlog(store, { name: 'legacy' })
+    // Seed a pre-migration row directly: both providers carry the old
+    // attacker-injectable scriptUrl alongside the still-valid identity.
+    store.db.prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?').run(
+      JSON.stringify({
+        umami: { scriptUrl: 'https://raw.githubusercontent.com/x/y/dark.js', siteId: 's' },
+        plausible: { scriptUrl: 'https://evil.example/x.js', domain: 'd' },
+      }),
+      blog.id,
+    )
+
+    // Re-run the migration SQL (idempotent) — simulates the runner
+    // processing a row that predates migration 008.
+    const sql = readFileSync(
+      new URL('../src/db/migrations/008_analytics_drop_script_url.sql', import.meta.url),
+      'utf8',
+    )
+    store.db.exec(sql)
+
+    const raw = store.db.prepare('SELECT analytics_json FROM blogs WHERE id = ?').get(blog.id) as {
+      analytics_json: string
+    }
+    expect(raw.analytics_json).not.toContain('scriptUrl')
+
+    // The stripped row is now valid: getBlog parses it without throwing
+    // and the provider identities survive.
+    const fetched = getBlog(store, blog.id)
+    expect(fetched.analytics?.umami?.siteId).toBe('s')
+    expect(fetched.analytics?.plausible?.domain).toBe('d')
+  })
+
+  it('is a no-op for rows with no analytics or no scriptUrl', () => {
+    const { blog: noAnalytics } = createBlog(store, { name: 'noan' })
+    const { blog: cleanRow } = createBlog(store, { name: 'clean' })
+    store.db
+      .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
+      .run(JSON.stringify({ umami: { siteId: 's' } }), cleanRow.id)
+
+    const sql = readFileSync(
+      new URL('../src/db/migrations/008_analytics_drop_script_url.sql', import.meta.url),
+      'utf8',
+    )
+    store.db.exec(sql)
+
+    expect(getBlog(store, noAnalytics.id).analytics).toBeUndefined()
+    expect(getBlog(store, cleanRow.id).analytics?.umami?.siteId).toBe('s')
   })
 })
 
@@ -500,7 +567,7 @@ describe('updateBlog', () => {
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
 
     const updated = updateBlog(store, renderer, blog.id, {
-      analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
+      analytics: { umami: { siteId: 's' } },
     })
 
     expect(updated.analytics?.umami?.siteId).toBe('s')
@@ -512,7 +579,7 @@ describe('updateBlog', () => {
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
     store.db
       .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
-      .run(JSON.stringify({ umami: { scriptUrl: 'https://u/s.js', siteId: 's' } }), blog.id)
+      .run(JSON.stringify({ umami: { siteId: 's' } }), blog.id)
 
     const updated = updateBlog(store, renderer, blog.id, { analytics: null })
     expect(updated.analytics).toBeUndefined()
@@ -533,7 +600,7 @@ describe('updateBlog', () => {
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
     store.db
       .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
-      .run(JSON.stringify({ umami: { scriptUrl: 'https://u/s.js', siteId: 's' } }), blog.id)
+      .run(JSON.stringify({ umami: { siteId: 's' } }), blog.id)
 
     // Zod's .optional() preserves explicit undefined on parsed output.
     // updateBlog must treat this case as no-change, NOT as "clear".
@@ -579,7 +646,7 @@ describe('updateBlog', () => {
     const beforeCount = calls.length
 
     updateBlog(store, renderer, blog.id, {
-      analytics: { plausible: { scriptUrl: 'https://p/s.js', domain: 'd' } },
+      analytics: { plausible: { domain: 'd' } },
     })
 
     // Re-render produced at least 2 HTML writes (one per published post).
@@ -608,13 +675,13 @@ describe('updateBlog', () => {
 
     // Set analytics for the first time → re-render fires
     updateBlog(store, renderer, blog.id, {
-      analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
+      analytics: { umami: { siteId: 's' } },
     })
     const afterSet = count
 
     // Re-apply the same analytics → no re-render
     updateBlog(store, renderer, blog.id, {
-      analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
+      analytics: { umami: { siteId: 's' } },
     })
     expect(count).toBe(afterSet)
   })
