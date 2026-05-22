@@ -44,6 +44,13 @@ describe('PostPatchSchema', () => {
     const patch: PostPatchInput = { title: 'x' }
     expect(patch.title).toBe('x')
   })
+
+  it('accepts an http(s) coverImage but rejects a dangerous scheme', () => {
+    expect(PostPatchSchema.parse({ coverImage: 'https://cdn.example/c.png' }).coverImage).toBe(
+      'https://cdn.example/c.png',
+    )
+    expect(() => PostPatchSchema.parse({ coverImage: 'javascript:alert(1)' })).toThrow()
+  })
 })
 
 describe('BlogAnalyticsSchema', () => {
@@ -166,6 +173,39 @@ describe('BlogSchema with parentSiteUrl', () => {
       }),
     ).toThrow()
   })
+
+  // parentSiteUrl is rendered into an `<a href>`. A `javascript:` (or
+  // data:/vbscript:) scheme would become a live stored-XSS link — the
+  // schema must reject every non-http(s) scheme, not just non-URLs.
+  it('rejects a parentSiteUrl with a dangerous scheme', () => {
+    for (const url of [
+      'javascript:alert(document.cookie)',
+      'JavaScript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'vbscript:msgbox(1)',
+    ]) {
+      expect(() =>
+        BlogSchema.parse({
+          id: 'b1',
+          name: 'x',
+          theme: 'minimal',
+          createdAt: '2026-05-06T00:00:00Z',
+          parentSiteUrl: url,
+        }),
+      ).toThrow()
+    }
+  })
+
+  it('accepts an http (not just https) parentSiteUrl', () => {
+    const blog = BlogSchema.parse({
+      id: 'b1',
+      name: 'x',
+      theme: 'minimal',
+      createdAt: '2026-05-06T00:00:00Z',
+      parentSiteUrl: 'http://example.com',
+    })
+    expect(blog.parentSiteUrl).toBe('http://example.com')
+  })
 })
 
 describe('BlogPatchSchema', () => {
@@ -193,6 +233,10 @@ describe('BlogPatchSchema', () => {
 
   it('rejects a non-URL parentSiteUrl in the patch', () => {
     expect(() => BlogPatchSchema.parse({ parentSiteUrl: 'not-a-url' })).toThrow()
+  })
+
+  it('rejects a dangerous-scheme parentSiteUrl in the patch', () => {
+    expect(() => BlogPatchSchema.parse({ parentSiteUrl: 'javascript:alert(1)' })).toThrow()
   })
 
   it('accepts an empty patch (no-op)', () => {

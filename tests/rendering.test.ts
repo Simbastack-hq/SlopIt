@@ -242,12 +242,37 @@ describe('renderParentSiteLink', () => {
   })
 
   it('escapes the href when the URL contains attribute metacharacters', () => {
-    // z.url() at the schema boundary blocks most of this in practice, but
+    // httpUrl at the schema boundary blocks most of this in practice, but
     // the renderer must still escape — we never trust input shape inside
     // the rendering layer.
     const out = renderParentSiteLink('https://example.com/?q="><script>')
     expect(out).not.toContain('"><script>')
     expect(out).toContain('&quot;')
+  })
+
+  it('drops a non-http(s) URL instead of emitting a live XSS link', () => {
+    // The schema (`httpUrl`) rejects these at the write boundary, but a
+    // row written before that constraint, or a corrupt write, must not
+    // render as a clickable `javascript:` anchor. Degrade to no link.
+    for (const url of [
+      'javascript:alert(document.cookie)',
+      'JavaScript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'vbscript:msgbox(1)',
+      'not-a-url',
+    ]) {
+      expect(renderParentSiteLink(url)).toBe('')
+    }
+  })
+
+  it('keeps every http(s) spelling the schema accepts (no silent drop)', () => {
+    // The render guard parses with the WHATWG URL constructor, same as
+    // the httpUrl schema — so a value that passed the write boundary,
+    // including authority-less forms like `http:example.com`, still
+    // renders rather than vanishing.
+    for (const url of ['http://example.com', 'HTTP://Example.com/x', 'http:example.com']) {
+      expect(renderParentSiteLink(url)).toContain('<a class="parent-site"')
+    }
   })
 })
 
