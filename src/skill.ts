@@ -70,8 +70,8 @@ Call \`GET ${baseUrl}/schema\` for the machine-readable JSONSchema of \`PostInpu
 
 The blog object additionally carries an optional \`analytics\` field — a per-blog configuration for third-party analytics. Set or change it via \`PATCH ${baseUrl}/blogs/:id\` (or the \`update_blog\` MCP tool). Three providers are supported and any combination is valid:
 
-- \`umami\` — \`{ scriptUrl, siteId }\`. Umami self-hosted or cloud.
-- \`plausible\` — \`{ scriptUrl, domain }\`. Plausible self-hosted or cloud.
+- \`umami\` — \`{ siteId }\`. Umami Cloud website id.
+- \`plausible\` — \`{ domain }\`. Plausible Cloud site domain.
 - \`googleAnalytics\` — \`{ measurementId }\`. GA4 measurement id (\`G-…\`).
 
 Analytics is opt-in. Blogs that have never been patched return \`analytics: undefined\` (the field is omitted from the response). To remove a previously-configured value send \`PATCH\` with body \`{ "analytics": null }\`.

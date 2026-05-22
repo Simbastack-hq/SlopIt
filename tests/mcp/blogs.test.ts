@@ -60,7 +60,7 @@ describe('MCP tool: update_blog', () => {
     const result = await callTool(client, 'update_blog', {
       blog_id: blogId,
       patch: {
-        analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 'sid' } },
+        analytics: { umami: { siteId: 'sid' } },
       },
     })
     expect(result.isError).toBeFalsy()
@@ -77,7 +77,7 @@ describe('MCP tool: update_blog', () => {
   it('clears analytics with explicit null', async () => {
     store.db
       .prepare('UPDATE blogs SET analytics_json = ? WHERE id = ?')
-      .run(JSON.stringify({ umami: { scriptUrl: 'https://u/s.js', siteId: 's' } }), blogId)
+      .run(JSON.stringify({ umami: { siteId: 's' } }), blogId)
 
     const result = await callTool(client, 'update_blog', {
       blog_id: blogId,

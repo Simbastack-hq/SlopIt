@@ -2,6 +2,15 @@ import { z } from 'zod'
 import { generateSlug } from '../ids.js'
 
 /**
+ * A URL constrained to the http/https schemes. Plain `z.url()` also
+ * accepts `javascript:`, `data:`, and `vbscript:` URLs — and when such a
+ * value is later rendered into an `<a href>` (e.g. parentSiteUrl in the
+ * masthead) it becomes a live stored-XSS link. Every caller-supplied URL
+ * field uses this instead of bare `z.url()`.
+ */
+export const httpUrl = z.url({ protocol: /^https?$/ })
+
+/**
  * Internal base schema shared across transports. Not re-exported from
  * src/schema/index.ts — consumers who need the shape use PostInputSchema.
  * Exists so REST's PostInputSchema and MCP's create_post tool schema
@@ -23,7 +32,7 @@ export const PostInputBaseSchema = z.object({
   seoTitle: z.string().max(200).optional(),
   seoDescription: z.string().max(300).optional(),
   author: z.string().max(100).optional(),
-  coverImage: z.url().optional(),
+  coverImage: httpUrl.optional(),
 })
 
 /**

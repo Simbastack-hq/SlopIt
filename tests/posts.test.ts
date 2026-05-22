@@ -68,6 +68,11 @@ describe('PostInputSchema', () => {
     ['slug with trailing hyphen', { title: 'T', body: 'x', slug: 'trailing-' }],
     ['invalid status', { title: 'T', body: 'x', status: 'archived' }],
     ['coverImage not a URL', { title: 'T', body: 'x', coverImage: 'not-a-url' }],
+    ['coverImage javascript: scheme', { title: 'T', body: 'x', coverImage: 'javascript:alert(1)' }],
+    [
+      'coverImage data: scheme',
+      { title: 'T', body: 'x', coverImage: 'data:text/html,<script>x</script>' },
+    ],
     ['seoTitle over 200 chars', { title: 'T', body: 'x', seoTitle: 'a'.repeat(201) }],
     ['seoDescription over 300 chars', { title: 'T', body: 'x', seoDescription: 'a'.repeat(301) }],
     ['author over 100 chars', { title: 'T', body: 'x', author: 'a'.repeat(101) }],

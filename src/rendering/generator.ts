@@ -170,8 +170,29 @@ export function renderPoweredBy(): string {
  *
  * @internal
  */
+/**
+ * True only for absolute http/https URLs. Parses with the WHATWG `URL`
+ * constructor and checks the normalized protocol — the same basis as the
+ * `httpUrl` schema, so a value that passes the write boundary is never
+ * silently dropped here for a spelling the schema would have accepted.
+ */
+function isHttpUrl(s: string): boolean {
+  let protocol: string
+  try {
+    protocol = new URL(s).protocol
+  } catch {
+    return false
+  }
+  return protocol === 'http:' || protocol === 'https:'
+}
+
 export function renderParentSiteLink(parentSiteUrl: string | null | undefined): string {
   if (!parentSiteUrl) return ''
+  // Defense in depth: the schema (`httpUrl`) rejects non-http(s) schemes
+  // at the write boundary, but a row written before that constraint — or
+  // a corrupt write — must not render as a live `javascript:` link. Drop
+  // anything that isn't http(s) rather than emit an XSS anchor.
+  if (!isHttpUrl(parentSiteUrl)) return ''
   return `<a class="parent-site" href="${escapeHtml(parentSiteUrl)}">← Main site</a>`
 }
 

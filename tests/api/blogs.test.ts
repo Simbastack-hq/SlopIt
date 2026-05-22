@@ -99,7 +99,7 @@ describe('PATCH /blogs/:id', () => {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        analytics: { umami: { scriptUrl: 'https://u/s.js', siteId: 's' } },
+        analytics: { umami: { siteId: 's' } },
       }),
     })
     expect(res.status).toBe(200)
@@ -118,7 +118,7 @@ describe('PATCH /blogs/:id', () => {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        analytics: { plausible: { scriptUrl: 'https://p/s.js', domain: 'd' } },
+        analytics: { plausible: { domain: 'd' } },
       }),
     })
     // Then clear
