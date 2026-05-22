@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { PostInputBaseSchema, slugTitleRefinement } from './post-input-base.js'
+import { httpUrl, PostInputBaseSchema, slugTitleRefinement } from './post-input-base.js'
 
 // NOT re-exported — stays internal. MCP imports from ./post-input-base.js directly.
 
@@ -49,8 +49,10 @@ export const BlogSchema = z.object({
   analytics: BlogAnalyticsSchema,
   // Optional link back to the blog author's main site (e.g. a custom-
   // domain blog at blog.example.com pointing to example.com). NULL =
-  // omit the link in rendered output.
-  parentSiteUrl: z.url().nullable(),
+  // omit the link in rendered output. httpUrl (not bare z.url()) — this
+  // is rendered into an `<a href>`, so a `javascript:` scheme would be a
+  // live XSS link.
+  parentSiteUrl: httpUrl.nullable(),
 })
 export type Blog = z.infer<typeof BlogSchema>
 
@@ -66,7 +68,7 @@ export type Blog = z.infer<typeof BlogSchema>
 export const BlogPatchSchema = z
   .object({
     analytics: BlogAnalyticsSchema.unwrap().nullable().optional(),
-    parentSiteUrl: z.url().nullable().optional(),
+    parentSiteUrl: httpUrl.nullable().optional(),
   })
   .strict()
 export type BlogPatchInput = z.input<typeof BlogPatchSchema>
@@ -93,7 +95,7 @@ export const PostPatchSchema = z
     seoTitle: z.string().max(200).optional(),
     seoDescription: z.string().max(300).optional(),
     author: z.string().max(100).optional(),
-    coverImage: z.url().optional(),
+    coverImage: httpUrl.optional(),
   })
   .strict()
 export type PostPatchInput = z.input<typeof PostPatchSchema>
