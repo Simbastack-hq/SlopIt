@@ -177,7 +177,7 @@ export function renderPoweredBy(): string {
  * Build the optional "back to parent site" link. Empty string when
  * `parentSiteUrl` is null/undefined — the templates inline the result
  * via `{{{parentSiteLink}}}` inside the masthead row, so absent config
- * renders no markup at all. The visible label is a fixed "← Main site"
+ * renders no markup at all. The visible label is a fixed "Main site →"
  * rather than the parent hostname: most blogs sit under the same brand
  * as their parent (blog.acme.com → acme.com), so echoing the hostname
  * would duplicate the blog's masthead name beside it. A generic label
@@ -210,7 +210,7 @@ export function renderParentSiteLink(parentSiteUrl: string | null | undefined): 
   // a corrupt write — must not render as a live `javascript:` link. Drop
   // anything that isn't http(s) rather than emit an XSS anchor.
   if (!isHttpUrl(parentSiteUrl)) return ''
-  return `<a class="parent-site" href="${escapeHtml(parentSiteUrl)}">← Main site</a>`
+  return `<a class="parent-site" href="${escapeHtml(parentSiteUrl)}">Main site &rarr;</a>`
 }
 
 /**
