@@ -107,8 +107,25 @@ export function formatDate(iso: string | null | undefined): string {
  *
  * @internal
  */
+/**
+ * Static fragment injected into `{{{postList}}}` when a blog has no
+ * published posts yet. A dead-empty index (masthead + footer and
+ * nothing in between) reads as broken; this gives the blank page a
+ * voice — a typed "waiting for the first post" line with a blinking
+ * caret, plus a nudge for the owner. Deliberately contains zero
+ * user-derived fields, so the raw injection stays safe without
+ * escaping. Styles live in each theme's style.css under `.empty-state`.
+ */
+const EMPTY_STATE_HTML =
+  '<section class="empty-state">' +
+  '<p class="empty-type-line" aria-hidden="true"><span class="empty-type">waiting for the first post</span></p>' +
+  '<h2>Nothing here yet.</h2>' +
+  '<p class="empty-sub">The blog is ready. The slop is not.</p>' +
+  '<p class="empty-owner"><strong>Your blog?</strong> Your AI has the key. Ask it to publish. The first post takes about a minute.</p>' +
+  '</section>'
+
 export function renderPostList(posts: Post[]): string {
-  if (posts.length === 0) return ''
+  if (posts.length === 0) return EMPTY_STATE_HTML
   return posts
     .map((p) => {
       const excerpt = p.excerpt ? `<p>${escapeHtml(p.excerpt)}</p>` : ''

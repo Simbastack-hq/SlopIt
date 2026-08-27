@@ -147,8 +147,12 @@ describe('formatDate', () => {
 })
 
 describe('renderPostList', () => {
-  it('returns an empty string when given no posts', () => {
-    expect(renderPostList([])).toBe('')
+  it('renders the empty state when given no posts', () => {
+    const out = renderPostList([])
+    expect(out).toContain('class="empty-state"')
+    expect(out).toContain('waiting for the first post')
+    expect(out).toContain('Nothing here yet.')
+    expect(out).not.toContain('post-item')
   })
 
   it('builds a post-item per post', () => {
