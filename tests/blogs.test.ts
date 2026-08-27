@@ -724,7 +724,7 @@ describe('updateBlog', () => {
     const indexHtml = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
     expect(indexHtml).toContain('class="parent-site"')
     expect(indexHtml).toContain('href="https://example.com"')
-    expect(indexHtml).toContain('← Main site')
+    expect(indexHtml).toContain('Main site &rarr;')
 
     const postHtml = readFileSync(join(outputDir, blog.id, 'aa', 'index.html'), 'utf8')
     expect(postHtml).toContain('class="parent-site"')

@@ -235,13 +235,13 @@ describe('renderParentSiteLink', () => {
     const out = renderParentSiteLink('https://example.com')
     expect(out).toContain('<a class="parent-site"')
     expect(out).toContain('href="https://example.com"')
-    expect(out).toContain('← Main site')
+    expect(out).toContain('Main site &rarr;')
   })
 
   it('uses the full URL verbatim as the href, label stays generic', () => {
     const out = renderParentSiteLink('https://www.example.com/about')
     expect(out).toContain('href="https://www.example.com/about"')
-    expect(out).toContain('← Main site')
+    expect(out).toContain('Main site &rarr;')
     expect(out).not.toContain('example.com<')
   })
 
