@@ -12,6 +12,16 @@ import type { McpServerConfig } from './server.js'
 import { wrapTool } from './wrap-tool.js'
 
 export function registerTools(server: McpServer, config: McpServerConfig): void {
+  const signupDescription = [
+    'Create a SlopIt blog and get an API key, live URL, and onboarding text.',
+    ...(config.requireEmail === true
+      ? ['Email is required and is the only API-key recovery channel.']
+      : []),
+    ...(config.termsUrl !== undefined
+      ? [`Creating a blog accepts the operator's terms: ${config.termsUrl}.`]
+      : []),
+  ].join(' ')
+
   // 1. signup — create a blog + API key in one call.
   // Schema: exactly CreateBlogInputSchema — idempotency_key is deliberately
   // absent so SDK validation rejects it at the schema layer (decision #22
@@ -19,8 +29,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'signup',
     {
-      description:
-        'Create a SlopIt blog and get an API key. Use this once, before anything else. Returns a live URL, the API key, and onboarding text to follow.',
+      description: signupDescription,
       inputSchema: CreateBlogInputSchema.strict(),
     },
     wrapTool<{ name?: string; theme?: 'minimal'; email?: string }>(
@@ -34,6 +43,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
           blog_url: result.blogUrl,
           api_key: result.apiKey,
           ...(config.mcpEndpoint !== undefined ? { mcp_endpoint: config.mcpEndpoint } : {}),
+          ...(config.termsUrl !== undefined ? { terms_url: config.termsUrl } : {}),
           onboarding_text: result.onboardingText,
           email_sent: result.emailSent,
         }

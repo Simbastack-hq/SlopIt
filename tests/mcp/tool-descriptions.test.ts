@@ -75,4 +75,34 @@ describe('MCP tool descriptions', () => {
     await client.close()
     await server.close()
   })
+
+  it('signup description conditionally states required email and terms acceptance', async () => {
+    const renderer = createRenderer({
+      store,
+      outputDir: join(dir, 'out'),
+      baseUrl: 'https://b.example',
+    })
+    const server = createMcpServer({
+      store,
+      rendererFor: () => renderer,
+      baseUrl: 'https://api.example',
+      requireEmail: true,
+      termsUrl: 'https://operator.example/legal',
+    })
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair()
+    await server.connect(serverT)
+    const client = new Client({ name: 'test', version: '0' }, {})
+    await client.connect(clientT)
+
+    const { tools } = await client.listTools()
+    const signup = tools.find((tool) => tool.name === 'signup')
+    expect(signup?.description).toContain('Email is required')
+    expect(signup?.description).toContain('only API-key recovery channel')
+    expect(signup?.description).toContain("accepts the operator's terms")
+    expect(signup?.description).toContain('https://operator.example/legal')
+    expect(signup?.description?.length).toBeLessThan(240)
+
+    await client.close()
+    await server.close()
+  })
 })

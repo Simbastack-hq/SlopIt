@@ -31,6 +31,8 @@ export interface SignupConfig {
   skillUrl?: string
   bugReportUrl?: string
   dashboardUrl?: string
+  requireEmail?: boolean
+  termsUrl?: string
   onSignup?: OnSignupHook
   /**
    * Optional policy hook for blog names. Runs AFTER core's structural
@@ -64,6 +66,17 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
   // Single Zod parse at the boundary. createBlog re-parses defensively;
   // that's cheap and not worth carving out.
   const input = CreateBlogInputSchema.parse(rawInput)
+
+  // Keep email optional in the shared schema: instance policy belongs
+  // here so REST and MCP receive this structured, actionable error
+  // instead of an SDK/Zod validation envelope.
+  if (config.requireEmail === true && input.email === undefined) {
+    throw new SlopItError(
+      'EMAIL_REQUIRED',
+      'This SlopIt instance requires an email at signup. Call signup again with an "email" field (the blog owner\'s email address) — it is the only recovery channel for the API key.',
+    )
+  }
+
   const email = input.email ?? null
 
   // Policy check (platform-supplied). Runs only when a name was actually

@@ -2,6 +2,7 @@ export type SlopItErrorCode =
   | 'BAD_REQUEST'
   | 'BLOG_NAME_CONFLICT'
   | 'BLOG_NAME_RESERVED'
+  | 'EMAIL_REQUIRED'
   | 'BLOG_NOT_FOUND'
   | 'POST_SLUG_CONFLICT'
   | 'POST_NOT_FOUND'

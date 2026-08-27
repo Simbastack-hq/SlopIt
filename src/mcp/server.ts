@@ -15,6 +15,8 @@ export interface McpServerConfig {
   skillUrl?: string
   bugReportUrl?: string
   dashboardUrl?: string
+  requireEmail?: boolean
+  termsUrl?: string
   /**
    * Per-file upload cap in bytes. Default 5_000_000 (5 MB) when undefined.
    * Function form lets platform pass plan-tier values per-blog.
