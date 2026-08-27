@@ -106,6 +106,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       blog_url: result.blogUrl,
       api_key: result.apiKey,
       ...(config.mcpEndpoint !== undefined ? { mcp_endpoint: config.mcpEndpoint } : {}),
+      ...(config.termsUrl !== undefined ? { terms_url: config.termsUrl } : {}),
       onboarding_text: result.onboardingText,
       email_sent: result.emailSent,
       _links: buildLinks(result.blog, config),
