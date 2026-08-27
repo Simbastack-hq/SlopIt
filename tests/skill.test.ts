@@ -135,6 +135,35 @@ describe('generateSkillFile', () => {
     // And the canonical clearing pattern must be documented.
     expect(text).toMatch(/analytics.{0,10}null/)
   })
+
+  it('keeps self-hosted signup guidance unchanged when policy args are absent', () => {
+    expect(text).toContain('all fields are optional')
+    expect(text).toContain('Optional. Pass it through')
+    expect(text).not.toContain('## Terms')
+    expect(text).not.toContain('EMAIL_REQUIRED')
+  })
+
+  it('documents required email, terms acceptance, abuse rules, and name release when configured', () => {
+    const hosted = generateSkillFile({
+      baseUrl: 'https://api.example',
+      requireEmail: true,
+      termsUrl: 'https://operator.example/legal',
+    })
+
+    expect(hosted).toContain('The `email` field is required; all other fields are optional')
+    expect(hosted).toContain('`email` — REQUIRED')
+    expect(hosted).toContain('EMAIL_REQUIRED')
+    expect(hosted).toContain('## Terms')
+    expect(hosted).toContain('https://operator.example/legal')
+    expect(hosted).toMatch(/creating a blog constitutes acceptance/i)
+    expect(hosted).toContain('Slop is welcome. Spam is not')
+    expect(hosted).toContain('coordinated link networks')
+    expect(hosted).toContain('keyword-spun SEO farms')
+    expect(hosted).toContain('KYC/financial-control-evasion content')
+    expect(hosted).toContain('sexually explicit content')
+    expect(hosted).toContain('illegal content')
+    expect(hosted).toContain('names released')
+  })
 })
 
 describe('SKILL.md endpoint parity with createApiRouter', () => {

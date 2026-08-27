@@ -17,6 +17,7 @@ describe('MCP tool: signup', () => {
   const boot = async (
     mcpEndpoint?: string,
     onSignup?: (params: { blog: { id: string }; apiKey: string; email: string }) => Promise<void>,
+    policy: { termsUrl?: string; requireEmail?: boolean } = {},
   ) => {
     const renderer = createRenderer({
       store,
@@ -29,6 +30,7 @@ describe('MCP tool: signup', () => {
       baseUrl: 'https://api.example',
       mcpEndpoint,
       onSignup,
+      ...policy,
     })
     const [clientT, serverT] = InMemoryTransport.createLinkedPair()
     await server.connect(serverT)
@@ -65,6 +67,7 @@ describe('MCP tool: signup', () => {
         onboarding_text: string
         email_sent: boolean
         mcp_endpoint?: string
+        terms_url?: string
       }
       isError?: boolean
     }
@@ -77,6 +80,7 @@ describe('MCP tool: signup', () => {
     )
     expect(result.structuredContent.email_sent).toBe(false)
     expect(result.structuredContent).not.toHaveProperty('mcp_endpoint')
+    expect(result.structuredContent).not.toHaveProperty('terms_url')
   })
 
   it('MCP signup fires onSignup hook (parity with REST) and reports email_sent: true on success', async () => {
@@ -124,6 +128,43 @@ describe('MCP tool: signup', () => {
       structuredContent: { mcp_endpoint?: string }
     }
     expect(result.structuredContent.mcp_endpoint).toBe('https://mcp.example/mcp')
+  })
+
+  it('includes terms_url when configured', async () => {
+    await boot(undefined, undefined, { termsUrl: 'https://operator.example/terms' })
+    const result = (await client.callTool({
+      name: 'signup',
+      arguments: {},
+    })) as unknown as {
+      structuredContent: { terms_url?: string }
+    }
+    expect(result.structuredContent.terms_url).toBe('https://operator.example/terms')
+  })
+
+  it('returns EMAIL_REQUIRED when configured and email is missing', async () => {
+    await boot(undefined, undefined, { requireEmail: true })
+    const result = (await client.callTool({
+      name: 'signup',
+      arguments: { name: 'missing-email' },
+    })) as unknown as {
+      isError: boolean
+      structuredContent: { error: { code: string; message: string } }
+    }
+
+    expect(result.isError).toBe(true)
+    expect(result.structuredContent.error.code).toBe('EMAIL_REQUIRED')
+    expect(result.structuredContent.error.message).toContain(
+      'Call signup again with an "email" field',
+    )
+  })
+
+  it('accepts required email when provided', async () => {
+    await boot(undefined, undefined, { requireEmail: true })
+    const result = await client.callTool({
+      name: 'signup',
+      arguments: { name: 'required-email', email: 'owner@example.com' },
+    })
+    expect(result.isError).toBeFalsy()
   })
 
   it('BLOG_NAME_CONFLICT envelope on duplicate name', async () => {

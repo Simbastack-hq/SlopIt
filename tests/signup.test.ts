@@ -14,6 +14,8 @@ describe('signupBlog orchestration', () => {
     overrides: {
       onSignup?: OnSignupHook
       nameValidator?: SignupConfig['nameValidator']
+      requireEmail?: SignupConfig['requireEmail']
+      termsUrl?: SignupConfig['termsUrl']
     } = {},
   ) => {
     const renderer = createRenderer({
@@ -49,6 +51,34 @@ describe('signupBlog orchestration', () => {
     expect(result.blogUrl).toBe('https://blog.example/')
     expect(result.emailSent).toBe(false)
     expect(onSignup).not.toHaveBeenCalled()
+  })
+
+  describe('email requirement', () => {
+    it('throws EMAIL_REQUIRED when the host requires email and signup omits it', async () => {
+      await expect(
+        signupBlog(makeConfig({ requireEmail: true }), { name: 'missing-email' }),
+      ).rejects.toMatchObject({
+        code: 'EMAIL_REQUIRED',
+        message: expect.stringContaining('Call signup again with an "email" field'),
+      })
+    })
+
+    it('keeps email optional when the host does not require it', async () => {
+      const result = await signupBlog(makeConfig(), { name: 'email-still-optional' })
+      expect(result.blog.name).toBe('email-still-optional')
+    })
+
+    it('allows signup when required email is provided', async () => {
+      const onSignup = vi.fn<OnSignupHook>(async () => {})
+      const result = await signupBlog(makeConfig({ requireEmail: true, onSignup }), {
+        name: 'required-email-present',
+        email: 'owner@example.com',
+      })
+
+      expect(result.blog.name).toBe('required-email-present')
+      expect(result.emailSent).toBe(true)
+      expect(onSignup).toHaveBeenCalledWith(expect.objectContaining({ email: 'owner@example.com' }))
+    })
   })
 
   it('fires onSignup with normalized email and reports emailSent: true on hook success', async () => {

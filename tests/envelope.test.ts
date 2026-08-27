@@ -35,6 +35,13 @@ describe('mapErrorToEnvelope', () => {
     expect(env.details).toEqual({ blog_id: 'x' })
   })
 
+  it('maps EMAIL_REQUIRED to HTTP 400', () => {
+    const env = mapErrorToEnvelope(new SlopItError('EMAIL_REQUIRED', 'email required'))
+    expect(env.code).toBe('EMAIL_REQUIRED')
+    expect(env.statusHint).toBe(400)
+    expect(env.message).toBe('email required')
+  })
+
   it('maps SlopItError with unknown code to 500 statusHint', () => {
     // cast through unknown — this tests the fallback, not public API
     const err = Object.assign(new SlopItError('BLOG_NOT_FOUND', 'x'), { code: 'WEIRD' as never })

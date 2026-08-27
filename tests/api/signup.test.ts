@@ -10,7 +10,13 @@ describe('POST /signup', () => {
   let dir: string
   let store: Store
 
-  const makeApp = (bugReportUrl?: string) => {
+  const makeApp = (
+    options: {
+      bugReportUrl?: string
+      termsUrl?: string
+      requireEmail?: boolean
+    } = {},
+  ) => {
     const renderer = createRenderer({
       store,
       outputDir: join(dir, 'out'),
@@ -20,10 +26,10 @@ describe('POST /signup', () => {
       store,
       rendererFor: () => renderer,
       baseUrl: 'https://api.example',
-      bugReportUrl,
       dashboardUrl: 'https://slopit.io/dashboard',
       docsUrl: 'https://slopit.io/agent-docs',
       skillUrl: 'https://slopit.io/slopit.SKILL.md',
+      ...options,
     })
   }
 
@@ -51,6 +57,7 @@ describe('POST /signup', () => {
       api_key: string
       onboarding_text: string
       email_sent: boolean
+      terms_url?: string
       _links: Record<string, string>
     }
     expect(body.blog_id).toMatch(/^[a-z0-9]+$/)
@@ -58,8 +65,48 @@ describe('POST /signup', () => {
     expect(body.api_key).toMatch(/^sk_slop_/)
     expect(body.onboarding_text).toContain('Published my first post to SlopIt: <url>')
     expect(body.email_sent).toBe(false) // no email was provided
+    expect(body).not.toHaveProperty('terms_url')
     expect(body._links.view).toBe('https://blog.example/')
     expect(body._links.bridge).toBe('https://api.example/bridge/report_bug')
+  })
+
+  it('includes terms_url when configured', async () => {
+    const app = makeApp({ termsUrl: 'https://operator.example/terms' })
+    const res = await app.request('/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'with-terms' }),
+    })
+
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { terms_url?: string }
+    expect(body.terms_url).toBe('https://operator.example/terms')
+  })
+
+  it('returns 400 EMAIL_REQUIRED when configured and email is missing', async () => {
+    const app = makeApp({ requireEmail: true })
+    const res = await app.request('/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'missing-email' }),
+    })
+
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as {
+      error: { code: string; message: string }
+    }
+    expect(body.error.code).toBe('EMAIL_REQUIRED')
+    expect(body.error.message).toContain('Call signup again with an "email" field')
+  })
+
+  it('accepts required email when provided', async () => {
+    const app = makeApp({ requireEmail: true })
+    const res = await app.request('/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'has-required-email', email: 'owner@example.com' }),
+    })
+    expect(res.status).toBe(200)
   })
 
   it('email_sent: true when an email is provided and onSignup resolves', async () => {
