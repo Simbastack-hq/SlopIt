@@ -131,25 +131,25 @@ function makePost(overrides: Partial<Post> = {}): Post {
 
 describe('formatDate', () => {
   it('formats an ISO string into a human-readable date (UTC-pinned)', () => {
-    expect(formatDate('2025-01-15T12:00:00Z')).toBe('January 15, 2025')
+    expect(formatDate('2025-01-15T12:00:00Z', 'en-US')).toBe('January 15, 2025')
   })
 
   it('is deterministic across host timezones (UTC, not local)', () => {
-    expect(formatDate('2025-01-01T00:00:00Z')).toBe('January 1, 2025')
+    expect(formatDate('2025-01-01T00:00:00Z', 'en-US')).toBe('January 1, 2025')
   })
 
   it('returns empty string for null', () => {
-    expect(formatDate(null)).toBe('')
+    expect(formatDate(null, 'en-US')).toBe('')
   })
 
   it('returns empty string for undefined', () => {
-    expect(formatDate(undefined)).toBe('')
+    expect(formatDate(undefined, 'en-US')).toBe('')
   })
 })
 
 describe('renderPostList', () => {
   it('renders the empty state when given no posts', () => {
-    const out = renderPostList([])
+    const out = renderPostList([], 'en-US')
     expect(out).toContain('class="empty-state"')
     expect(out).toContain('waiting for the first post')
     expect(out).toContain('Nothing here yet.')
@@ -157,10 +157,13 @@ describe('renderPostList', () => {
   })
 
   it('builds a post-item per post', () => {
-    const out = renderPostList([
-      makePost({ slug: 'first', title: 'First', publishedAt: '2025-01-01T00:00:00Z' }),
-      makePost({ slug: 'second', title: 'Second', publishedAt: '2025-02-01T00:00:00Z' }),
-    ])
+    const out = renderPostList(
+      [
+        makePost({ slug: 'first', title: 'First', publishedAt: '2025-01-01T00:00:00Z' }),
+        makePost({ slug: 'second', title: 'Second', publishedAt: '2025-02-01T00:00:00Z' }),
+      ],
+      'en-US',
+    )
     expect(out).toContain('<article class="post-item">')
     expect(out).toContain('href="first/"')
     expect(out).toContain('href="second/"')
@@ -174,7 +177,7 @@ describe('renderPostList', () => {
       title: '<script>alert(1)</script>',
       excerpt: '"onerror=alert(1)"',
     })
-    const out = renderPostList([evil])
+    const out = renderPostList([evil], 'en-US')
     expect(out).not.toContain('<script>alert(1)</script>')
     expect(out).toContain('&lt;script&gt;')
     expect(out).toContain('&quot;onerror')
@@ -182,7 +185,7 @@ describe('renderPostList', () => {
 
   it('omits excerpt paragraph when excerpt is absent', () => {
     const p = makePost({ excerpt: undefined })
-    const out = renderPostList([p])
+    const out = renderPostList([p], 'en-US')
     expect(out).not.toMatch(/<p[^>]*>undefined<\/p>/)
     const postItems = out.match(/<article class="post-item">[\s\S]*?<\/article>/g)
     expect(postItems).toHaveLength(1)
@@ -191,7 +194,7 @@ describe('renderPostList', () => {
 
   it('renders excerpt paragraph when present', () => {
     const p = makePost({ excerpt: 'A short summary.' })
-    const out = renderPostList([p])
+    const out = renderPostList([p], 'en-US')
     expect(out).toContain('<p>A short summary.</p>')
   })
 })
@@ -225,22 +228,32 @@ describe('renderPoweredBy', () => {
 
 describe('renderParentSiteLink', () => {
   it('returns empty string when parentSiteUrl is null', () => {
-    expect(renderParentSiteLink(null)).toBe('')
+    expect(renderParentSiteLink(null, 'Main site', 'ltr')).toBe('')
   })
 
   it('returns empty string when parentSiteUrl is undefined', () => {
-    expect(renderParentSiteLink(undefined)).toBe('')
+    expect(renderParentSiteLink(undefined, 'Main site', 'ltr')).toBe('')
   })
 
   it('emits a link with a fixed "Main site" label when set', () => {
-    const out = renderParentSiteLink('https://example.com')
+    const out = renderParentSiteLink('https://example.com', 'Main site', 'ltr')
     expect(out).toContain('<a class="parent-site"')
     expect(out).toContain('href="https://example.com"')
     expect(out).toContain('Main site &rarr;')
   })
 
+  it('takes the label from the caller and flips the arrow for rtl pages', () => {
+    expect(renderParentSiteLink('https://example.com', 'Основной сайт', 'ltr')).toContain(
+      '>Основной сайт &rarr;</a>',
+    )
+    expect(renderParentSiteLink('https://example.com', 'الموقع الرئيسي', 'rtl')).toContain(
+      '>الموقع الرئيسي &larr;</a>',
+    )
+    expect(renderParentSiteLink('https://example.com', '<b>x</b>', 'ltr')).toContain('&lt;b&gt;x')
+  })
+
   it('uses the full URL verbatim as the href, label stays generic', () => {
-    const out = renderParentSiteLink('https://www.example.com/about')
+    const out = renderParentSiteLink('https://www.example.com/about', 'Main site', 'ltr')
     expect(out).toContain('href="https://www.example.com/about"')
     expect(out).toContain('Main site &rarr;')
     expect(out).not.toContain('example.com<')
@@ -250,7 +263,7 @@ describe('renderParentSiteLink', () => {
     // httpUrl at the schema boundary blocks most of this in practice, but
     // the renderer must still escape — we never trust input shape inside
     // the rendering layer.
-    const out = renderParentSiteLink('https://example.com/?q="><script>')
+    const out = renderParentSiteLink('https://example.com/?q="><script>', 'Main site', 'ltr')
     expect(out).not.toContain('"><script>')
     expect(out).toContain('&quot;')
   })
@@ -266,7 +279,7 @@ describe('renderParentSiteLink', () => {
       'vbscript:msgbox(1)',
       'not-a-url',
     ]) {
-      expect(renderParentSiteLink(url)).toBe('')
+      expect(renderParentSiteLink(url, 'Main site', 'ltr')).toBe('')
     }
   })
 
@@ -276,7 +289,7 @@ describe('renderParentSiteLink', () => {
     // including authority-less forms like `http:example.com`, still
     // renders rather than vanishing.
     for (const url of ['http://example.com', 'HTTP://Example.com/x', 'http:example.com']) {
-      expect(renderParentSiteLink(url)).toContain('<a class="parent-site"')
+      expect(renderParentSiteLink(url, 'Main site', 'ltr')).toContain('<a class="parent-site"')
     }
   })
 })
@@ -986,7 +999,7 @@ describe('createRenderer — renderBlog', () => {
 
 describe('renderPostList — null publishedAt branch', () => {
   it('renders an empty datetime attribute when publishedAt is null', () => {
-    const out = renderPostList([makePost({ publishedAt: null })])
+    const out = renderPostList([makePost({ publishedAt: null })], 'en-US')
     expect(out).toContain('datetime=""')
   })
 })

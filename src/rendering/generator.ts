@@ -7,8 +7,16 @@ import type { Blog, Post } from '../schema/index.js'
 import { buildLlmsTxt, buildRssFeed, buildSitemap } from './feeds.js'
 import { buildFrontmatter } from './frontmatter.js'
 import { renderMarkdown } from './markdown.js'
-import { buildJsonLd, buildSeoMeta, normalizeBaseUrl, resolveDescription } from './seo.js'
+import {
+  buildJsonLd,
+  buildSeoMeta,
+  normalizeBaseUrl,
+  resolveDescription,
+  resolveLanguage,
+  textDirection,
+} from './seo.js'
 import { escapeHtml, loadTheme, render, type ThemeAssets } from './templates.js'
+import { stringsFor } from './strings.js'
 
 export interface RendererConfig {
   store: Store
@@ -97,7 +105,8 @@ export interface MutationRenderer extends Renderer {
 }
 
 /**
- * Format an ISO timestamp for human display. Returns '' on null/undefined.
+ * Format an ISO timestamp for human display in `locale` (a canonical
+ * BCP-47 tag — the page's language). Returns '' on null/undefined.
  *
  * Pinned to UTC so static output is deterministic regardless of host
  * timezone — '2025-01-01T00:00:00Z' renders as 'January 1, 2025'
@@ -105,10 +114,10 @@ export interface MutationRenderer extends Renderer {
  *
  * @internal
  */
-export function formatDate(iso: string | null | undefined): string {
+export function formatDate(iso: string | null | undefined, locale: string): string {
   if (!iso) return ''
   const d = new Date(iso)
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleDateString(locale, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -140,7 +149,7 @@ const EMPTY_STATE_HTML =
   '<p class="empty-owner"><strong>Your blog?</strong> Your AI has the key. Ask it to publish. The first post takes about a minute.</p>' +
   '</section>'
 
-export function renderPostList(posts: Post[]): string {
+export function renderPostList(posts: Post[], locale: string): string {
   if (posts.length === 0) return EMPTY_STATE_HTML
   return posts
     .map((p) => {
@@ -148,7 +157,7 @@ export function renderPostList(posts: Post[]): string {
       return (
         `<article class="post-item">` +
         `<h2><a href="${escapeHtml(p.slug)}/">${escapeHtml(p.title)}</a></h2>` +
-        `<time datetime="${escapeHtml(p.publishedAt ?? '')}">${escapeHtml(formatDate(p.publishedAt))}</time>` +
+        `<time datetime="${escapeHtml(p.publishedAt ?? '')}">${escapeHtml(formatDate(p.publishedAt, locale))}</time>` +
         excerpt +
         `</article>`
       )
@@ -196,7 +205,7 @@ export function renderTagList(tags: string[]): string {
  *
  * @internal
  */
-export function renderMoreFrom(self: Post, published: Post[]): string {
+export function renderMoreFrom(self: Post, published: Post[], heading: string): string {
   const others = published.filter((p) => p.id !== self.id).slice(0, 3)
   if (others.length === 0) return ''
   const items = others
@@ -208,7 +217,7 @@ export function renderMoreFrom(self: Post, published: Post[]): string {
     .join('')
   return (
     `<nav class="more-from" aria-labelledby="more-from-heading">` +
-    `<h2 id="more-from-heading">More from this blog</h2>` +
+    `<h2 id="more-from-heading">${escapeHtml(heading)}</h2>` +
     `<ul>${items}</ul>` +
     `</nav>`
   )
@@ -254,14 +263,20 @@ function isHttpUrl(s: string): boolean {
   return protocol === 'http:' || protocol === 'https:'
 }
 
-export function renderParentSiteLink(parentSiteUrl: string | null | undefined): string {
+export function renderParentSiteLink(
+  parentSiteUrl: string | null | undefined,
+  label: string,
+  dir: 'ltr' | 'rtl',
+): string {
   if (!parentSiteUrl) return ''
   // Defense in depth: the schema (`httpUrl`) rejects non-http(s) schemes
   // at the write boundary, but a row written before that constraint — or
   // a corrupt write — must not render as a live `javascript:` link. Drop
   // anything that isn't http(s) rather than emit an XSS anchor.
   if (!isHttpUrl(parentSiteUrl)) return ''
-  return `<a class="parent-site" href="${escapeHtml(parentSiteUrl)}">Main site &rarr;</a>`
+  // The arrow points "outward" in the page's reading direction.
+  const arrow = dir === 'rtl' ? '&larr;' : '&rarr;'
+  return `<a class="parent-site" href="${escapeHtml(parentSiteUrl)}">${escapeHtml(label)} ${arrow}</a>`
 }
 
 /**
@@ -331,6 +346,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
   // Emit the `<slug>.md` source file for a published post: YAML frontmatter
   // (8 fixed keys, blanks omitted) + the author's raw markdown body.
   function renderPostMarkdown(blogId: string, post: Post): void {
+    const blog = getBlogInternal(config.store, blogId)
     const blogDir = blogOutputDir(blogId)
     mkdirSync(blogDir, { recursive: true })
     const canonical = canonicalFor(post.slug)
@@ -338,6 +354,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     const frontmatter = buildFrontmatter({
       title: post.title,
       slug: post.slug,
+      language: resolveLanguage(post, blog),
       date: post.publishedAt ?? null,
       updated: sameDay,
       author: post.author ?? null,
@@ -428,11 +445,19 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
     const canonicalUrl = canonicalFor(post.slug)
 
+    // The page is in the post's effective language: its own override,
+    // else the blog default. Dates, chrome strings, and direction follow.
+    const lang = resolveLanguage(post, blog)
+    const dir = textDirection(lang)
+    const strings = stringsFor(lang)
+
     const html = render(theme.post, {
+      lang,
+      dir,
       blogName: displayName(blog),
       postTitle: post.title,
       postPublishedAt: post.publishedAt ?? '',
-      postPublishedAtDisplay: formatDate(post.publishedAt),
+      postPublishedAtDisplay: formatDate(post.publishedAt, lang),
       themeCssHref: '../style.css',
       blogHomeHref: '..',
       canonicalUrl,
@@ -441,9 +466,9 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       coverImage: renderCoverImage(post.coverImage, post.title),
       postBody: renderMarkdown(post.body),
       tagList: renderTagList(post.tags),
-      moreFrom: renderMoreFrom(post, published),
+      moreFrom: renderMoreFrom(post, published, strings.moreFrom),
       poweredBy: renderPoweredBy(),
-      parentSiteLink: renderParentSiteLink(blog.parentSiteUrl),
+      parentSiteLink: renderParentSiteLink(blog.parentSiteUrl, strings.mainSite, dir),
     })
 
     writeFileAtomic(join(postDir, 'index.html'), applyPostprocess(html, blog.id))
@@ -491,12 +516,18 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const posts = listPublishedPostsForBlog(config.store, blogId)
       mkdirSync(blogDir, { recursive: true })
 
+      // The index is in the blog's default language.
+      const dir = textDirection(blog.language)
+      const strings = stringsFor(blog.language)
+
       const html = render(theme.index, {
+        lang: blog.language,
+        dir,
         blogName: displayName(blog),
         themeCssHref: 'style.css',
-        postList: renderPostList(posts),
+        postList: renderPostList(posts, blog.language),
         poweredBy: renderPoweredBy(),
-        parentSiteLink: renderParentSiteLink(blog.parentSiteUrl),
+        parentSiteLink: renderParentSiteLink(blog.parentSiteUrl, strings.mainSite, dir),
       })
 
       writeFileAtomic(join(blogDir, 'index.html'), applyPostprocess(html, blogId))

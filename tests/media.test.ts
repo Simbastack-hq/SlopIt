@@ -30,6 +30,7 @@ function makeFixtures() {
     theme: 'minimal',
     createdAt: '',
     parentSiteUrl: null,
+    language: 'en',
   }
   const renderer = createRenderer({
     store,
@@ -120,6 +121,7 @@ describe('uploadMedia', () => {
       theme: 'minimal',
       createdAt: '',
       parentSiteUrl: null,
+      language: 'en',
     }
     const renderer = createRenderer({
       store,

@@ -46,18 +46,18 @@ describe('renderMoreFrom', () => {
   )
 
   it('returns empty string when the post is the only published post', () => {
-    expect(renderMoreFrom(self, [self])).toBe('')
-    expect(renderMoreFrom(self, [])).toBe('')
+    expect(renderMoreFrom(self, [self], 'More from this blog')).toBe('')
+    expect(renderMoreFrom(self, [], 'More from this blog')).toBe('')
   })
 
   it('excludes the post itself and keeps the caller order (newest first)', () => {
-    const html = renderMoreFrom(self, [others[0], self, others[1]])
+    const html = renderMoreFrom(self, [others[0], self, others[1]], 'More from this blog')
     expect(html).not.toContain('post-self')
     expect(html.indexOf('post-a')).toBeLessThan(html.indexOf('post-b'))
   })
 
   it('caps at three items', () => {
-    const html = renderMoreFrom(self, [self, ...others])
+    const html = renderMoreFrom(self, [self, ...others], 'More from this blog')
     expect(html).toContain('post-a')
     expect(html).toContain('post-b')
     expect(html).toContain('post-c')
@@ -65,37 +65,42 @@ describe('renderMoreFrom', () => {
   })
 
   it('links relatively (../<slug>/), matching blogHomeHref: ".."', () => {
-    const html = renderMoreFrom(self, [self, others[0]])
+    const html = renderMoreFrom(self, [self, others[0]], 'More from this blog')
     expect(html).toContain('<a href="../post-a/">Post A</a>')
   })
 
   it('shows the resolved description and omits the <p> when there is none', () => {
-    const withDesc = renderMoreFrom(self, [self, others[0]])
+    const withDesc = renderMoreFrom(self, [self, others[0]], 'More from this blog')
     expect(withDesc).toContain('<p>About a</p>')
-    const noDesc = renderMoreFrom(self, [
+    const noDesc = renderMoreFrom(
       self,
-      makePost({ id: 'x', slug: 'x', title: 'X', body: '', excerpt: '' }),
-    ])
+      [self, makePost({ id: 'x', slug: 'x', title: 'X', body: '', excerpt: '' })],
+      'More from this blog',
+    )
     expect(noDesc).toContain('<a href="../x/">X</a></li>')
     expect(noDesc).not.toContain('<p>')
   })
 
   it('uses the fixed heading and labels the nav by it', () => {
-    const html = renderMoreFrom(self, [self, others[0]])
+    const html = renderMoreFrom(self, [self, others[0]], 'More from this blog')
     expect(html).toContain('<nav class="more-from" aria-labelledby="more-from-heading">')
     expect(html).toContain('<h2 id="more-from-heading">More from this blog</h2>')
   })
 
   it('escapes title, description, and slug', () => {
-    const html = renderMoreFrom(self, [
+    const html = renderMoreFrom(
       self,
-      makePost({
-        id: 'evil',
-        slug: 'a"b',
-        title: '<script>x</script>',
-        excerpt: 'Tom & "Jerry"',
-      }),
-    ])
+      [
+        self,
+        makePost({
+          id: 'evil',
+          slug: 'a"b',
+          title: '<script>x</script>',
+          excerpt: 'Tom & "Jerry"',
+        }),
+      ],
+      'More from this blog',
+    )
     expect(html).not.toContain('<script>')
     expect(html).toContain('&lt;script&gt;x&lt;/script&gt;')
     expect(html).toContain('Tom &amp; &quot;Jerry&quot;')

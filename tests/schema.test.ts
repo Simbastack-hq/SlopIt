@@ -121,6 +121,7 @@ describe('BlogSchema with analytics', () => {
       name: 'x',
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
+      language: 'en',
       parentSiteUrl: null,
       analytics: { umami: { siteId: 's' } },
     })
@@ -133,6 +134,7 @@ describe('BlogSchema with analytics', () => {
       name: 'x',
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
+      language: 'en',
       parentSiteUrl: null,
     })
     expect(blog.analytics).toBeUndefined()
@@ -146,6 +148,7 @@ describe('BlogSchema with parentSiteUrl', () => {
       name: 'x',
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
+      language: 'en',
       parentSiteUrl: null,
     })
     expect(blog.parentSiteUrl).toBeNull()
@@ -157,6 +160,7 @@ describe('BlogSchema with parentSiteUrl', () => {
       name: 'x',
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
+      language: 'en',
       parentSiteUrl: 'https://example.com',
     })
     expect(blog.parentSiteUrl).toBe('https://example.com')
@@ -169,6 +173,7 @@ describe('BlogSchema with parentSiteUrl', () => {
         name: 'x',
         theme: 'minimal',
         createdAt: '2026-05-06T00:00:00Z',
+        language: 'en',
         parentSiteUrl: 'not-a-url',
       }),
     ).toThrow()
@@ -190,6 +195,7 @@ describe('BlogSchema with parentSiteUrl', () => {
           name: 'x',
           theme: 'minimal',
           createdAt: '2026-05-06T00:00:00Z',
+          language: 'en',
           parentSiteUrl: url,
         }),
       ).toThrow()
@@ -202,6 +208,7 @@ describe('BlogSchema with parentSiteUrl', () => {
       name: 'x',
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
+      language: 'en',
       parentSiteUrl: 'http://example.com',
     })
     expect(blog.parentSiteUrl).toBe('http://example.com')

@@ -112,14 +112,14 @@ article a:hover {
 }
 article ul,
 article ol {
-  padding-left: 24px;
+  padding-inline-start: 24px;
 }
 article li {
   margin: 8px 0;
 }
 article blockquote {
-  border-left: 4px solid var(--accent);
-  padding-left: 16px;
+  border-inline-start: 4px solid var(--accent);
+  padding-inline-start: 16px;
   color: var(--text-muted);
   margin: 24px 0;
 }
@@ -163,7 +163,7 @@ article img {
   font-size: 14px;
   padding: 4px 8px;
   border-radius: 4px;
-  margin-right: 4px;
+  margin-inline-end: 4px;
 }
 
 /* "More from this blog" — three newest sibling posts at the end of a post.
