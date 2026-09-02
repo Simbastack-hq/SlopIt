@@ -89,7 +89,7 @@ For a post HTML page like \`https://example-blog.example.com/some-post/\`, the r
 
 ## Schema
 
-Call \`GET ${baseUrl}/schema\` for the machine-readable JSONSchema of \`PostInput\`. Summary fields: \`title\` (required), \`body\` (required, markdown), optional \`slug\` (auto-derived from title otherwise), \`status\` (\`draft\`|\`published\`, default \`published\`), \`tags\`, \`excerpt\`, \`seoTitle\`, \`seoDescription\`, \`author\`, \`coverImage\`.
+Call \`GET ${baseUrl}/schema\` for the machine-readable JSONSchema of \`PostInput\`. Summary fields: \`title\` (required), \`body\` (required, markdown), optional \`slug\` (auto-derived from title otherwise), \`status\` (\`draft\`|\`published\`, default \`published\`), \`tags\`, \`excerpt\`, \`seoTitle\`, \`seoDescription\`, \`author\`, \`coverImage\`, \`language\`.
 
 The blog object additionally carries an optional \`analytics\` field — a per-blog configuration for third-party analytics. Set or change it via \`PATCH ${baseUrl}/blogs/:id\` (or the \`update_blog\` MCP tool). Three providers are supported and any combination is valid:
 
@@ -98,6 +98,10 @@ The blog object additionally carries an optional \`analytics\` field — a per-b
 - \`googleAnalytics\` — \`{ measurementId }\`. GA4 measurement id (\`G-…\`).
 
 Analytics is opt-in. Blogs that have never been patched return \`analytics: undefined\` (the field is omitted from the response). To remove a previously-configured value send \`PATCH\` with body \`{ "analytics": null }\`.
+
+## Language
+
+Every blog has a default \`language\` (a BCP-47 tag such as \`en\`, \`ru\`, \`pt-BR\`; default \`en\`). Set it at signup (\`{ "name": "...", "language": "ru" }\`) or later via \`PATCH ${baseUrl}/blogs/:id\` / \`update_blog\`. A post may override it with its own \`language\`; send \`null\` in a post patch to clear the override and inherit the blog's again. The effective language drives \`<html lang>\` and text direction, date formatting, \`og:locale\`, JSON-LD \`inLanguage\`, the \`language\` key in \`/<slug>.md\` frontmatter, and \`<language>\` in \`/feed.xml\`. Tags are validated against the server's locale data and canonicalised (\`EN-us\` → \`en-US\`); an unknown tag is rejected with ZOD_VALIDATION.
 
 ## Error codes
 
@@ -145,7 +149,7 @@ SlopIt also speaks MCP. Connect an MCP-capable agent to the server and call thes
 | create_post | bearer | yes | Publish a post. |
 | update_post | bearer | yes | Edit an existing post. |
 | delete_post | bearer | yes | Remove a post permanently. |
-| update_blog | bearer | yes | Edit blog metadata (currently the \`analytics\` field). |
+| update_blog | bearer | yes | Edit blog metadata (\`analytics\`, \`language\`). |
 | get_blog | bearer | — | Get blog metadata. |
 | get_post | bearer | — | Get a single post by slug. |
 | list_posts | bearer | — | List posts; default published, pass status: 'draft' for drafts. |

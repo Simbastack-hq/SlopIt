@@ -11,6 +11,52 @@ import { generateSlug } from '../ids.js'
 export const httpUrl = z.url({ protocol: /^https?$/ })
 
 /**
+ * True when `tag` is a well-formed BCP-47 tag that the runtime has locale
+ * data for, with no extension subtags. Uses the standard library only:
+ *   - `Intl.getCanonicalLocales` throws RangeError on malformed input
+ *     ("Russian", "not a tag", "");
+ *   - `baseName !== canonical` catches `-u-`/`-x-`/`-t-` extensions
+ *     (`ru-u-ca-islamic`) that would otherwise leak into `<html lang>`;
+ *   - `Intl.DateTimeFormat.supportedLocalesOf` rejects tags ICU has no
+ *     data for (`xx`), so a page never ends up tagged with a language we
+ *     cannot format dates in. Node's official builds ship full ICU.
+ */
+export function isSupportedLanguage(tag: string): boolean {
+  let canonical: string | undefined
+  try {
+    canonical = Intl.getCanonicalLocales(tag)[0]
+  } catch {
+    return false
+  }
+  if (canonical === undefined) return false
+  if (new Intl.Locale(canonical).baseName !== canonical) return false
+  return Intl.DateTimeFormat.supportedLocalesOf(canonical).length > 0
+}
+
+/** Canonical form of an already-validated tag: `EN-us` → `en-US`. */
+export function canonicalLanguage(tag: string): string {
+  return Intl.getCanonicalLocales(tag)[0]
+}
+
+/**
+ * A BCP-47 language tag with locale data, stored canonicalised. Built
+ * with `refine` + `overwrite` rather than `transform` so `z.toJSONSchema`
+ * (the public `/schema` endpoint) can still represent it. The description
+ * flows into `/schema` and every MCP tool schema, so agents see the
+ * examples where they read the contract.
+ */
+export const languageTag = z
+  .string()
+  .max(35)
+  .refine(isSupportedLanguage, {
+    message: 'Expected a BCP-47 language tag with locale data, e.g. "en", "ru", "pt-BR"',
+    // Stop here on failure: `overwrite` below would otherwise still run
+    // and throw RangeError on a malformed tag instead of reporting an issue.
+    abort: true,
+  })
+  .overwrite(canonicalLanguage)
+
+/**
  * Internal base schema shared across transports. Not re-exported from
  * src/schema/index.ts — consumers who need the shape use PostInputSchema.
  * Exists so REST's PostInputSchema and MCP's create_post tool schema
@@ -33,6 +79,11 @@ export const PostInputBaseSchema = z.object({
   seoDescription: z.string().max(300).optional(),
   author: z.string().max(100).optional(),
   coverImage: httpUrl.optional(),
+  language: languageTag
+    .describe(
+      'Language of this post as a BCP-47 tag, e.g. "en", "ru", "pt-BR". Omit to inherit the blog\'s language.',
+    )
+    .optional(),
 })
 
 /**

@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { httpUrl, PostInputBaseSchema, slugTitleRefinement } from './post-input-base.js'
+import {
+  httpUrl,
+  languageTag,
+  PostInputBaseSchema,
+  slugTitleRefinement,
+} from './post-input-base.js'
 
 // NOT re-exported — stays internal. MCP imports from ./post-input-base.js directly.
 
@@ -57,6 +62,10 @@ export const BlogSchema = z.object({
   // is rendered into an `<a href>`, so a `javascript:` scheme would be a
   // live XSS link.
   parentSiteUrl: httpUrl.nullable(),
+  // Default language for every page and feed on the blog (BCP-47,
+  // canonical). Always present — the column is NOT NULL DEFAULT 'en'.
+  // Posts may override it individually via `Post.language`.
+  language: z.string(),
 })
 export type Blog = z.infer<typeof BlogSchema>
 
@@ -73,6 +82,10 @@ export const BlogPatchSchema = z
   .object({
     analytics: BlogAnalyticsSchema.unwrap().nullable().optional(),
     parentSiteUrl: httpUrl.nullable().optional(),
+    // Not nullable: a blog always has a language. "Reset" is `'en'`.
+    language: languageTag
+      .describe('Default language for the blog as a BCP-47 tag, e.g. "en", "ru", "pt-BR".')
+      .optional(),
   })
   .strict()
 export type BlogPatchInput = z.input<typeof BlogPatchSchema>
@@ -100,6 +113,14 @@ export const PostPatchSchema = z
     seoDescription: z.string().max(300).optional(),
     author: z.string().max(100).optional(),
     coverImage: httpUrl.optional(),
+    // `null` clears a per-post override so the post follows the blog's
+    // language again; omitting the key leaves it unchanged.
+    language: languageTag
+      .describe(
+        'Language of this post as a BCP-47 tag, e.g. "en", "ru", "pt-BR". Send null to clear the override and inherit the blog\'s language.',
+      )
+      .nullable()
+      .optional(),
   })
   .strict()
 export type PostPatchInput = z.input<typeof PostPatchSchema>
@@ -140,5 +161,10 @@ export const CreateBlogInputSchema = z.object({
     }, z.email().optional())
     .optional(),
   theme: z.enum(['minimal']).default('minimal'),
+  language: languageTag
+    .describe(
+      'Default language for the blog as a BCP-47 tag, e.g. "en", "ru", "pt-BR". Defaults to "en". Individual posts may override it.',
+    )
+    .default('en'),
 })
 export type CreateBlogInput = z.input<typeof CreateBlogInputSchema>

@@ -20,6 +20,7 @@
 export interface FrontmatterFields {
   title: string
   slug: string
+  language?: string | null
   date?: string | null
   updated?: string | null
   author?: string | null
@@ -28,7 +29,16 @@ export interface FrontmatterFields {
   tags?: readonly string[]
 }
 
-const KEYS = ['title', 'slug', 'date', 'updated', 'author', 'description', 'canonical'] as const
+const KEYS = [
+  'title',
+  'slug',
+  'language',
+  'date',
+  'updated',
+  'author',
+  'description',
+  'canonical',
+] as const
 
 // YAML 1.2 double-quoted scalars are a superset of JSON string literals
 // for the JSON-compatible escape set. JSON.stringify handles `"`, `\`,

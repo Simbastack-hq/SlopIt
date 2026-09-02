@@ -98,6 +98,41 @@ export function normalizeBaseUrl(s: string): string {
   return s.endsWith('/') ? s.slice(0, -1) : s
 }
 
+/**
+ * Effective language of a post: its own override, else the blog default.
+ * Stored values are canonical and non-blank (schema boundary), so no
+ * blank-handling is needed. Single source of truth for `<html lang>`,
+ * dates, `og:locale`, JSON-LD `inLanguage`, and `.md` frontmatter.
+ */
+export function resolveLanguage(
+  post: Pick<Post, 'language'>,
+  blog: Pick<Blog, 'language'>,
+): string {
+  return post.language ?? blog.language
+}
+
+// Scripts written right-to-left. Direction is decided by the *script*
+// the tag maximises to (CLDR likely-subtags), not the language: `ar-Latn`
+// is ltr, `az-Arab` is rtl. `Intl.Locale#getTextInfo()` would be the
+// direct answer but does not exist on Node 20, which production runs.
+const RTL_SCRIPTS = new Set(['Arab', 'Hebr', 'Thaa', 'Syrc', 'Nkoo', 'Adlm'])
+
+/** `dir` attribute value for a language tag. */
+export function textDirection(tag: string): 'ltr' | 'rtl' {
+  const script = new Intl.Locale(tag).maximize().script
+  return script !== undefined && RTL_SCRIPTS.has(script) ? 'rtl' : 'ltr'
+}
+
+/**
+ * Open Graph `og:locale` value: `language_TERRITORY` per the OG spec.
+ * A bare `ru` maximises to `ru-Cyrl-RU` → `ru_RU`; `zh-Hant-TW` → `zh_TW`.
+ * No hand-written territory table, no hyphen→underscore guesswork.
+ */
+export function ogLocale(tag: string): string {
+  const m = new Intl.Locale(tag).maximize()
+  return m.region !== undefined ? `${m.language}_${m.region}` : m.language
+}
+
 export interface SeoInput {
   post: Post
   blog: Blog
@@ -114,7 +149,7 @@ export interface SeoInput {
  * user-controlled string (title, author, tags, etc.).
  */
 export function buildJsonLd(input: SeoInput): string {
-  const { post, canonicalUrl } = input
+  const { post, blog, canonicalUrl } = input
   // Description follows the documented fallback chain via resolveDescription.
   // Phase 2 reuses the same helper so .md/RSS/llms.txt produce the same
   // description for the same post.
@@ -126,6 +161,7 @@ export function buildJsonLd(input: SeoInput): string {
     headline: resolveTitle(post),
     datePublished: post.publishedAt ?? post.createdAt,
     mainEntityOfPage: canonicalUrl,
+    inLanguage: resolveLanguage(post, blog),
   }
 
   if (post.updatedAt && post.publishedAt && post.updatedAt !== post.publishedAt) {
@@ -186,6 +222,9 @@ export function buildSeoMeta(input: SeoInput): string {
   lines.push(`<meta property="og:type" content="article">`)
   lines.push(`<meta property="og:url" content="${escapeHtml(canonicalUrl)}">`)
   lines.push(`<meta property="og:site_name" content="${escapeHtml(siteName)}">`)
+  lines.push(
+    `<meta property="og:locale" content="${escapeHtml(ogLocale(resolveLanguage(post, blog)))}">`,
+  )
   if (post.coverImage) {
     lines.push(`<meta property="og:image" content="${escapeHtml(post.coverImage)}">`)
     lines.push(`<meta property="og:image:alt" content="${escapeHtml(title)}">`)

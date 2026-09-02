@@ -9,6 +9,7 @@ const blog: Blog = {
   theme: 'minimal',
   createdAt: '2026-04-23T00:00:00Z',
   parentSiteUrl: null,
+  language: 'en',
 }
 
 const API = 'https://slopit.io/api'

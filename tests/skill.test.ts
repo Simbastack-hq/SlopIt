@@ -136,6 +136,14 @@ describe('generateSkillFile', () => {
     expect(text).toMatch(/analytics.{0,10}null/)
   })
 
+  it('documents language on blog and post, with the null-clears rule', () => {
+    expect(text).toContain('## Language')
+    expect(text).toMatch(/BCP-47/)
+    expect(text).toMatch(/pt-BR/)
+    expect(text).toMatch(/null/)
+    expect(text).toContain('`language`')
+  })
+
   it('keeps self-hosted signup guidance unchanged when policy args are absent', () => {
     expect(text).toContain('all fields are optional')
     expect(text).toContain('Optional. Pass it through')

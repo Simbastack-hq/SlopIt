@@ -218,6 +218,7 @@ const minimalBlog: Blog = {
   theme: 'minimal',
   createdAt: '2026-04-01T00:00:00Z',
   parentSiteUrl: null,
+  language: 'en',
 }
 
 const minimalPost: Post = {

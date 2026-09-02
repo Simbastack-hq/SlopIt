@@ -71,6 +71,10 @@ Variables available (exact list will stabilize as the renderer lands):
 
 CSS is a sibling file loaded via `<link>`. No `<style>` blocks, no Tailwind build. Plain CSS.
 
+## Language and chrome strings
+
+Every page carries `<html lang="…" dir="…">` from the post's effective language (its own `language`, else the blog's). Dates are formatted by ICU for that language. The theme's own two labels ("More from this blog", "Main site") come from `src/rendering/strings.ts`, looked up by primary language subtag with English as the fallback. Everything else on the page is the author's content or brand. To add a language: one object in `src/rendering/strings.ts` with both keys; the drift-guard test refuses half-translated entries.
+
 ## When to add a feature to a theme
 
 Default answer: **don't**. Raise it as a strategy discussion first. The v1 template is deliberately narrow so we can ship fast and so agent-generated content isn't buried under chrome. Saying "no" is the job.
