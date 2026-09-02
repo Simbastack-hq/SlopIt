@@ -10,7 +10,7 @@ applies-to: [core, platform]
 
 After changing the theme CSS in core, **existing blogs continue to serve the old `style.css` until they re-render organically.** To force-refresh a specific blog: PATCH any post on it (anything that triggers `renderPost`). All posts on that blog then pick up the new CSS at once because they share the same per-blog stylesheet.
 
-Since the "More from this blog" block (2026-09), every publish, update, unpublish, delete, or blog PATCH also re-renders **every post page** on that blog (`renderBlogPosts`), so post *HTML* template changes now refresh blog-wide on the next organic mutation too. The manual PATCH workaround still applies to blogs that never publish again.
+Since the "More from this blog" block (2026-09), every mutation that touches a *published* post (publish, edit, unpublish, delete) and every blog PATCH also re-renders **every post page** on that blog (`renderBlogPosts`), so post *HTML* template changes now refresh blog-wide on the next such mutation too. Draft-only edits and draft deletes do not trigger it. The manual PATCH workaround still applies to blogs that never publish again.
 
 ## Why
 

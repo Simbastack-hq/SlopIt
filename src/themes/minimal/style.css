@@ -188,6 +188,8 @@ article img {
   padding: 0;
 }
 .more-from li {
+  position: relative;
+  min-height: 44px;
   margin: 0 0 16px;
 }
 .more-from li a {
@@ -195,6 +197,13 @@ article img {
   font-size: 17px;
   font-weight: 500;
   text-decoration: none;
+}
+/* Stretch the link's hit area over the whole item (title + blurb) so the
+   tap target on mobile is at least 44px tall without changing the layout. */
+.more-from li a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
 }
 .more-from li a:hover {
   color: var(--accent);

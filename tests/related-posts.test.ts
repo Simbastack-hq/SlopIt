@@ -239,10 +239,12 @@ describe('More from this blog — lifecycle', () => {
     expect(listPublishedPostsForBlog(store, blogId).map((p) => p.slug)).toEqual(['second', 'first'])
   })
 
-  describe('platform CTA-injector invariants (slopit-platform cta-injection.ts)', () => {
-    // The injector treats a page as a post page iff it has exactly one
-    // `</article>` and does not match the index marker below. The block
-    // must sit inside the article so the CTA lands after it.
+  describe('post-page markup invariants a postprocessHtml hook can rely on', () => {
+    // A consumer's hook tells a post page from an index page by two
+    // markers: exactly one `</article>`, and no `<article class="post-item">`
+    // (that class is the index list's item). The new block must keep both
+    // true and sit inside the article, so anything a hook appends before
+    // `</article>` lands after it.
     const INDEX_MARKER = /<article\b[^>]*\bclass="[^"]*\bpost-item\b/
 
     it('a post page with the block still has exactly one </article> and no index marker', () => {

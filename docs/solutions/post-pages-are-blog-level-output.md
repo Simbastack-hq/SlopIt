@@ -40,9 +40,9 @@ Core is uncapped; the hosted platform caps posts per tier. Burst publishing (13 
 
 `createPost`/`updatePost` call `renderPost` (self HTML + `.md` + manifests) and then `renderBlogPosts` (all HTML, self included). The self page is written twice with identical content. Accepted: ~1 ms, atomic rename, and an `exceptSlug` knob would have one caller. Consequence: `postprocessHtml` must be deterministic for a given `(html, blogId)`, which it already had to be — the same page was already re-rendered by `updateBlog` and the platform's ops scripts.
 
-## Platform CTA injector compatibility
+## Markup invariants for `postprocessHtml` consumers
 
-`slopit-platform/src/cta-injection.ts` decides "post page" by *exactly one `</article>`* and *no `<article … class="…post-item…">`*. The block is a `<nav class="more-from">` inside the article, after the tags, so the CTA lands after it (reading order: body → tags → more from → CTA). `tests/related-posts.test.ts` asserts those two invariants and the ordering.
+A hook that post-processes HTML tells a post page from an index page by two markers core guarantees: *exactly one `</article>`* on a post page, and `<article … class="…post-item…">` only on the index. The block is a `<nav class="more-from">` inside the article, after the tags, so anything a hook inserts before `</article>` (the hosted platform's CTA card, for example) lands after it: body → tags → more from → hook content. `tests/related-posts.test.ts` asserts both markers and the ordering.
 
 ## Pointers
 

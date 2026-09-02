@@ -9,7 +9,7 @@ Title
 Date
 Body (rendered markdown)
 Tags
-More from this blog (the 3 newest other posts: title + one-line description)
+More from this blog (the 3 newest other posts: title + description, clamped to two lines)
 Powered by SlopIt footer link
 ```
 

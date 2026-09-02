@@ -16,9 +16,10 @@ export interface RendererConfig {
   baseUrl: string
   /**
    * Optional post-processor that receives fully-rendered HTML and
-   * returns transformed HTML before it's written to disk. Called from
-   * `renderPost` (per-post HTML) and `renderBlog` (per-blog index HTML).
-   * NOT called for non-HTML outputs (.md, llms.txt, feed.xml, sitemap.xml).
+   * returns transformed HTML before it's written to disk. Called for
+   * every HTML write: `renderPost` (one post page), `renderBlogPosts`
+   * (every post page), and `renderBlog` (the index). NOT called for
+   * non-HTML outputs (.md, llms.txt, feed.xml, sitemap.xml).
    *
    * `blogId` is passed so the caller can look up per-blog config like
    * `blog.analytics` without re-resolving it. Identity is the default.
@@ -26,7 +27,8 @@ export interface RendererConfig {
    * Platform uses this to inject analytics `<script>` tags into <head>
    * (Phase 3c). Self-hosted callers pass nothing and get unchanged behavior.
    *
-   * Must be deterministic for a given `(html, blogId)`: the same page is
+   * Must be repeatable: for the same `(html, blogId)` and the same blog
+   * state it reads, it returns the same output. The same page is
    * re-rendered many times over its life (every sibling publish, every
    * blog patch, ops re-render scripts), and each run replaces the file.
    */
@@ -187,9 +189,10 @@ export function renderTagList(tags: string[]): string {
  * order `listPublishedPostsForBlog` returns). Every user-derived field is
  * HTML-escaped here so the `{{{moreFrom}}}` raw injection stays safe.
  *
- * Markup deliberately avoids `<article>` and the `post-item` class: the
- * platform's CTA injector keys on "exactly one `</article>`" and "no
- * `<article class="post-item">`" to tell a post page from an index page.
+ * Markup deliberately avoids `<article>` and the `post-item` class. Those
+ * are the two markers a consumer's `postprocessHtml` hook can rely on to
+ * tell a post page (exactly one `</article>`, no `post-item` article)
+ * from an index page, and this block must not blur them.
  *
  * @internal
  */
