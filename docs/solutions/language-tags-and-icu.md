@@ -8,7 +8,7 @@ applies-to: [core, platform, self-hosted]
 
 ## Rule
 
-`language` on blogs (default `en`) and posts (optional override) is a BCP-47 tag validated and canonicalised at the Zod boundary by `languageTag` in `src/schema/post-input-base.ts`. Everything downstream (`<html lang>`, `dir`, dates, `og:locale`, JSON-LD `inLanguage`, `.md` frontmatter, RSS `<language>`) reads the stored canonical value through `resolveLanguage(post, blog)` in `src/rendering/seo.ts`. No i18n library.
+`language` on blogs (default `en`) and posts (optional override) is a BCP-47 tag validated and canonicalised at the Zod boundary by `languageTag` in `src/schema/post-input-base.ts`. Post-level outputs (`<html lang>`, `dir`, dates, `og:locale`, JSON-LD `inLanguage`, `.md` frontmatter) read the post's *effective* language through `resolveLanguage(post, blog)` in `src/rendering/seo.ts`; blog-level outputs (the index page, RSS `<language>`) read `blog.language` directly. No i18n library.
 
 ## The validator, and why each piece is there
 
@@ -19,7 +19,7 @@ z.string().max(35)
 ```
 
 - `Intl.getCanonicalLocales(tag)` throws `RangeError` on malformed input (`"Russian"` is *not* malformed — a 7-letter language subtag is syntactically legal — so shape alone is not enough).
-- `Intl.DateTimeFormat.supportedLocalesOf(tag).length > 0` rejects tags ICU has no data for (`xx`, `russian`). An agent passing a language *name* gets a ZOD_VALIDATION error with examples instead of a page tagged with nonsense.
+- `Intl.DateTimeFormat.supportedLocalesOf(tag).length > 0` rejects tags ICU has no data for (`xx`, `russian`). An agent passing a language *name* gets a ZOD_VALIDATION error with examples instead of a page tagged with nonsense. Only the language subtag is checked this way: `en-XX` passes because lookup falls back to `en`. Regions and scripts are open lists; a wrong one still yields a correctly tagged, correctly dated page.
 - `new Intl.Locale(tag).baseName !== canonical` rejects extension subtags (`ru-u-ca-islamic`) that would otherwise leak into `lang` attributes.
 - **`overwrite`, not `transform`.** `z.toJSONSchema` (the public `/schema` endpoint) throws "Transforms cannot be represented in JSON Schema" on Zod 4.3.6. `overwrite` is a type-preserving transform that JSON Schema can ignore.
 - **`abort: true` on the refine.** Zod 4 keeps running later checks after a failed refine; without `abort`, `overwrite` ran `getCanonicalLocales` on the bad input and threw `RangeError` out of `parse` instead of returning an issue. Caught by the "rejects junk" test.

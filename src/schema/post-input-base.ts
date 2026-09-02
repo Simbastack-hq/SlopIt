@@ -11,15 +11,22 @@ import { generateSlug } from '../ids.js'
 export const httpUrl = z.url({ protocol: /^https?$/ })
 
 /**
- * True when `tag` is a well-formed BCP-47 tag that the runtime has locale
- * data for, with no extension subtags. Uses the standard library only:
+ * True when `tag` is a well-formed BCP-47 tag whose language the runtime
+ * has locale data for, with no extension subtags. Standard library only:
  *   - `Intl.getCanonicalLocales` throws RangeError on malformed input
- *     ("Russian", "not a tag", "");
+ *     ("not a tag", "", 40 chars of junk);
  *   - `baseName !== canonical` catches `-u-`/`-x-`/`-t-` extensions
  *     (`ru-u-ca-islamic`) that would otherwise leak into `<html lang>`;
  *   - `Intl.DateTimeFormat.supportedLocalesOf` rejects tags ICU has no
- *     data for (`xx`), so a page never ends up tagged with a language we
- *     cannot format dates in. Node's official builds ship full ICU.
+ *     data for — `xx`, and also `Russian`, which is *syntactically* a
+ *     legal 7-letter language subtag — so a page never ends up tagged
+ *     with a language we cannot format dates in.
+ *
+ * Only the language is checked against locale data. Script and region
+ * subtags are validated for shape, not existence: `en-XX` passes because
+ * ICU's lookup falls back to `en`. That is deliberate — regions and
+ * scripts are open lists, and a wrong region still yields a correctly
+ * tagged, correctly dated page.
  */
 export function isSupportedLanguage(tag: string): boolean {
   let canonical: string | undefined

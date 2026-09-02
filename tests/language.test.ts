@@ -44,6 +44,14 @@ describe('languageTag schema', () => {
     expect(isSupportedLanguage('Russian')).toBe(false)
   })
 
+  it('checks the language subtag only: an unknown region rides on its language (documented)', () => {
+    // Regions and scripts are open lists; ICU lookup falls back to `en`,
+    // so the page is still correctly tagged and dated. See the JSDoc.
+    expect(languageTag.parse('en-XX')).toBe('en-XX')
+    expect(textDirection('en-XX')).toBe('ltr')
+    expect(formatDate('2026-09-02T00:00:00Z', 'en-XX')).toBe('September 2, 2026')
+  })
+
   it('blog input defaults to en; post input has no default; patches accept the field', () => {
     expect(CreateBlogInputSchema.parse({}).language).toBe('en')
     expect(PostInputSchema.parse({ title: 'T', body: 'b' }).language).toBeUndefined()
@@ -158,7 +166,7 @@ describe('language — store and lifecycle', () => {
 
     const post = read(blog.id, 'pervyj', 'index.html')
     expect(post).toContain('<html lang="ru" dir="ltr">')
-    expect(post).toContain('Ещё из этого блога')
+    expect(post).toContain('Ещё в этом блоге')
     expect(post).toContain('Основной сайт &rarr;')
     expect(post).toContain('<meta property="og:locale" content="ru_RU">')
     expect(post).toContain('"inLanguage":"ru"')
@@ -260,13 +268,27 @@ describe('language — store and lifecycle', () => {
     expect(body).toContain('BCP-47')
   })
 
-  it('a pre-009 database migrates: existing blog reads en, existing post reads no override', () => {
+  it('migration 009 upgrades a pre-009 database: blogs read en, posts read no override', () => {
+    // Build a database that predates 009: open it (all migrations run),
+    // then drop the two columns and forget that 009 ran. Legacy rows go
+    // in through raw SQL because the app-level writers now set language.
     const { blog } = createBlog(store, { name: 'legacy' })
     createPost(store, renderer, blog.id, { title: 'T', slug: 'tt', body: 'b' })
-    // Simulate rows that predate the migration's defaults being applied
-    // by the app (the column default covers them; NULL is the post default).
-    store.db.prepare('UPDATE posts SET language = NULL').run()
+    store.db.exec(
+      "ALTER TABLE blogs DROP COLUMN language; ALTER TABLE posts DROP COLUMN language; DELETE FROM schema_migrations WHERE filename = '009_language.sql'",
+    )
+    expect(() => store.db.prepare('SELECT language FROM blogs').all()).toThrow()
+    const dbPath = join(dir, 'test.db')
+    store.close()
+
+    store = createStore({ dbPath })
+    const applied = store.db
+      .prepare('SELECT filename FROM schema_migrations WHERE filename = ?')
+      .get('009_language.sql')
+    expect(applied).toBeDefined()
     expect(getBlog(store, blog.id).language).toBe('en')
     expect(getPost(store, blog.id, 'tt').language).toBeUndefined()
+    // And the reopened store writes the new columns normally.
+    expect(createBlog(store, { name: 'fresh', language: 'ru' }).blog.language).toBe('ru')
   })
 })

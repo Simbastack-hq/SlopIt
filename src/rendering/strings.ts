@@ -25,12 +25,12 @@ const STRINGS: Record<string, ThemeStrings> = {
   de: { moreFrom: 'Mehr aus diesem Blog', mainSite: 'Hauptseite' },
   fr: { moreFrom: 'Plus d’articles de ce blog', mainSite: 'Site principal' },
   pt: { moreFrom: 'Mais deste blog', mainSite: 'Site principal' },
-  it: { moreFrom: 'Altro da questo blog', mainSite: 'Sito principale' },
-  ru: { moreFrom: 'Ещё из этого блога', mainSite: 'Основной сайт' },
+  it: { moreFrom: 'Altri articoli da questo blog', mainSite: 'Sito principale' },
+  ru: { moreFrom: 'Ещё в этом блоге', mainSite: 'Основной сайт' },
   ja: { moreFrom: 'このブログの他の記事', mainSite: 'メインサイト' },
-  zh: { moreFrom: '本博客更多文章', mainSite: '主站' },
+  zh: { moreFrom: '更多文章', mainSite: '主站' },
   ar: { moreFrom: 'المزيد من هذه المدونة', mainSite: 'الموقع الرئيسي' },
-  hi: { moreFrom: 'इस ब्लॉग से और', mainSite: 'मुख्य साइट' },
+  hi: { moreFrom: 'इस ब्लॉग के और लेख', mainSite: 'मुख्य साइट' },
 }
 
 /** Languages with a translated chrome. Exported for the drift-guard test. */

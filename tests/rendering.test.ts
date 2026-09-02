@@ -242,6 +242,16 @@ describe('renderParentSiteLink', () => {
     expect(out).toContain('Main site &rarr;')
   })
 
+  it('takes the label from the caller and flips the arrow for rtl pages', () => {
+    expect(renderParentSiteLink('https://example.com', 'Основной сайт', 'ltr')).toContain(
+      '>Основной сайт &rarr;</a>',
+    )
+    expect(renderParentSiteLink('https://example.com', 'الموقع الرئيسي', 'rtl')).toContain(
+      '>الموقع الرئيسي &larr;</a>',
+    )
+    expect(renderParentSiteLink('https://example.com', '<b>x</b>', 'ltr')).toContain('&lt;b&gt;x')
+  })
+
   it('uses the full URL verbatim as the href, label stays generic', () => {
     const out = renderParentSiteLink('https://www.example.com/about', 'Main site', 'ltr')
     expect(out).toContain('href="https://www.example.com/about"')

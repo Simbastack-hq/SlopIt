@@ -73,7 +73,7 @@ CSS is a sibling file loaded via `<link>`. No `<style>` blocks, no Tailwind buil
 
 ## Language and chrome strings
 
-Every page carries `<html lang="…" dir="…">` from the post's effective language (its own `language`, else the blog's). Dates are formatted by ICU for that language. The theme's own two labels ("More from this blog", "Main site") come from `src/rendering/strings.ts`, looked up by primary language subtag with English as the fallback. Everything else on the page is the author's content or brand. To add a language: one object in `src/rendering/strings.ts` with both keys; the drift-guard test refuses half-translated entries.
+Every post page carries `<html lang="…" dir="…">` from the post's effective language (its own `language`, else the blog's); the index page uses the blog's. Dates are formatted by ICU for that language. Directional CSS (list indents, blockquote rule, tag-pill spacing) uses logical properties so `dir="rtl"` mirrors it. The theme's own two labels ("More from this blog", "Main site") come from `src/rendering/strings.ts`, looked up by primary language subtag with English as the fallback. Everything else on the page is the author's content or brand. To add a language: one object in `src/rendering/strings.ts` with both keys; the drift-guard test refuses half-translated entries.
 
 ## When to add a feature to a theme
 
