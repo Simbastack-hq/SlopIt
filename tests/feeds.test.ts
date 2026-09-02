@@ -26,6 +26,7 @@ const blog = {
   name: 'My Blog',
   theme: 'minimal' as const,
   createdAt: '2026-01-01T00:00:00Z',
+  language: 'en',
 }
 
 const post1 = {

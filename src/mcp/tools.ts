@@ -32,7 +32,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       description: signupDescription,
       inputSchema: CreateBlogInputSchema.strict(),
     },
-    wrapTool<{ name?: string; theme?: 'minimal'; email?: string }>(
+    wrapTool<z.input<typeof CreateBlogInputSchema>>(
       config,
       'signup',
       { auth: 'public' },
@@ -164,7 +164,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     'update_blog',
     {
       description:
-        'Edit a blog. v1 patch surface allows setting/clearing the analytics config (Umami, Plausible, or Google Analytics). Send `patch: { analytics: null }` to remove analytics.',
+        'Edit a blog: set/clear the analytics config (Umami, Plausible, or Google Analytics) or set the default `language` (BCP-47 tag, e.g. "ru"). Send `patch: { analytics: null }` to remove analytics.',
       inputSchema: UpdateBlogInputSchema,
     },
     wrapTool<z.infer<typeof UpdateBlogInputSchema>>(

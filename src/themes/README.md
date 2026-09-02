@@ -9,10 +9,13 @@ Title
 Date
 Body (rendered markdown)
 Tags
+More from this blog (the 3 newest other posts: title + description, clamped to two lines)
 Powered by SlopIt footer link
 ```
 
 **That's it.** Nothing else on the post page.
+
+"More from this blog" is the one piece of chrome that earned its place: readers mostly land on old posts from search, and three fresh links keep them on the blog and give every new post inbound links the moment it's published. It is fixed at three, blog-level (not author-level), zero JavaScript, and disappears entirely on a one-post blog. Because it embeds blog-wide state, every post page is re-rendered whenever the blog's published set changes (`Renderer.renderBlogPosts`). Spec: `docs/superpowers/specs/2026-09-02-related-posts-design.md`.
 
 Explicitly *not* shipped in v1:
 
@@ -22,7 +25,7 @@ Explicitly *not* shipped in v1:
 - "X min read" estimates
 - Editorial team branding
 - Styled pull-quotes or drop caps
-- Related posts, newsletter sign-ups, popovers
+- Tag-based "related" scoring, newsletter sign-ups, popovers
 - Comment sections
 - Any JavaScript for interactivity
 
@@ -67,6 +70,10 @@ Variables available (exact list will stabilize as the renderer lands):
 - `{{poweredByFooter}}` — HTML for the SlopIt footer (or empty string if platform has disabled it)
 
 CSS is a sibling file loaded via `<link>`. No `<style>` blocks, no Tailwind build. Plain CSS.
+
+## Language and chrome strings
+
+Every post page carries `<html lang="…" dir="…">` from the post's effective language (its own `language`, else the blog's); the index page uses the blog's. Dates are formatted by ICU for that language. Directional CSS (list indents, blockquote rule, tag-pill spacing) uses logical properties so `dir="rtl"` mirrors it. The theme's own two labels ("More from this blog", "Main site") come from `src/rendering/strings.ts`, looked up by primary language subtag with English as the fallback. Everything else on the page is the author's content or brand. To add a language: one object in `src/rendering/strings.ts` with both keys; the drift-guard test refuses half-translated entries.
 
 ## When to add a feature to a theme
 

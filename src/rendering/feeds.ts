@@ -102,7 +102,7 @@ export interface RssPost {
 }
 
 export interface RssFeedInput {
-  blog: Pick<Blog, 'id' | 'name'>
+  blog: Pick<Blog, 'id' | 'name' | 'language'>
   blogRoot: string
   feedUrl: string
   posts: readonly RssPost[]
@@ -155,6 +155,7 @@ export function buildRssFeed(input: RssFeedInput): string {
     `    <title>${escapeXml(channelTitle)}</title>`,
     `    <link>${escapeXml(input.blogRoot)}</link>`,
     `    <description>${escapeXml(STATIC_CHANNEL_DESCRIPTION)}</description>`,
+    `    <language>${escapeXml(input.blog.language)}</language>`,
     `    <atom:link href="${escapeXml(input.feedUrl)}" rel="self" type="application/rss+xml" />`,
     items,
     '  </channel>',

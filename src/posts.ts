@@ -57,11 +57,11 @@ export function listPublishedPostsForBlog(store: Store, blogId: string): Post[] 
   const rows = store.db
     .prepare(
       `SELECT id, blog_id, slug, title, body, excerpt, tags, status,
-              seo_title, seo_description, author, cover_image,
+              seo_title, seo_description, author, cover_image, language,
               published_at, created_at, updated_at
          FROM posts
         WHERE blog_id = ? AND status = 'published'
-        ORDER BY published_at DESC`,
+        ORDER BY published_at DESC, rowid DESC`,
     )
     .all(blogId) as {
     id: string
@@ -76,6 +76,7 @@ export function listPublishedPostsForBlog(store: Store, blogId: string): Post[] 
     seo_description: string | null
     author: string | null
     cover_image: string | null
+    language: string | null
     published_at: string | null
     created_at: string
     updated_at: string
@@ -94,6 +95,7 @@ export function listPublishedPostsForBlog(store: Store, blogId: string): Post[] 
     seoDescription: row.seo_description ?? undefined,
     author: row.author ?? undefined,
     coverImage: row.cover_image ?? undefined,
+    language: row.language ?? undefined,
     publishedAt: row.published_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -108,7 +110,7 @@ export function getPost(store: Store, blogId: string, slug: string): Post {
   const row = store.db
     .prepare(
       `SELECT id, blog_id, slug, title, body, excerpt, tags, status,
-              seo_title, seo_description, author, cover_image,
+              seo_title, seo_description, author, cover_image, language,
               published_at, created_at, updated_at
          FROM posts WHERE blog_id = ? AND slug = ?`,
     )
@@ -126,6 +128,7 @@ export function getPost(store: Store, blogId: string, slug: string): Post {
         seo_description: string | null
         author: string | null
         cover_image: string | null
+        language: string | null
         published_at: string | null
         created_at: string
         updated_at: string
@@ -152,6 +155,7 @@ export function getPost(store: Store, blogId: string, slug: string): Post {
     seoDescription: row.seo_description ?? undefined,
     author: row.author ?? undefined,
     coverImage: row.cover_image ?? undefined,
+    language: row.language ?? undefined,
     publishedAt: row.published_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -174,7 +178,7 @@ export function listPosts(
   const rows = store.db
     .prepare(
       `SELECT id, blog_id, slug, title, body, excerpt, tags, status,
-              seo_title, seo_description, author, cover_image,
+              seo_title, seo_description, author, cover_image, language,
               published_at, created_at, updated_at
          FROM posts
         WHERE blog_id = ? AND status = ?
@@ -193,6 +197,7 @@ export function listPosts(
     seo_description: string | null
     author: string | null
     cover_image: string | null
+    language: string | null
     published_at: string | null
     created_at: string
     updated_at: string
@@ -211,6 +216,7 @@ export function listPosts(
     seoDescription: row.seo_description ?? undefined,
     author: row.author ?? undefined,
     coverImage: row.cover_image ?? undefined,
+    language: row.language ?? undefined,
     publishedAt: row.published_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -264,8 +270,8 @@ export function createPost(
         .prepare(
           `INSERT INTO posts (
              id, blog_id, slug, title, body, excerpt, tags, status,
-             seo_title, seo_description, author, cover_image, published_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             seo_title, seo_description, author, cover_image, language, published_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -280,6 +286,7 @@ export function createPost(
           parsed.seoDescription ?? null,
           parsed.author ?? null,
           parsed.coverImage ?? null,
+          parsed.language ?? null,
           publishedAt,
         )
     } catch (e) {
@@ -299,7 +306,7 @@ export function createPost(
   const row = store.db
     .prepare(
       `SELECT id, blog_id, slug, title, body, excerpt, tags, status,
-              seo_title, seo_description, author, cover_image,
+              seo_title, seo_description, author, cover_image, language,
               published_at, created_at, updated_at
          FROM posts WHERE id = ?`,
     )
@@ -317,6 +324,7 @@ export function createPost(
     seo_description: string | null
     author: string | null
     cover_image: string | null
+    language: string | null
     published_at: string | null
     created_at: string
     updated_at: string
@@ -335,16 +343,19 @@ export function createPost(
     seoDescription: row.seo_description ?? undefined,
     author: row.author ?? undefined,
     coverImage: row.cover_image ?? undefined,
+    language: row.language ?? undefined,
     publishedAt: row.published_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 
-  // Render (published only) with compensation on failure
+  // Render (published only) with compensation on failure. renderBlogPosts
+  // refreshes every sibling page's "More from this blog" block.
   if (parsed.status === 'published') {
     try {
       renderer.renderPost(blogId, post)
       renderer.renderBlog(blogId)
+      renderer.renderBlogPosts(blogId)
     } catch (renderErr) {
       try {
         store.db.prepare('DELETE FROM posts WHERE id = ?').run(id)
@@ -407,6 +418,9 @@ export function updatePost(
     seoDescription: 'seoDescription' in parsed ? parsed.seoDescription : prior.seoDescription,
     author: 'author' in parsed ? parsed.author : prior.author,
     coverImage: 'coverImage' in parsed ? parsed.coverImage : prior.coverImage,
+    // `null` clears the per-post override (stored NULL → inherits the blog
+    // language); an omitted key leaves the prior value.
+    language: 'language' in parsed ? parsed.language : prior.language,
   }
 
   // Determine published_at by transition (decision #21 preserves on pub→pub)
@@ -429,7 +443,7 @@ export function updatePost(
       `UPDATE posts
           SET title = ?, body = ?, excerpt = ?, tags = ?, status = ?,
               seo_title = ?, seo_description = ?, author = ?, cover_image = ?,
-              published_at = ?, updated_at = ?
+              language = ?, published_at = ?, updated_at = ?
         WHERE blog_id = ? AND slug = ?`,
     )
     .run(
@@ -442,6 +456,7 @@ export function updatePost(
       merged.seoDescription ?? null,
       merged.author ?? null,
       merged.coverImage ?? null,
+      merged.language ?? null,
       publishedAt,
       nowIso,
       blogId,
@@ -459,7 +474,7 @@ export function updatePost(
         `UPDATE posts
             SET title = ?, body = ?, excerpt = ?, tags = ?, status = ?,
                 seo_title = ?, seo_description = ?, author = ?, cover_image = ?,
-                published_at = ?, updated_at = ?
+                language = ?, published_at = ?, updated_at = ?
           WHERE blog_id = ? AND slug = ?`,
       )
       .run(
@@ -472,6 +487,7 @@ export function updatePost(
         prior.seoDescription ?? null,
         prior.author ?? null,
         prior.coverImage ?? null,
+        prior.language ?? null,
         prior.publishedAt,
         prior.updatedAt,
         blogId,
@@ -484,20 +500,24 @@ export function updatePost(
       // no file ops
     } else if (newStatus === 'published') {
       // renderPost emits per-post HTML + .md + per-blog manifests (Phase 2),
-      // renderBlog refreshes the human-facing index.
+      // renderBlog refreshes the human-facing index, renderBlogPosts the
+      // sibling pages (title/description may have changed).
       renderer.renderPost(blogId, updated)
       renderer.renderBlog(blogId)
+      renderer.renderBlogPosts(blogId)
     } else if (oldStatus === 'published' && newStatus === 'draft') {
       // Published → draft. Ordering matters (reviewer P2 from Phase 2 review):
-      //   1. renderBlog + renderManifests run FIRST against the now-draft DB
-      //      so the post is excluded from index + manifests. If either
-      //      throws, the catch compensates DB back to 'published' and the
-      //      per-post files are still on disk → consistent pre-call state.
+      //   1. renderBlog + renderManifests + renderBlogPosts run FIRST against
+      //      the now-draft DB so the post is excluded from index, manifests
+      //      and sibling "More from" lists. If any throws, the catch
+      //      compensates DB back to 'published' and the per-post files are
+      //      still on disk → consistent pre-call state.
       //   2. removePostFiles + deletePostMarkdown run LAST. They're
       //      destructive; we cannot recover them from the catch, so we only
       //      reach them after the safe re-render side has succeeded.
       renderer.renderBlog(blogId)
       renderer.renderManifests(blogId)
+      renderer.renderBlogPosts(blogId)
       renderer.removePostFiles(blogId, slug)
       renderer.deletePostMarkdown(blogId, slug)
     }
@@ -546,6 +566,7 @@ export function deletePost(
   if (prior.status === 'published') {
     renderer.renderBlog(blogId)
     renderer.renderManifests(blogId)
+    renderer.renderBlogPosts(blogId)
     renderer.deletePostMarkdown(blogId, slug)
   }
   renderer.removePostFiles(blogId, slug)
