@@ -16,15 +16,21 @@ export interface RendererConfig {
   baseUrl: string
   /**
    * Optional post-processor that receives fully-rendered HTML and
-   * returns transformed HTML before it's written to disk. Called from
-   * `renderPost` (per-post HTML) and `renderBlog` (per-blog index HTML).
-   * NOT called for non-HTML outputs (.md, llms.txt, feed.xml, sitemap.xml).
+   * returns transformed HTML before it's written to disk. Called for
+   * every HTML write: `renderPost` (one post page), `renderBlogPosts`
+   * (every post page), and `renderBlog` (the index). NOT called for
+   * non-HTML outputs (.md, llms.txt, feed.xml, sitemap.xml).
    *
    * `blogId` is passed so the caller can look up per-blog config like
    * `blog.analytics` without re-resolving it. Identity is the default.
    *
    * Platform uses this to inject analytics `<script>` tags into <head>
    * (Phase 3c). Self-hosted callers pass nothing and get unchanged behavior.
+   *
+   * Must be repeatable: for the same `(html, blogId)` and the same blog
+   * state it reads, it returns the same output. The same page is
+   * re-rendered many times over its life (every sibling publish, every
+   * blog patch, ops re-render scripts), and each run replaces the file.
    */
   postprocessHtml?: (html: string, blogId: string) => string
 }
@@ -32,7 +38,17 @@ export interface RendererConfig {
 export interface Renderer {
   readonly baseUrl: string
   renderPost(blogId: string, post: Post): void
+  /** Write the blog index (`index.html`). */
   renderBlog(blogId: string): void
+  /**
+   * Re-write `<slug>/index.html` for every published post in the blog.
+   * Post pages embed blog-wide state (the "More from this blog" list of
+   * the newest posts), so they are blog-level derived output like the
+   * index: any change to the published set, or to a post's title or
+   * description, must be followed by this call. HTML only — `.md` and
+   * the manifests do not depend on sibling posts.
+   */
+  renderBlogPosts(blogId: string): void
 }
 
 /**
@@ -160,6 +176,41 @@ export function renderTagList(tags: string[]): string {
   if (tags.length === 0) return ''
   return (
     `<div class="tags">` + tags.map((t) => `<span>#${escapeHtml(t)}</span>`).join('') + `</div>`
+  )
+}
+
+/**
+ * Build the "More from this blog" fragment for a post page: the blog's
+ * three newest published posts, excluding the post being rendered.
+ * Returns '' when there is nothing else to link to, so a one-post blog
+ * renders no heading.
+ *
+ * `published` is the blog's published posts in newest-first order (the
+ * order `listPublishedPostsForBlog` returns). Every user-derived field is
+ * HTML-escaped here so the `{{{moreFrom}}}` raw injection stays safe.
+ *
+ * Markup deliberately avoids `<article>` and the `post-item` class. Those
+ * are the two markers a consumer's `postprocessHtml` hook can rely on to
+ * tell a post page (exactly one `</article>`, no `post-item` article)
+ * from an index page, and this block must not blur them.
+ *
+ * @internal
+ */
+export function renderMoreFrom(self: Post, published: Post[]): string {
+  const others = published.filter((p) => p.id !== self.id).slice(0, 3)
+  if (others.length === 0) return ''
+  const items = others
+    .map((p) => {
+      const description = resolveDescription(p)
+      const blurb = description ? `<p>${escapeHtml(description)}</p>` : ''
+      return `<li><a href="../${escapeHtml(p.slug)}/">${escapeHtml(p.title)}</a>${blurb}</li>`
+    })
+    .join('')
+  return (
+    `<nav class="more-from" aria-labelledby="more-from-heading">` +
+    `<h2 id="more-from-heading">More from this blog</h2>` +
+    `<ul>${items}</ul>` +
+    `</nav>`
   )
 }
 
@@ -367,6 +418,37 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     writeFileAtomic(join(blogDir, 'sitemap.xml'), sitemapXml)
   }
 
+  // Single template render path for a post page, shared by renderPost
+  // (one post) and renderBlogPosts (every published post). `published`
+  // is the blog's newest-first published list; it feeds the "More from
+  // this blog" block. Caller has already run ensureThemeAssets.
+  function writePostHtml(blog: Blog, blogDir: string, post: Post, published: Post[]): void {
+    const postDir = join(blogDir, post.slug)
+    mkdirSync(postDir, { recursive: true })
+
+    const canonicalUrl = canonicalFor(post.slug)
+
+    const html = render(theme.post, {
+      blogName: displayName(blog),
+      postTitle: post.title,
+      postPublishedAt: post.publishedAt ?? '',
+      postPublishedAtDisplay: formatDate(post.publishedAt),
+      themeCssHref: '../style.css',
+      blogHomeHref: '..',
+      canonicalUrl,
+      seoMeta: buildSeoMeta({ post, blog, canonicalUrl }),
+      jsonLd: buildJsonLd({ post, blog, canonicalUrl }),
+      coverImage: renderCoverImage(post.coverImage, post.title),
+      postBody: renderMarkdown(post.body),
+      tagList: renderTagList(post.tags),
+      moreFrom: renderMoreFrom(post, published),
+      poweredBy: renderPoweredBy(),
+      parentSiteLink: renderParentSiteLink(blog.parentSiteUrl),
+    })
+
+    writeFileAtomic(join(postDir, 'index.html'), applyPostprocess(html, blog.id))
+  }
+
   return {
     baseUrl,
 
@@ -377,29 +459,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       // ensureThemeAssets BEFORE HTML write — see spec's Render sequencing section
       ensureThemeAssets(theme, blogDir)
 
-      const postDir = join(blogDir, post.slug)
-      mkdirSync(postDir, { recursive: true })
-
-      const canonicalUrl = canonicalFor(post.slug)
-
-      const html = render(theme.post, {
-        blogName: displayName(blog),
-        postTitle: post.title,
-        postPublishedAt: post.publishedAt ?? '',
-        postPublishedAtDisplay: formatDate(post.publishedAt),
-        themeCssHref: '../style.css',
-        blogHomeHref: '..',
-        canonicalUrl,
-        seoMeta: buildSeoMeta({ post, blog, canonicalUrl }),
-        jsonLd: buildJsonLd({ post, blog, canonicalUrl }),
-        coverImage: renderCoverImage(post.coverImage, post.title),
-        postBody: renderMarkdown(post.body),
-        tagList: renderTagList(post.tags),
-        poweredBy: renderPoweredBy(),
-        parentSiteLink: renderParentSiteLink(blog.parentSiteUrl),
-      })
-
-      writeFileAtomic(join(postDir, 'index.html'), applyPostprocess(html, blogId))
+      writePostHtml(blog, blogDir, post, listPublishedPostsForBlog(config.store, blogId))
 
       // Phase 2 — emit the .md sibling and refresh the per-blog manifests
       // whenever a published post is rendered. Drafts skip both (no
@@ -407,6 +467,18 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       if (post.status === 'published') {
         renderPostMarkdown(blogId, post)
         renderManifests(blogId)
+      }
+    },
+
+    renderBlogPosts(blogId) {
+      const blog = getBlogInternal(config.store, blogId)
+      const blogDir = blogOutputDir(blogId)
+
+      ensureThemeAssets(theme, blogDir)
+
+      const published = listPublishedPostsForBlog(config.store, blogId)
+      for (const post of published) {
+        writePostHtml(blog, blogDir, post, published)
       }
     },
 

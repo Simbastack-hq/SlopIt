@@ -17,6 +17,7 @@ const makeRenderer = (baseUrl: string): Renderer => ({
   baseUrl,
   renderPost: () => {},
   renderBlog: () => {},
+  renderBlogPosts: () => {},
 })
 
 describe('buildLinks', () => {

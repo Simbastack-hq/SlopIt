@@ -9,10 +9,13 @@ Title
 Date
 Body (rendered markdown)
 Tags
+More from this blog (the 3 newest other posts: title + description, clamped to two lines)
 Powered by SlopIt footer link
 ```
 
 **That's it.** Nothing else on the post page.
+
+"More from this blog" is the one piece of chrome that earned its place: readers mostly land on old posts from search, and three fresh links keep them on the blog and give every new post inbound links the moment it's published. It is fixed at three, blog-level (not author-level), zero JavaScript, and disappears entirely on a one-post blog. Because it embeds blog-wide state, every post page is re-rendered whenever the blog's published set changes (`Renderer.renderBlogPosts`). Spec: `docs/superpowers/specs/2026-09-02-related-posts-design.md`.
 
 Explicitly *not* shipped in v1:
 
@@ -22,7 +25,7 @@ Explicitly *not* shipped in v1:
 - "X min read" estimates
 - Editorial team branding
 - Styled pull-quotes or drop caps
-- Related posts, newsletter sign-ups, popovers
+- Tag-based "related" scoring, newsletter sign-ups, popovers
 - Comment sections
 - Any JavaScript for interactivity
 
