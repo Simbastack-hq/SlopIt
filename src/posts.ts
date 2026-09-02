@@ -61,7 +61,7 @@ export function listPublishedPostsForBlog(store: Store, blogId: string): Post[] 
               published_at, created_at, updated_at
          FROM posts
         WHERE blog_id = ? AND status = 'published'
-        ORDER BY published_at DESC`,
+        ORDER BY published_at DESC, rowid DESC`,
     )
     .all(blogId) as {
     id: string
@@ -340,11 +340,13 @@ export function createPost(
     updatedAt: row.updated_at,
   }
 
-  // Render (published only) with compensation on failure
+  // Render (published only) with compensation on failure. renderBlogPosts
+  // refreshes every sibling page's "More from this blog" block.
   if (parsed.status === 'published') {
     try {
       renderer.renderPost(blogId, post)
       renderer.renderBlog(blogId)
+      renderer.renderBlogPosts(blogId)
     } catch (renderErr) {
       try {
         store.db.prepare('DELETE FROM posts WHERE id = ?').run(id)
@@ -484,20 +486,24 @@ export function updatePost(
       // no file ops
     } else if (newStatus === 'published') {
       // renderPost emits per-post HTML + .md + per-blog manifests (Phase 2),
-      // renderBlog refreshes the human-facing index.
+      // renderBlog refreshes the human-facing index, renderBlogPosts the
+      // sibling pages (title/description may have changed).
       renderer.renderPost(blogId, updated)
       renderer.renderBlog(blogId)
+      renderer.renderBlogPosts(blogId)
     } else if (oldStatus === 'published' && newStatus === 'draft') {
       // Published → draft. Ordering matters (reviewer P2 from Phase 2 review):
-      //   1. renderBlog + renderManifests run FIRST against the now-draft DB
-      //      so the post is excluded from index + manifests. If either
-      //      throws, the catch compensates DB back to 'published' and the
-      //      per-post files are still on disk → consistent pre-call state.
+      //   1. renderBlog + renderManifests + renderBlogPosts run FIRST against
+      //      the now-draft DB so the post is excluded from index, manifests
+      //      and sibling "More from" lists. If any throws, the catch
+      //      compensates DB back to 'published' and the per-post files are
+      //      still on disk → consistent pre-call state.
       //   2. removePostFiles + deletePostMarkdown run LAST. They're
       //      destructive; we cannot recover them from the catch, so we only
       //      reach them after the safe re-render side has succeeded.
       renderer.renderBlog(blogId)
       renderer.renderManifests(blogId)
+      renderer.renderBlogPosts(blogId)
       renderer.removePostFiles(blogId, slug)
       renderer.deletePostMarkdown(blogId, slug)
     }
@@ -546,6 +552,7 @@ export function deletePost(
   if (prior.status === 'published') {
     renderer.renderBlog(blogId)
     renderer.renderManifests(blogId)
+    renderer.renderBlogPosts(blogId)
     renderer.deletePostMarkdown(blogId, slug)
   }
   renderer.removePostFiles(blogId, slug)

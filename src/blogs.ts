@@ -2,7 +2,6 @@ import { generateApiKey, hashApiKey } from './auth/api-key.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId } from './ids.js'
-import { listPublishedPostsForBlog } from './posts.js'
 import type { MutationRenderer } from './rendering/generator.js'
 import {
   BlogAnalyticsSchema,
@@ -188,7 +187,7 @@ export function getBlogByName(store: Store, name: string): Blog | null {
  *
  * Side effects:
  *  - When any patched field changes (set, cleared, or modified), every
- *    published post in the blog is re-rendered via `renderer.renderPost`
+ *    published post page is re-rendered via `renderer.renderBlogPosts`
  *    so any postprocessHtml hook (Phase 3c's injection wrapper) sees
  *    the new value. `renderer.renderBlog` is also called once.
  *  - Empty patch, patches with explicit `undefined` values, and
@@ -274,12 +273,10 @@ export function updateBlog(
   // Re-render side effects. The renderer reads blog.analytics and
   // blog.parentSiteUrl on every call (analytics via the postprocessHtml
   // hook, parentSiteUrl via the template), so rendered HTML on disk is
-  // stale until we re-run it.
+  // stale until we re-run it. Both fields affect HTML only, so the
+  // per-post .md files and manifests are left alone.
   try {
-    const posts = listPublishedPostsForBlog(store, blogId)
-    for (const post of posts) {
-      renderer.renderPost(blogId, post)
-    }
+    renderer.renderBlogPosts(blogId)
     renderer.renderBlog(blogId)
   } catch (renderErr) {
     try {

@@ -97,6 +97,7 @@ describe('loadTheme', () => {
     expect(theme.post).toContain('{{{postBody}}}')
     expect(theme.post).toContain('{{themeCssHref}}')
     expect(theme.post).toContain('{{blogHomeHref}}')
+    expect(theme.post).toContain('{{{moreFrom}}}')
   })
 
   it('index template contains expected placeholders', () => {

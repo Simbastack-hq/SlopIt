@@ -166,6 +166,49 @@ article img {
   margin-right: 4px;
 }
 
+/* "More from this blog" — three newest sibling posts at the end of a post.
+   Scoped overrides: the block sits inside <article>, so the article's
+   h2 / p / ul / li typography would otherwise apply. */
+.more-from {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.more-from h2 {
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.more-from ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.more-from li {
+  margin: 0 0 16px;
+}
+.more-from li a {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.more-from li a:hover {
+  color: var(--accent);
+}
+.more-from li p {
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 main .post-item {
   border-bottom: 1px solid var(--border);
   padding: 24px 0;
