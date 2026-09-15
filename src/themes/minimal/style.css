@@ -77,15 +77,21 @@ a.masthead-name:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 16px;
+  gap: 0 16px;
   font-size: 14px;
   color: var(--text-muted);
 }
+/* Each name is a 44px-tall touch target (11px above and below a 22px
+   line); the surrounding margins take the padding back so the text sits
+   where a plain line would. Wrapped rows abut without overlapping. */
+.translations > * {
+  padding-block: 11px;
+}
 .masthead + .translations {
-  margin: -32px 0 48px;
+  margin: -43px 0 37px;
 }
 article header .translations {
-  margin-top: 8px;
+  margin-top: -3px;
 }
 /* Underlined so the clickable names read as links on touch screens,
    where hover never happens; the current language is plain and darker. */

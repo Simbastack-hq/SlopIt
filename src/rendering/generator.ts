@@ -458,11 +458,6 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
   const blogRootUrl = (): string => normalizeBaseUrl(config.baseUrl) + '/'
 
-  // On-disk directory of a language's home page: the blog dir for the
-  // root language, `lang/<tag>/` for every other.
-  const homeDir = (blogDir: string, lang: string, rootLang: string): string =>
-    lang === rootLang ? blogDir : join(blogDir, 'lang', languageSegment(lang))
-
   // Emit the `<slug>.md` source file for a published post: YAML frontmatter
   // (8 fixed keys, blanks omitted) + the author's raw markdown body.
   function renderPostMarkdown(blogId: string, post: Post): void {
@@ -527,31 +522,48 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     })
     writeFileAtomic(join(blogDir, 'llms.txt'), llmsTxt)
 
-    // One feed per language: `feed.xml` for the root language,
-    // `lang/<tag>/feed.xml` for the others. Filter first, then cap at the
-    // 20 most recent, so a small language is never crowded out.
-    for (const lang of languages) {
-      const dir = homeDir(blogDir, lang, rootLang)
-      mkdirSync(dir, { recursive: true })
-      const home = homeUrl(root, lang, rootLang)
-      const rssPosts = all
-        .filter((p) => resolveLanguage(p, blog) === lang)
-        .slice(0, 20)
-        .map((p) => ({
-          title: p.title,
-          canonicalUrl: canonicalFor(p.slug),
-          description: resolveDescription(p),
-          publishedAt: p.publishedAt ?? p.createdAt,
-          author: p.author,
-          bodyHtml: renderMarkdown(p.body),
-        }))
-      const feedXml = buildRssFeed({
-        blog: { id: blog.id, name: blog.name, language: lang },
-        blogRoot: home,
-        feedUrl: home + 'feed.xml',
-        posts: rssPosts,
-      })
-      writeFileAtomic(join(dir, 'feed.xml'), feedXml)
+    const rssItem = (p: Post) => ({
+      title: p.title,
+      canonicalUrl: canonicalFor(p.slug),
+      description: resolveDescription(p),
+      publishedAt: p.publishedAt ?? p.createdAt,
+      author: p.author,
+      bodyHtml: renderMarkdown(p.body),
+    })
+
+    // `/feed.xml` — the 20 newest posts in every language, as it has
+    // always been, so existing subscriptions never change meaning; the
+    // channel `<language>` is the root language.
+    writeFileAtomic(
+      join(blogDir, 'feed.xml'),
+      buildRssFeed({
+        blog: { id: blog.id, name: blog.name, language: rootLang },
+        blogRoot: root,
+        feedUrl: root + 'feed.xml',
+        posts: all.slice(0, 20).map(rssItem),
+      }),
+    )
+
+    // On a multilingual blog, one feed per language at a stable URL,
+    // `lang/<tag>/feed.xml` — root language included, so a subscription
+    // survives the root changing. Filter first, then cap at 20, so a
+    // small language is never crowded out.
+    if (languages.length > 1) {
+      for (const lang of languages) {
+        const dir = join(blogDir, 'lang', languageSegment(lang))
+        mkdirSync(dir, { recursive: true })
+        const home = root + 'lang/' + languageSegment(lang) + '/'
+        const feedXml = buildRssFeed({
+          blog: { id: blog.id, name: blog.name, language: lang },
+          blogRoot: home,
+          feedUrl: home + 'feed.xml',
+          posts: all
+            .filter((p) => resolveLanguage(p, blog) === lang)
+            .slice(0, 20)
+            .map(rssItem),
+        })
+        writeFileAtomic(join(dir, 'feed.xml'), feedXml)
+      }
     }
 
     // sitemap.xml — the root, every other language's home, every
@@ -612,15 +624,10 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     const sameLanguage = published.filter((p) => resolveLanguage(p, blog) === lang)
 
     // Home link: `..` on a monolingual blog, as ever. On a multilingual
-    // blog a post links to its own language's home; a root-language post
-    // carries `?lang=` so a consumer negotiating language on `/` treats
-    // the click as an explicit choice rather than an entry to redirect.
-    const blogHomeHref =
-      languages.length === 1
-        ? '..'
-        : lang === rootLang
-          ? `../?lang=${lang}`
-          : `../lang/${languageSegment(lang)}/`
+    // blog a post links to its own language's stable home under `lang/`
+    // (the root language has one too), never to `/`, which a consumer may
+    // negotiate — a reader who chose a language keeps it while navigating.
+    const blogHomeHref = languages.length === 1 ? '..' : `../lang/${languageSegment(lang)}/`
 
     const html = render(theme.post, {
       lang,
@@ -723,12 +730,29 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
       const homes = languages.map((l) => ({ language: l, url: homeUrl(root, l, rootLang) }))
 
-      // One home page per language, each in that language: its posts,
-      // its chrome strings, its `lang`/`dir`, its dates.
-      for (const lang of languages) {
-        const dir = homeDir(blogDir, lang, rootLang)
-        mkdirSync(dir, { recursive: true })
-        const prefix = lang === rootLang ? '' : '../../'
+      // The pages to write. `/` is the root language's canonical home. On
+      // a multilingual blog every language — the root included — also has
+      // a stable home at `lang/<tag>/`, so its URL and feed survive the
+      // root changing (which a publish can cause, see listBlogLanguages).
+      // The root language's `lang/` copy is a duplicate: it points its
+      // canonical at `/` and carries no hreflang of its own.
+      const pages: { lang: string; dir: string; prefix: string; canonical: boolean }[] = [
+        { lang: rootLang, dir: blogDir, prefix: '', canonical: true },
+        ...(languages.length > 1
+          ? languages.map((l) => ({
+              lang: l,
+              dir: join(blogDir, 'lang', languageSegment(l)),
+              prefix: '../../',
+              canonical: l !== rootLang,
+            }))
+          : []),
+      ]
+
+      // Each home page is in its language: its posts, its chrome strings,
+      // its `lang`/`dir`, its dates.
+      for (const page of pages) {
+        const { lang, prefix } = page
+        mkdirSync(page.dir, { recursive: true })
         const dirAttr = textDirection(lang)
         const strings = stringsFor(lang)
 
@@ -739,12 +763,11 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
           themeCssHref: prefix + 'style.css',
           faviconHref: prefix + 'favicon.svg',
           canonicalUrl: homeUrl(root, lang, rootLang),
-          alternates: renderAlternates(homes, rootLang),
+          alternates: page.canonical ? renderAlternates(homes, rootLang) : '',
           languageNav: renderLanguageNav(
             languages.map((l) => ({
               language: l,
-              // The root home's link carries `?lang=` (see writePostHtml).
-              href: prefix + (l === rootLang ? `?lang=${l}` : `lang/${languageSegment(l)}/`),
+              href: `${prefix}lang/${languageSegment(l)}/`,
             })),
             lang,
             strings.otherLanguages,
@@ -758,16 +781,18 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
           parentSiteLink: renderParentSiteLink(blog.parentSiteUrl, strings.mainSite, dirAttr),
         })
 
-        writeFileAtomic(join(dir, 'index.html'), applyPostprocess(html, blogId))
+        writeFileAtomic(join(page.dir, 'index.html'), applyPostprocess(html, blogId))
       }
     },
 
     pruneLanguageHomes(blogId) {
       const langDir = join(config.outputDir, blogId, 'lang')
       if (!existsSync(langDir)) return
-      // `lang/` holds only what renderBlog and renderManifests wrote, so
-      // anything not in the current non-root language set is stale.
-      const keep = new Set(listBlogLanguages(config.store, blogId).slice(1).map(languageSegment))
+      // `lang/` holds only what renderBlog and renderManifests wrote: one
+      // directory per language with published posts while the blog is
+      // multilingual, none once it is back to one language.
+      const languages = listBlogLanguages(config.store, blogId)
+      const keep = new Set(languages.length > 1 ? languages.map(languageSegment) : [])
       // Directories only: a post written before the slug `lang` was
       // reserved owns `lang/index.html` (a file), and that is not ours to
       // remove. `lang/` itself goes only when nothing at all is left.
