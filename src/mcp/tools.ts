@@ -63,7 +63,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     'create_post',
     {
       description:
-        "Publish a post to the blog. Needs `title` and `body` (markdown). Returns the published post's live URL.",
+        "Publish a post to the blog. Needs `title` and `body` (markdown). Returns the published post's live URL. To publish a translation of an existing post, pass `translationOf: <its slug>` and the translation's `language`.",
       inputSchema: CreatePostInputSchema,
     },
     wrapTool<z.infer<typeof CreatePostInputSchema>>(
@@ -76,7 +76,9 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
         const { blog_id: _blogId, idempotency_key: _idem, ...postInput } = args
         void _blogId
         void _idem
-        const { post, postUrl } = createPost(config.store, renderer, ctx.blog!.id, postInput)
+        const { post, postUrl } = createPost(config.store, renderer, ctx.blog!.id, postInput, {
+          translationPolicy: config.translationPolicy,
+        })
         return {
           post,
           ...(postUrl !== undefined ? { post_url: postUrl } : {}),
@@ -114,6 +116,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
           ctx.blog!.id,
           args.slug,
           args.patch,
+          { translationPolicy: config.translationPolicy },
         )
         return {
           post,

@@ -137,6 +137,12 @@ export interface SeoInput {
   post: Post
   blog: Blog
   canonicalUrl: string
+  /**
+   * Languages of this post's published translations (not including its
+   * own). Each becomes an `og:locale:alternate`. Omit or pass [] for a
+   * post with no translations.
+   */
+  alternateLanguages?: readonly string[]
 }
 
 /**
@@ -225,6 +231,9 @@ export function buildSeoMeta(input: SeoInput): string {
   lines.push(
     `<meta property="og:locale" content="${escapeHtml(ogLocale(resolveLanguage(post, blog)))}">`,
   )
+  for (const alt of input.alternateLanguages ?? []) {
+    lines.push(`<meta property="og:locale:alternate" content="${escapeHtml(ogLocale(alt))}">`)
+  }
   if (post.coverImage) {
     lines.push(`<meta property="og:image" content="${escapeHtml(post.coverImage)}">`)
     lines.push(`<meta property="og:image:alt" content="${escapeHtml(title)}">`)

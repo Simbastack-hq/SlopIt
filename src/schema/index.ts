@@ -121,15 +121,31 @@ export const PostPatchSchema = z
       )
       .nullable()
       .optional(),
+    // A slug joins this post to that post's translation group (creating
+    // the group if needed); `null` leaves the group; omitting the key
+    // leaves membership unchanged.
+    translationOf: z
+      .string()
+      .min(1)
+      .max(100)
+      .describe(
+        'Slug of a post in this blog to link as a translation of this one. Send null to unlink this post from its translation group.',
+      )
+      .nullable()
+      .optional(),
   })
   .strict()
 export type PostPatchInput = z.input<typeof PostPatchSchema>
 
-// Post — what core stores and returns.
-export const PostSchema = PostInputBaseSchema.extend({
+// Post — what core stores and returns. `translationOf` is input-only:
+// the write path resolves it to the shared `translationGroup` id, which
+// is what reads expose. Posts with the same `translationGroup` are the
+// same text in different languages.
+export const PostSchema = PostInputBaseSchema.omit({ translationOf: true }).extend({
   id: z.string(),
   blogId: z.string(),
   slug: z.string(),
+  translationGroup: z.string().optional(),
   publishedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
