@@ -100,7 +100,7 @@ describe('translations — schema and fragments', () => {
   it('renderLanguageNav: autonyms, current as a span, everything escaped', () => {
     const html = renderLanguageNav(
       [
-        { language: 'en', href: '?lang=en' },
+        { language: 'en', href: 'lang/en/' },
         { language: 'de', href: 'lang/de/' },
         { language: 'ar', href: 'lang/ar/' },
       ],
@@ -410,7 +410,7 @@ describe('translations — store, lifecycle and rendering', () => {
       expect(root).toContain('href="lang/pt-br/">Português (Brasil)</a>')
 
       const de = read(blogId, 'lang', 'de', 'index.html')
-      expect(de).toContain('href="../../?lang=en">English</a>')
+      expect(de).toContain('href="../../lang/en/">English</a>')
       expect(de).toContain('href="../../lang/pt-br/">Português (Brasil)</a>')
       expect(de).toContain('<span aria-current="page" lang="de" dir="auto">Deutsch</span>')
     })
@@ -445,7 +445,7 @@ describe('translations — store, lifecycle and rendering', () => {
       expect(hallo).not.toContain('href="../second-en/"')
       expect(hallo).toContain('<a class="masthead-name" href="../lang/de/">')
       expect(read(blogId, 'hello', 'index.html')).toContain(
-        '<a class="masthead-name" href="../?lang=en">',
+        '<a class="masthead-name" href="../lang/en/">',
       )
     })
 
@@ -484,10 +484,16 @@ describe('translations — store, lifecycle and rendering', () => {
     })
 
     it('feeds are per language and the sitemap lists the language homes, never ?lang=', () => {
+      // /feed.xml keeps its historical meaning: every language, root language
+      // as the channel language. Per-language feeds live under lang/.
       const rootFeed = read(blogId, 'feed.xml')
       expect(rootFeed).toContain('<language>en</language>')
       expect(rootFeed).toContain('https://b.example/hello/')
-      expect(rootFeed).not.toContain('https://b.example/hallo/')
+      expect(rootFeed).toContain('https://b.example/hallo/')
+      const enFeed = read(blogId, 'lang', 'en', 'feed.xml')
+      expect(enFeed).toContain('https://b.example/hello/')
+      expect(enFeed).not.toContain('https://b.example/hallo/')
+      expect(enFeed).toContain('<link>https://b.example/lang/en/</link>')
 
       const deFeed = read(blogId, 'lang', 'de', 'feed.xml')
       expect(deFeed).toContain('<language>de</language>')
@@ -500,6 +506,8 @@ describe('translations — store, lifecycle and rendering', () => {
       expect(sitemap).toContain('<loc>https://b.example/lang/de/</loc>')
       expect(sitemap).toContain('<loc>https://b.example/lang/pt-br/</loc>')
       expect(sitemap).not.toContain('?lang=')
+      // The root language's lang/ copy is a duplicate (canonical → /), not a sitemap entry.
+      expect(sitemap).not.toContain('/lang/en/')
     })
 
     it('the last post of a language takes its home with it; lang/ goes when empty', () => {
@@ -542,11 +550,14 @@ describe('translations — store, lifecycle and rendering', () => {
     expect(listBlogLanguages(store, blog.id)).toEqual(['ru', 'en'])
     expect(read(blog.id, 'index.html')).toContain('<html lang="ru" dir="ltr">')
     expect(read(blog.id, 'lang', 'en', 'index.html')).toContain('href="../../hello/"')
-    expect(exists(blog.id, 'lang', 'ru')).toBe(false)
+    // Russian is the root now, and keeps its stable home too (canonical → /).
+    expect(read(blog.id, 'lang', 'ru', 'index.html')).toContain(
+      '<link rel="canonical" href="https://b.example/" />',
+    )
     // Post URLs never moved.
     expect(exists(blog.id, 'privet', 'index.html')).toBe(true)
     expect(read(blog.id, 'privet', 'index.html')).toContain(
-      '<a class="masthead-name" href="../?lang=ru">',
+      '<a class="masthead-name" href="../lang/ru/">',
     )
   })
 
@@ -731,7 +742,7 @@ describe('translations — code review round 2', () => {
     expect(read(blog.id, 'lang', 'index.html')).toContain('Lang')
   })
 
-  it("a publish that makes another language the root prunes that language's old home", () => {
+  it("a publish that makes another language the root keeps every language's URL", () => {
     const { blog } = createBlog(store, { name: 'root-flip' })
     publish(blog.id, { slug: 'de-1', language: 'de' })
     publish(blog.id, { slug: 'de-2', language: 'de' })
@@ -740,13 +751,18 @@ describe('translations — code review round 2', () => {
     // No English post: the root is the most-published language, tie → alphabetical.
     expect(listBlogLanguages(store, blog.id)).toEqual(['de', 'fr'])
     expect(exists(blog.id, 'lang', 'fr', 'index.html')).toBe(true)
-    expect(exists(blog.id, 'lang', 'de')).toBe(false)
+    expect(exists(blog.id, 'lang', 'de', 'index.html')).toBe(true)
+    expect(read(blog.id, 'lang', 'de', 'index.html')).toContain('href="https://b.example/" />')
 
     publish(blog.id, { slug: 'fr-3', language: 'fr' })
     expect(listBlogLanguages(store, blog.id)).toEqual(['fr', 'de'])
     expect(read(blog.id, 'index.html')).toContain('<html lang="fr"')
     expect(exists(blog.id, 'lang', 'de', 'index.html')).toBe(true)
-    expect(exists(blog.id, 'lang', 'fr')).toBe(false)
+    // French moved to / but its own URL and feed are still there for bookmarks and subscribers.
+    expect(read(blog.id, 'lang', 'fr', 'index.html')).toContain(
+      '<link rel="canonical" href="https://b.example/" />',
+    )
+    expect(read(blog.id, 'lang', 'fr', 'feed.xml')).toContain('<language>fr</language>')
   })
 
   it('translationOf accepts a one-character auto-generated slug', () => {
@@ -764,11 +780,219 @@ describe('translations — code review round 2', () => {
     const { blog } = createBlog(store, { name: 'feed-cap' })
     publish(blog.id, { slug: 'einzig', language: 'de' })
     for (let i = 0; i < 25; i++) publish(blog.id, { slug: `en-${i}` })
-    const en = read(blog.id, 'feed.xml')
+    const en = read(blog.id, 'lang', 'en', 'feed.xml')
     expect((en.match(/<item>/g) ?? []).length).toBe(20)
     expect(en).not.toContain('/einzig/')
     const de = read(blog.id, 'lang', 'de', 'feed.xml')
     expect((de.match(/<item>/g) ?? []).length).toBe(1)
     expect(de).toContain('/einzig/')
+  })
+})
+
+describe('translations — audit round (2026-09-16)', () => {
+  let dir: string
+  let store: Store
+  let outputDir: string
+  let renderer: ReturnType<typeof createRenderer>
+
+  const read = (...p: string[]) => readFileSync(join(outputDir, ...p), 'utf8')
+  const exists = (...p: string[]) => existsSync(join(outputDir, ...p))
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-translations-audit-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+    outputDir = join(dir, 'out')
+    renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example' })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const publish = (blogId: string, input: Partial<PostInput> & { slug: string }) =>
+    createPost(store, renderer, blogId, {
+      title: input.slug,
+      body: `Body of ${input.slug}`,
+      ...input,
+    }).post
+
+  const failNextRenderBlogPosts = () =>
+    vi.spyOn(renderer, 'renderBlogPosts').mockImplementationOnce(() => {
+      throw new Error('synthetic')
+    })
+
+  it('a failed publish leaves no public trace: no page, no .md, no language home, no feed entry, no hreflang', () => {
+    const { blog } = createBlog(store, { name: 'trace' })
+    publish(blog.id, { slug: 'hello' })
+    publish(blog.id, { slug: 'hallo', language: 'de', translationOf: 'hello' })
+    failNextRenderBlogPosts()
+    expect(() =>
+      publish(blog.id, { slug: 'ola', language: 'pt-BR', translationOf: 'hello' }),
+    ).toThrow('synthetic')
+    expect(exists(blog.id, 'ola', 'index.html')).toBe(false)
+    expect(exists(blog.id, 'ola.md')).toBe(false)
+    expect(exists(blog.id, 'lang', 'pt-br')).toBe(false)
+    expect(read(blog.id, 'feed.xml')).not.toContain('/ola/')
+    expect(read(blog.id, 'sitemap.xml')).not.toContain('/ola/')
+    expect(read(blog.id, 'llms.txt')).not.toContain('/ola/')
+    expect(read(blog.id, 'hello', 'index.html')).not.toContain('hreflang="pt-BR"')
+    // What existed before the failure is untouched.
+    expect(exists(blog.id, 'lang', 'de', 'index.html')).toBe(true)
+    expect(read(blog.id, 'hello', 'index.html')).toContain('hreflang="de"')
+  })
+
+  it('a failed draft→published patch removes the files it wrote; a failed edit restores the prior page', () => {
+    const { blog } = createBlog(store, { name: 'trace2' })
+    publish(blog.id, { slug: 'hello' })
+    createPost(store, renderer, blog.id, {
+      title: 'Entwurf',
+      slug: 'entwurf',
+      body: 'b',
+      language: 'de',
+      status: 'draft',
+    })
+
+    failNextRenderBlogPosts()
+    expect(() => updatePost(store, renderer, blog.id, 'entwurf', { status: 'published' })).toThrow(
+      'synthetic',
+    )
+    expect(getPost(store, blog.id, 'entwurf').status).toBe('draft')
+    expect(exists(blog.id, 'entwurf', 'index.html')).toBe(false)
+    expect(exists(blog.id, 'entwurf.md')).toBe(false)
+    expect(exists(blog.id, 'lang')).toBe(false)
+    expect(read(blog.id, 'feed.xml')).not.toContain('/entwurf/')
+
+    failNextRenderBlogPosts()
+    expect(() => updatePost(store, renderer, blog.id, 'hello', { title: 'Neuer Titel' })).toThrow(
+      'synthetic',
+    )
+    expect(getPost(store, blog.id, 'hello').title).toBe('hello')
+    const page = read(blog.id, 'hello', 'index.html')
+    expect(page).toContain('<h1>hello</h1>')
+    expect(page).not.toContain('Neuer Titel')
+  })
+
+  it('the root language keeps a stable home and feed under lang/ (a duplicate whose canonical is /)', () => {
+    const { blog } = createBlog(store, { name: 'stable' })
+    publish(blog.id, { slug: 'hello' })
+    publish(blog.id, { slug: 'hallo', language: 'de' })
+    const copy = read(blog.id, 'lang', 'en', 'index.html')
+    expect(copy).toContain('<html lang="en"')
+    expect(copy).toContain('<link rel="canonical" href="https://b.example/" />')
+    expect(copy).not.toContain('<link rel="alternate" hreflang=')
+    expect(copy).toContain('href="../../hello/"')
+    expect(copy).toContain('<span aria-current="page" lang="en" dir="auto">English</span>')
+    expect(copy).toContain('href="../../lang/de/">Deutsch</a>')
+    expect(read(blog.id, 'lang', 'en', 'feed.xml')).toContain('<language>en</language>')
+    // The canonical root still carries the alternates.
+    expect(read(blog.id, 'index.html')).toContain('hreflang="x-default"')
+    expect(read(blog.id, 'index.html')).toContain('href="lang/de/">Deutsch</a>')
+    // Post home links never point at the negotiated root.
+    expect(read(blog.id, 'hello', 'index.html')).toContain(
+      '<a class="masthead-name" href="../lang/en/">',
+    )
+    expect(read(blog.id, 'hallo', 'index.html')).toContain(
+      '<a class="masthead-name" href="../lang/de/">',
+    )
+    // Back to one language: the whole lang/ tree goes, home link back to `..`.
+    deletePost(store, renderer, blog.id, 'hallo')
+    expect(exists(blog.id, 'lang')).toBe(false)
+    expect(read(blog.id, 'hello', 'index.html')).toContain('<a class="masthead-name" href="..">')
+  })
+
+  it('Traditional Chinese gets its own chrome; Simplified and unknown tags keep the existing lookup', () => {
+    expect(stringsFor('zh-Hant').otherLanguages).toBe('其他語言')
+    expect(stringsFor('zh-TW').otherLanguages).toBe('其他語言')
+    expect(stringsFor('zh-HK').otherLanguages).toBe('其他語言')
+    expect(stringsFor('zh').otherLanguages).toBe('其他语言')
+    expect(stringsFor('zh-Hans').otherLanguages).toBe('其他语言')
+    expect(stringsFor('zh-CN').otherLanguages).toBe('其他语言')
+    expect(stringsFor('pt-BR').otherLanguages).toBe('Outros idiomas')
+    expect(stringsFor('nl')).toEqual(stringsFor('en'))
+  })
+})
+
+describe('translations — review of the audit fixes (2026-09-16)', () => {
+  let dir: string
+  let store: Store
+  let outputDir: string
+  let renderer: ReturnType<typeof createRenderer>
+
+  const read = (...p: string[]) => readFileSync(join(outputDir, ...p), 'utf8')
+  const exists = (...p: string[]) => existsSync(join(outputDir, ...p))
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-translations-r4-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+    outputDir = join(dir, 'out')
+    renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example' })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const publish = (blogId: string, input: Partial<PostInput> & { slug: string }) =>
+    createPost(store, renderer, blogId, {
+      title: input.slug,
+      body: `Body of ${input.slug}`,
+      ...input,
+    }).post
+
+  it('a persistent render failure still removes the row, the post files and the stale language home, and reports the incomplete recovery', () => {
+    const { blog } = createBlog(store, { name: 'persist' })
+    publish(blog.id, { slug: 'hello' })
+    publish(blog.id, { slug: 'hallo', language: 'de', translationOf: 'hello' })
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(renderer, 'renderBlogPosts').mockImplementation(() => {
+      throw new Error('synthetic')
+    })
+    expect(() =>
+      publish(blog.id, { slug: 'ola', language: 'pt-BR', translationOf: 'hello' }),
+    ).toThrow(/^synthetic \(compensation incomplete: synthetic\)$/)
+    expect(quiet).toHaveBeenCalled()
+    expect(codeOf(() => getPost(store, blog.id, 'ola'))).toBe('POST_NOT_FOUND')
+    expect(exists(blog.id, 'ola', 'index.html')).toBe(false)
+    expect(exists(blog.id, 'ola.md')).toBe(false)
+    // pruneLanguageHomes and renderManifests ran although renderBlogPosts failed again.
+    expect(exists(blog.id, 'lang', 'pt-br')).toBe(false)
+    expect(exists(blog.id, 'lang', 'de', 'index.html')).toBe(true)
+    expect(read(blog.id, 'feed.xml')).not.toContain('/ola/')
+    expect(read(blog.id, 'sitemap.xml')).not.toContain('/lang/pt-br/')
+  })
+
+  it('a one-shot failure whose recovery completes rethrows the original error untouched', () => {
+    const { blog } = createBlog(store, { name: 'oneshot' })
+    publish(blog.id, { slug: 'hello' })
+    vi.spyOn(renderer, 'renderBlogPosts').mockImplementationOnce(() => {
+      throw new Error('synthetic')
+    })
+    let thrown: unknown
+    try {
+      publish(blog.id, { slug: 'hallo', language: 'de' })
+    } catch (e) {
+      thrown = e
+    }
+    expect((thrown as Error).message).toBe('synthetic')
+    expect(exists(blog.id, 'lang')).toBe(false)
+  })
+
+  it('deletePost removes the files and prunes even when the re-render fails, since a retry can never reach them', () => {
+    const { blog } = createBlog(store, { name: 'del' })
+    publish(blog.id, { slug: 'hello' })
+    publish(blog.id, { slug: 'hallo', language: 'de' })
+    expect(exists(blog.id, 'lang', 'de', 'index.html')).toBe(true)
+    vi.spyOn(renderer, 'renderBlog').mockImplementationOnce(() => {
+      throw new Error('synthetic')
+    })
+    expect(() => deletePost(store, renderer, blog.id, 'hallo')).toThrow('synthetic')
+    expect(codeOf(() => getPost(store, blog.id, 'hallo'))).toBe('POST_NOT_FOUND')
+    expect(exists(blog.id, 'hallo', 'index.html')).toBe(false)
+    expect(exists(blog.id, 'hallo.md')).toBe(false)
+    expect(exists(blog.id, 'lang')).toBe(false)
   })
 })

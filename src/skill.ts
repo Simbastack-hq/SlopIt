@@ -82,8 +82,8 @@ Every blog hosted on this SlopIt instance exposes four read-only files for agent
 |---|---|---|
 | /llms.txt | Markdown | Manifest of every published post (newest first), one description line each. Start here if you're indexing a blog. |
 | /<slug>.md | Markdown (YAML frontmatter + raw body) | Source markdown for any published post. The frontmatter has \`title\`, \`slug\`, \`language\`, \`date\`, \`updated\` (when changed), \`author\`, \`description\`, \`canonical\`, \`tags\`. The body below the closing \`---\` is exactly what the author submitted. |
-| /feed.xml | RSS 2.0 + content:encoded | The 20 most recent published posts in the blog's root language, full HTML in \`<content:encoded>\`. Stable feed for syndication. |
-| /lang/<tag>/feed.xml | RSS 2.0 + content:encoded | Same, for each other language the blog publishes in (\`<tag>\` is the lowercase BCP-47 tag, e.g. \`/lang/de/feed.xml\`). Only exists on blogs with posts in more than one language. |
+| /feed.xml | RSS 2.0 + content:encoded | The 20 most recent published posts in every language (channel language = the blog's root language), full HTML in \`<content:encoded>\`. Stable feed for syndication. |
+| /lang/<tag>/feed.xml | RSS 2.0 + content:encoded | That language's posts only, for every language the blog publishes in, root language included (\`<tag>\` is the lowercase BCP-47 tag, e.g. \`/lang/de/feed.xml\`). Only exists on blogs with posts in more than one language. |
 | /sitemap.xml | XML sitemap | Every published post URL and every language home page with \`<lastmod>\`. |
 
 For a post HTML page like \`https://example-blog.example.com/some-post/\`, the raw markdown source is at \`https://example-blog.example.com/some-post.md\` (append \`.md\` to the slug, no trailing slash on this one). The HTML page also advertises this via \`<link rel="alternate" type="text/markdown">\` in its \`<head>\`.
@@ -104,7 +104,7 @@ Analytics is opt-in. Blogs that have never been patched return \`analytics: unde
 
 Every blog has a default \`language\` (a BCP-47 tag such as \`en\`, \`ru\`, \`pt-BR\`; default \`en\`). Set it at signup (\`{ "name": "...", "language": "ru" }\`) or later via \`PATCH ${baseUrl}/blogs/:id\` / \`update_blog\`. A post may override it with its own \`language\`; send \`null\` in a post patch to clear the override and inherit the blog's again. A post's effective language drives its page's \`<html lang>\` and text direction, date formatting, \`og:locale\`, JSON-LD \`inLanguage\`, and the \`language\` key in \`/<slug>.md\` frontmatter. Tags are validated against the server's locale data and canonicalised (\`EN-us\` → \`en-US\`); an unknown tag is rejected with ZOD_VALIDATION.
 
-A blog that publishes in more than one language gets one home page per language: \`/\` for its root language (the blog default, or, if no published post is in it, the language with the most posts) and \`/lang/<tag>/\` for each other language (\`/lang/de/\`, \`/lang/pt-br/\`), each listing only that language's posts, with a matching \`feed.xml\` and a row of language names linking between them. Post URLs stay flat (\`/<slug>/\`) whatever the language. The slug \`lang\` is reserved for this and rejected with POST_SLUG_RESERVED.
+A blog that publishes in more than one language gets one home page per language: \`/\` for its root language (the blog default, or, if no published post is in it, the language with the most posts) and \`/lang/<tag>/\` for every language it publishes in, the root language included (\`/lang/en/\`, \`/lang/de/\`, \`/lang/pt-br/\`), each listing only that language's posts, with a matching \`feed.xml\` and a row of language names linking between them. These \`/lang/…\` URLs are stable for as long as the language has posts; the root language's copy points its canonical at \`/\`. Post URLs stay flat (\`/<slug>/\`) whatever the language. The slug \`lang\` is reserved for this and rejected with POST_SLUG_RESERVED.
 
 ### Translations
 
