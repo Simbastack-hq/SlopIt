@@ -67,6 +67,44 @@ a.masthead-name:hover {
   color: var(--background);
 }
 
+/* Language switcher — one item per language the page exists in, each
+   named in its own language, the current one plain. Rendered only on
+   blogs with more than one language: under the masthead on a home page,
+   under the date on a post. Wraps rather than crowding the masthead row.
+   `dir="auto"` on each item keeps an Arabic or Hebrew name from
+   reordering its neighbours. */
+.translations {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.masthead + .translations {
+  margin: -32px 0 48px;
+}
+article header .translations {
+  margin-top: 8px;
+}
+.translations a,
+article .translations a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.translations a:hover,
+article .translations a:hover {
+  color: var(--accent);
+}
+.translations [aria-current] {
+  color: var(--text);
+  font-weight: 500;
+}
+.translations > * + *::before {
+  content: '·';
+  color: var(--text-muted);
+  margin-inline: 8px;
+}
+
 article header h1 {
   font-size: 32px;
   font-weight: 900;

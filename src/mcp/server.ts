@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Store } from '../db/store.js'
+import type { TranslationPolicy } from '../posts.js'
 import type { MutationRenderer } from '../rendering/generator.js'
 import type { Blog } from '../schema/index.js'
 import type { OnSignupHook } from '../signup.js'
@@ -30,6 +31,11 @@ export interface McpServerConfig {
    * Platform passes plan-tier values; self-hosted leaves unset.
    */
   mediaMaxTotalBytesPerBlog?: number | null | ((blog: Blog) => number | null)
+  /**
+   * Mirrors ApiRouterConfig.translationPolicy so REST and MCP gate
+   * `translationOf` identically. See that field's doc.
+   */
+  translationPolicy?: TranslationPolicy
   /**
    * Mirrors ApiRouterConfig.onSignup so REST and MCP signup go through
    * the same hook. Both paths invoke signupBlog() under the hood; this

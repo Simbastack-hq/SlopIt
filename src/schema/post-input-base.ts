@@ -91,6 +91,15 @@ export const PostInputBaseSchema = z.object({
       'Language of this post as a BCP-47 tag, e.g. "en", "ru", "pt-BR". Omit to inherit the blog\'s language.',
     )
     .optional(),
+  // Input-only: resolved to a shared `translationGroup` id on write.
+  translationOf: z
+    .string()
+    .min(2)
+    .max(100)
+    .describe(
+      "Slug of an existing post in this blog that this post translates. The two become a translation group: one post per language, cross-linked with hreflang and a language switcher. Set `language` to the translation's language; it must differ from every other member's.",
+    )
+    .optional(),
 })
 
 /**

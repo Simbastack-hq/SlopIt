@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { Store } from '../db/store.js'
+import type { TranslationPolicy } from '../posts.js'
 import type { MutationRenderer } from '../rendering/generator.js'
 import type { Blog } from '../schema/index.js'
 import type { OnSignupHook } from '../signup.js'
@@ -39,6 +40,14 @@ export interface ApiRouterConfig {
    * Platform passes plan-tier values; self-hosted leaves unset.
    */
   mediaMaxTotalBytesPerBlog?: number | null | ((blog: Blog) => number | null)
+  /**
+   * Optional per-blog policy consulted when a write links a post into a
+   * translation group (`translationOf` with a slug). A rejection becomes
+   * a `TRANSLATIONS_DISABLED` error carrying the policy's `reason` as the
+   * message. Unlinking (`translationOf: null`) is never consulted.
+   * Platform passes a plan check; self-hosted leaves unset (allowed).
+   */
+  translationPolicy?: TranslationPolicy
   /**
    * Optional hook fired after a blog + API key are created at signup,
    * if (and only if) the caller provided an email. Platform wires this

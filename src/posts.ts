@@ -3,7 +3,7 @@ import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId, generateSlug } from './ids.js'
 import type { Renderer, MutationRenderer } from './rendering/generator.js'
-import { PostInputSchema, type Post, type PostInput } from './schema/index.js'
+import { PostInputSchema, type Blog, type Post, type PostInput } from './schema/index.js'
 import { PostPatchSchema, type PostPatchInput } from './schema/index.js'
 
 /**
@@ -48,100 +48,53 @@ export function autoExcerpt(body: string): string {
 }
 
 /**
- * Returns published posts for a blog, newest-first by published_at.
- * Drafts excluded. Used by the renderer to build the blog index.
- *
- * @internal
+ * Consumer policy consulted when a write links a post into a translation
+ * group (`translationOf` with a slug). Same shape as the signup
+ * `nameValidator`: the consumer decides, core turns a rejection into a
+ * structured `TRANSLATIONS_DISABLED` error with `reason` as the message.
+ * Core does not know why a consumer might refuse (the hosted platform
+ * gates this by plan); it only knows a consumer may.
  */
-export function listPublishedPostsForBlog(store: Store, blogId: string): Post[] {
-  const rows = store.db
-    .prepare(
-      `SELECT id, blog_id, slug, title, body, excerpt, tags, status,
-              seo_title, seo_description, author, cover_image, language,
-              published_at, created_at, updated_at
-         FROM posts
-        WHERE blog_id = ? AND status = 'published'
-        ORDER BY published_at DESC, rowid DESC`,
-    )
-    .all(blogId) as {
-    id: string
-    blog_id: string
-    slug: string
-    title: string
-    body: string
-    excerpt: string | null
-    tags: string
-    status: 'published'
-    seo_title: string | null
-    seo_description: string | null
-    author: string | null
-    cover_image: string | null
-    language: string | null
-    published_at: string | null
-    created_at: string
-    updated_at: string
-  }[]
+export type TranslationPolicy = (blog: Blog) => { ok: true } | { ok: false; reason: string }
 
-  return rows.map((row) => ({
-    id: row.id,
-    blogId: row.blog_id,
-    slug: row.slug,
-    title: row.title,
-    body: row.body,
-    excerpt: row.excerpt ?? undefined,
-    tags: JSON.parse(row.tags) as string[],
-    status: row.status,
-    seoTitle: row.seo_title ?? undefined,
-    seoDescription: row.seo_description ?? undefined,
-    author: row.author ?? undefined,
-    coverImage: row.cover_image ?? undefined,
-    language: row.language ?? undefined,
-    publishedAt: row.published_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }))
+export interface PostWriteOptions {
+  translationPolicy?: TranslationPolicy
 }
 
 /**
- * Public read: fetch a single post by (blogId, slug). Drafts are
- * included (unlike listPublishedPostsForBlog). Throws POST_NOT_FOUND.
+ * `lang` is the directory of the per-language home pages
+ * (`/lang/<tag>/index.html`, `/lang/<tag>/feed.xml`). A post with that
+ * slug would share the directory, so the slug is refused for new posts.
+ * One reserved word keeps post slugs and language homes in disjoint
+ * namespaces without reserving every language code as a slug.
  */
-export function getPost(store: Store, blogId: string, slug: string): Post {
-  const row = store.db
-    .prepare(
-      `SELECT id, blog_id, slug, title, body, excerpt, tags, status,
+const RESERVED_SLUGS = new Set(['lang'])
+
+const POST_COLUMNS = `id, blog_id, slug, title, body, excerpt, tags, status,
               seo_title, seo_description, author, cover_image, language,
-              published_at, created_at, updated_at
-         FROM posts WHERE blog_id = ? AND slug = ?`,
-    )
-    .get(blogId, slug) as
-    | {
-        id: string
-        blog_id: string
-        slug: string
-        title: string
-        body: string
-        excerpt: string | null
-        tags: string
-        status: 'draft' | 'published'
-        seo_title: string | null
-        seo_description: string | null
-        author: string | null
-        cover_image: string | null
-        language: string | null
-        published_at: string | null
-        created_at: string
-        updated_at: string
-      }
-    | undefined
+              translation_group, published_at, created_at, updated_at`
 
-  if (!row) {
-    throw new SlopItError('POST_NOT_FOUND', `Post "${slug}" does not exist in blog "${blogId}"`, {
-      blogId,
-      slug,
-    })
-  }
+interface PostRow {
+  id: string
+  blog_id: string
+  slug: string
+  title: string
+  body: string
+  excerpt: string | null
+  tags: string
+  status: 'draft' | 'published'
+  seo_title: string | null
+  seo_description: string | null
+  author: string | null
+  cover_image: string | null
+  language: string | null
+  translation_group: string | null
+  published_at: string | null
+  created_at: string
+  updated_at: string
+}
 
+function rowToPost(row: PostRow): Post {
   return {
     id: row.id,
     blogId: row.blog_id,
@@ -156,10 +109,82 @@ export function getPost(store: Store, blogId: string, slug: string): Post {
     author: row.author ?? undefined,
     coverImage: row.cover_image ?? undefined,
     language: row.language ?? undefined,
+    translationGroup: row.translation_group ?? undefined,
     publishedAt: row.published_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+}
+
+/**
+ * Returns published posts for a blog, newest-first by published_at.
+ * Drafts excluded. Used by the renderer to build the blog index.
+ *
+ * @internal
+ */
+export function listPublishedPostsForBlog(store: Store, blogId: string): Post[] {
+  const rows = store.db
+    .prepare(
+      `SELECT ${POST_COLUMNS}
+         FROM posts
+        WHERE blog_id = ? AND status = 'published'
+        ORDER BY published_at DESC, rowid DESC`,
+    )
+    .all(blogId) as PostRow[]
+  return rows.map(rowToPost)
+}
+
+/**
+ * Languages a blog publishes in, root language first, the rest
+ * alphabetical. The root language is the blog's default when at least
+ * one published post is in it; otherwise the language with the most
+ * published posts (tie: alphabetical), so `/` is always the most useful
+ * page rather than an empty state on a blog whose stored default has
+ * drifted from what it actually publishes. A blog with no published
+ * posts reports `[blog.language]`. Never empty.
+ *
+ * The renderer builds one home page and feed per entry; the hosted
+ * platform uses the same list to pick a visitor's home page.
+ */
+export function listBlogLanguages(store: Store, blogId: string): string[] {
+  const blog = getBlogInternal(store, blogId)
+  const rows = store.db
+    .prepare(
+      `SELECT COALESCE(p.language, b.language) AS lang, COUNT(*) AS n
+         FROM posts p JOIN blogs b ON b.id = p.blog_id
+        WHERE p.blog_id = ? AND p.status = 'published'
+        GROUP BY lang`,
+    )
+    .all(blogId) as { lang: string; n: number }[]
+  if (rows.length === 0) return [blog.language]
+
+  const byTag = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+  const root = rows.some((r) => r.lang === blog.language)
+    ? blog.language
+    : rows.slice().sort((a, b) => b.n - a.n || byTag(a.lang, b.lang))[0].lang
+  const others = rows
+    .map((r) => r.lang)
+    .filter((l) => l !== root)
+    .sort(byTag)
+  return [root, ...others]
+}
+
+/**
+ * Public read: fetch a single post by (blogId, slug). Drafts are
+ * included (unlike listPublishedPostsForBlog). Throws POST_NOT_FOUND.
+ */
+export function getPost(store: Store, blogId: string, slug: string): Post {
+  const row = store.db
+    .prepare(`SELECT ${POST_COLUMNS} FROM posts WHERE blog_id = ? AND slug = ?`)
+    .get(blogId, slug) as PostRow | undefined
+
+  if (!row) {
+    throw new SlopItError('POST_NOT_FOUND', `Post "${slug}" does not exist in blog "${blogId}"`, {
+      blogId,
+      slug,
+    })
+  }
+  return rowToPost(row)
 }
 
 /**
@@ -177,50 +202,114 @@ export function listPosts(
 
   const rows = store.db
     .prepare(
-      `SELECT id, blog_id, slug, title, body, excerpt, tags, status,
-              seo_title, seo_description, author, cover_image, language,
-              published_at, created_at, updated_at
+      `SELECT ${POST_COLUMNS}
          FROM posts
         WHERE blog_id = ? AND status = ?
         ORDER BY ${orderBy}`,
     )
-    .all(blogId, status) as {
-    id: string
-    blog_id: string
-    slug: string
-    title: string
-    body: string
-    excerpt: string | null
-    tags: string
-    status: 'draft' | 'published'
-    seo_title: string | null
-    seo_description: string | null
-    author: string | null
-    cover_image: string | null
-    language: string | null
-    published_at: string | null
-    created_at: string
-    updated_at: string
-  }[]
+    .all(blogId, status) as PostRow[]
+  return rows.map(rowToPost)
+}
 
-  return rows.map((row) => ({
-    id: row.id,
-    blogId: row.blog_id,
-    slug: row.slug,
-    title: row.title,
-    body: row.body,
-    excerpt: row.excerpt ?? undefined,
-    tags: JSON.parse(row.tags) as string[],
-    status: row.status,
-    seoTitle: row.seo_title ?? undefined,
-    seoDescription: row.seo_description ?? undefined,
-    author: row.author ?? undefined,
-    coverImage: row.cover_image ?? undefined,
-    language: row.language ?? undefined,
-    publishedAt: row.published_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }))
+// -----------------------------------------------------------------------------
+// Translation groups
+// -----------------------------------------------------------------------------
+
+/**
+ * Where a write leaves a post's group membership. `adopt` names the
+ * target post to bring into the group when it had none yet, with the
+ * `language` it stored before (NULL = inherited) so compensation can
+ * put it back.
+ */
+interface TranslationLink {
+  group: string | null
+  adopt: { id: string; language: string | null } | null
+}
+
+const NO_LINK: TranslationLink = { group: null, adopt: null }
+
+/**
+ * Resolve `translationOf` (a slug in the same blog) into the group the
+ * writing post joins. Consults the consumer's policy first; then the
+ * target must exist in *this* blog (getPost is blog-scoped, so a slug
+ * from another tenant is simply not found); a post cannot translate
+ * itself.
+ */
+function resolveTranslationOf(
+  store: Store,
+  blog: Blog,
+  translationOf: string,
+  selfId: string | null,
+  policy: TranslationPolicy | undefined,
+): TranslationLink {
+  if (policy !== undefined) {
+    const verdict = policy(blog)
+    if (!verdict.ok) {
+      throw new SlopItError('TRANSLATIONS_DISABLED', verdict.reason, { translationOf })
+    }
+  }
+  const target = getPost(store, blog.id, translationOf)
+  if (selfId !== null && target.id === selfId) {
+    throw new SlopItError('BAD_REQUEST', 'A post cannot be a translation of itself', {
+      translationOf,
+    })
+  }
+  return {
+    group: target.translationGroup ?? generateShortId(),
+    adopt:
+      target.translationGroup === undefined
+        ? { id: target.id, language: target.language ?? null }
+        : null,
+  }
+}
+
+/**
+ * Bring the target post into `group`, freezing its language at its
+ * current effective value so group membership never depends on the blog
+ * default (which can change). Runs inside the caller's transaction.
+ */
+function adoptIntoGroup(store: Store, blog: Blog, link: TranslationLink): void {
+  if (link.adopt === null) return
+  store.db
+    .prepare(
+      'UPDATE posts SET translation_group = ?, language = COALESCE(language, ?) WHERE id = ?',
+    )
+    .run(link.group, blog.language, link.adopt.id)
+}
+
+/** Reverse of adoptIntoGroup, for compensation after a failed render. */
+function unadopt(store: Store, link: TranslationLink): void {
+  if (link.adopt === null) return
+  store.db
+    .prepare('UPDATE posts SET translation_group = NULL, language = ? WHERE id = ?')
+    .run(link.adopt.language, link.adopt.id)
+}
+
+/**
+ * One post per language per group. Preflight inside the write
+ * transaction (after the adopt write, so the target's now-explicit
+ * language is visible) to name the existing member in the error; the
+ * partial unique index in migration 010 is the backstop.
+ */
+function assertLanguageFree(
+  store: Store,
+  blogId: string,
+  group: string,
+  language: string,
+  selfId: string,
+): void {
+  const taken = store.db
+    .prepare(
+      'SELECT slug FROM posts WHERE blog_id = ? AND translation_group = ? AND language = ? AND id != ?',
+    )
+    .get(blogId, group, language, selfId) as { slug: string } | undefined
+  if (taken) {
+    throw new SlopItError(
+      'TRANSLATION_CONFLICT',
+      `This translation group already has a post in "${language}": "${taken.slug}"`,
+      { language, slug: taken.slug },
+    )
+  }
 }
 
 /**
@@ -233,29 +322,50 @@ export function listPosts(
  * createPost attempts compensation via DELETE FROM posts. If the DELETE
  * also fails (extraordinarily rare — usually indicates DB corruption or
  * I/O failure), the row persists and operator cleanup is needed.
+ *
+ * `translationOf` links the new post into the target's translation group
+ * (docs/superpowers/specs/2026-09-15-translations-design.md): the target
+ * is adopted into a fresh group if it had none, both rows end up with an
+ * explicit `language`, and compensation restores the target too.
  */
 export function createPost(
   store: Store,
   renderer: Renderer,
   blogId: string,
   input: PostInput,
+  opts?: PostWriteOptions,
 ): { post: Post; postUrl?: string } {
   const parsed = PostInputSchema.parse(input)
 
   // Step 2: blog exists (throws BLOG_NOT_FOUND with details.blogId)
-  getBlogInternal(store, blogId)
+  const blog = getBlogInternal(store, blogId)
 
   // Step 3: resolve slug (superRefine already rejected empty auto-slug)
   const slug = parsed.slug ?? generateSlug(parsed.title)
+  if (RESERVED_SLUGS.has(slug)) {
+    throw new SlopItError(
+      'POST_SLUG_RESERVED',
+      `Slug "${slug}" is reserved for the per-language home pages; choose another slug`,
+      { slug },
+    )
+  }
 
-  // Step 4: derived fields
+  // Step 4: derived fields. A group member always stores its language.
+  const link =
+    parsed.translationOf !== undefined
+      ? resolveTranslationOf(store, blog, parsed.translationOf, null, opts?.translationPolicy)
+      : NO_LINK
+  const language =
+    link.group !== null ? (parsed.language ?? blog.language) : (parsed.language ?? null)
   const id = generateShortId()
   const excerpt = parsed.excerpt ?? autoExcerpt(parsed.body)
   const now = new Date().toISOString()
   const publishedAt = parsed.status === 'published' ? now : null
   const tagsJson = JSON.stringify(parsed.tags)
 
-  // Step 5: transactional INSERT with preflight + narrow-match
+  // Step 5: transactional INSERT with preflight + narrow-match. The target
+  // adoption and the language-uniqueness preflight ride in the same
+  // transaction, so a conflict rolls the adoption back with it.
   const tx = store.db.transaction(() => {
     const exists = store.db
       .prepare('SELECT 1 FROM posts WHERE blog_id = ? AND slug = ?')
@@ -265,13 +375,16 @@ export function createPost(
         slug,
       })
     }
+    adoptIntoGroup(store, blog, link)
+    if (link.group !== null) assertLanguageFree(store, blogId, link.group, language!, id)
     try {
       store.db
         .prepare(
           `INSERT INTO posts (
              id, blog_id, slug, title, body, excerpt, tags, status,
-             seo_title, seo_description, author, cover_image, language, published_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             seo_title, seo_description, author, cover_image, language,
+             translation_group, published_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -286,7 +399,8 @@ export function createPost(
           parsed.seoDescription ?? null,
           parsed.author ?? null,
           parsed.coverImage ?? null,
-          parsed.language ?? null,
+          language,
+          link.group,
           publishedAt,
         )
     } catch (e) {
@@ -303,54 +417,13 @@ export function createPost(
   tx()
 
   // Hydrate the row we just wrote
-  const row = store.db
-    .prepare(
-      `SELECT id, blog_id, slug, title, body, excerpt, tags, status,
-              seo_title, seo_description, author, cover_image, language,
-              published_at, created_at, updated_at
-         FROM posts WHERE id = ?`,
-    )
-    .get(id) as {
-    id: string
-    blog_id: string
-    slug: string
-    title: string
-    body: string
-    // createPost always writes a non-null excerpt (explicit or auto).
-    excerpt: string
-    tags: string
-    status: 'draft' | 'published'
-    seo_title: string | null
-    seo_description: string | null
-    author: string | null
-    cover_image: string | null
-    language: string | null
-    published_at: string | null
-    created_at: string
-    updated_at: string
-  }
-
-  const post: Post = {
-    id: row.id,
-    blogId: row.blog_id,
-    slug: row.slug,
-    title: row.title,
-    body: row.body,
-    excerpt: row.excerpt,
-    tags: JSON.parse(row.tags) as string[],
-    status: row.status,
-    seoTitle: row.seo_title ?? undefined,
-    seoDescription: row.seo_description ?? undefined,
-    author: row.author ?? undefined,
-    coverImage: row.cover_image ?? undefined,
-    language: row.language ?? undefined,
-    publishedAt: row.published_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }
+  const post = rowToPost(
+    store.db.prepare(`SELECT ${POST_COLUMNS} FROM posts WHERE id = ?`).get(id) as PostRow,
+  )
 
   // Render (published only) with compensation on failure. renderBlogPosts
-  // refreshes every sibling page's "More from this blog" block.
+  // refreshes every sibling page's "More from this blog" block and, for
+  // translations, the hreflang links and language switcher.
   if (parsed.status === 'published') {
     try {
       renderer.renderPost(blogId, post)
@@ -358,7 +431,10 @@ export function createPost(
       renderer.renderBlogPosts(blogId)
     } catch (renderErr) {
       try {
-        store.db.prepare('DELETE FROM posts WHERE id = ?').run(id)
+        store.db.transaction(() => {
+          store.db.prepare('DELETE FROM posts WHERE id = ?').run(id)
+          unadopt(store, link)
+        })()
       } catch {
         /* best-effort; see spec decision #6 */
       }
@@ -380,9 +456,14 @@ export function createPost(
  *   published→published : re-render files + index; keep published_at, bump updated_at
  *   published→draft  : delete files; re-render index; clear published_at
  *
- * Compensation mirrors createPost: on render failure the prior row is
- * restored via a reverse UPDATE and the original render error bubbles.
- * See spec's weakened invariant.
+ * `translationOf`: a slug joins that post's group (adopting it into a
+ * fresh group if needed), `null` leaves the current group, omitted keeps
+ * membership. A group member always stores an explicit language, so
+ * `language: null` on a member stores the blog default rather than NULL.
+ *
+ * Compensation mirrors createPost: on render failure the prior row (and
+ * an adopted target) is restored via reverse UPDATEs and the original
+ * render error bubbles. See spec's weakened invariant.
  */
 export function updatePost(
   store: Store,
@@ -390,11 +471,12 @@ export function updatePost(
   blogId: string,
   slug: string,
   patch: PostPatchInput,
+  opts?: PostWriteOptions,
 ): { post: Post; postUrl?: string } {
   const parsed = PostPatchSchema.parse(patch)
 
   // Ensure blog exists (throws BLOG_NOT_FOUND)
-  getBlogInternal(store, blogId)
+  const blog = getBlogInternal(store, blogId)
 
   // Load prior row — throws POST_NOT_FOUND if missing
   const prior = getPost(store, blogId, slug)
@@ -407,6 +489,31 @@ export function updatePost(
       : { post: prior }
   }
 
+  // Group membership after this patch (see the function doc).
+  const membership = parsed.translationOf
+  let link: TranslationLink
+  if (typeof membership === 'string') {
+    link = resolveTranslationOf(store, blog, membership, prior.id, opts?.translationPolicy)
+  } else if (membership === null) {
+    link = NO_LINK
+  } else {
+    link = { group: prior.translationGroup ?? null, adopt: null }
+  }
+
+  // Language after this patch. Outside a group the existing rule holds
+  // (`null` clears the override, omitted keeps the prior value). Inside a
+  // group the value is always explicit: `null`/absent resolve to the
+  // blog default.
+  const languageTouched = 'language' in parsed
+  const language: string | null =
+    link.group !== null
+      ? languageTouched
+        ? (parsed.language ?? blog.language)
+        : (prior.language ?? blog.language)
+      : languageTouched
+        ? (parsed.language ?? null)
+        : (prior.language ?? null)
+
   // Merge patched fields into prior row
   const merged = {
     title: parsed.title ?? prior.title,
@@ -418,9 +525,6 @@ export function updatePost(
     seoDescription: 'seoDescription' in parsed ? parsed.seoDescription : prior.seoDescription,
     author: 'author' in parsed ? parsed.author : prior.author,
     coverImage: 'coverImage' in parsed ? parsed.coverImage : prior.coverImage,
-    // `null` clears the per-post override (stored NULL → inherits the blog
-    // language); an omitted key leaves the prior value.
-    language: 'language' in parsed ? parsed.language : prior.language,
   }
 
   // Determine published_at by transition (decision #21 preserves on pub→pub)
@@ -435,49 +539,46 @@ export function updatePost(
     publishedAt = prior.publishedAt
   }
 
-  // Apply DB UPDATE (updated_at bumps automatically? No — set explicitly)
+  const writeSelf = store.db.prepare(
+    `UPDATE posts
+        SET title = ?, body = ?, excerpt = ?, tags = ?, status = ?,
+            seo_title = ?, seo_description = ?, author = ?, cover_image = ?,
+            language = ?, translation_group = ?, published_at = ?, updated_at = ?
+      WHERE blog_id = ? AND slug = ?`,
+  )
+
+  // One transaction over both rows: adopt the target (if any), check the
+  // group has no other post in this language, then write this post.
   const nowIso = new Date().toISOString()
-  const tagsJson = JSON.stringify(merged.tags)
-  store.db
-    .prepare(
-      `UPDATE posts
-          SET title = ?, body = ?, excerpt = ?, tags = ?, status = ?,
-              seo_title = ?, seo_description = ?, author = ?, cover_image = ?,
-              language = ?, published_at = ?, updated_at = ?
-        WHERE blog_id = ? AND slug = ?`,
-    )
-    .run(
+  store.db.transaction(() => {
+    adoptIntoGroup(store, blog, link)
+    if (link.group !== null) assertLanguageFree(store, blogId, link.group, language!, prior.id)
+    writeSelf.run(
       merged.title,
       merged.body,
       merged.excerpt ?? null,
-      tagsJson,
+      JSON.stringify(merged.tags),
       merged.status,
       merged.seoTitle ?? null,
       merged.seoDescription ?? null,
       merged.author ?? null,
       merged.coverImage ?? null,
-      merged.language ?? null,
+      language,
+      link.group,
       publishedAt,
       nowIso,
       blogId,
       slug,
     )
+  })()
 
   // Hydrate the updated row
   const updated = getPost(store, blogId, slug)
 
   // Render side effects per matrix, with compensation
   const compensate = () => {
-    // Reverse UPDATE back to prior state
-    store.db
-      .prepare(
-        `UPDATE posts
-            SET title = ?, body = ?, excerpt = ?, tags = ?, status = ?,
-                seo_title = ?, seo_description = ?, author = ?, cover_image = ?,
-                language = ?, published_at = ?, updated_at = ?
-          WHERE blog_id = ? AND slug = ?`,
-      )
-      .run(
+    store.db.transaction(() => {
+      writeSelf.run(
         prior.title,
         prior.body,
         prior.excerpt ?? null,
@@ -488,11 +589,14 @@ export function updatePost(
         prior.author ?? null,
         prior.coverImage ?? null,
         prior.language ?? null,
+        prior.translationGroup ?? null,
         prior.publishedAt,
         prior.updatedAt,
         blogId,
         slug,
       )
+      unadopt(store, link)
+    })()
   }
 
   try {
@@ -500,11 +604,14 @@ export function updatePost(
       // no file ops
     } else if (newStatus === 'published') {
       // renderPost emits per-post HTML + .md + per-blog manifests (Phase 2),
-      // renderBlog refreshes the human-facing index, renderBlogPosts the
-      // sibling pages (title/description may have changed).
+      // renderBlog refreshes the human-facing home pages, renderBlogPosts
+      // the sibling pages (title/description/translations may have
+      // changed). A language change can empty a language, so the stale
+      // home is pruned last, after every write succeeded.
       renderer.renderPost(blogId, updated)
       renderer.renderBlog(blogId)
       renderer.renderBlogPosts(blogId)
+      renderer.pruneLanguageHomes(blogId)
     } else if (oldStatus === 'published' && newStatus === 'draft') {
       // Published → draft. Ordering matters (reviewer P2 from Phase 2 review):
       //   1. renderBlog + renderManifests + renderBlogPosts run FIRST against
@@ -512,14 +619,16 @@ export function updatePost(
       //      and sibling "More from" lists. If any throws, the catch
       //      compensates DB back to 'published' and the per-post files are
       //      still on disk → consistent pre-call state.
-      //   2. removePostFiles + deletePostMarkdown run LAST. They're
-      //      destructive; we cannot recover them from the catch, so we only
-      //      reach them after the safe re-render side has succeeded.
+      //   2. removePostFiles, deletePostMarkdown and pruneLanguageHomes run
+      //      LAST. They're destructive; we cannot recover them from the
+      //      catch, so we only reach them after the safe re-render side
+      //      has succeeded.
       renderer.renderBlog(blogId)
       renderer.renderManifests(blogId)
       renderer.renderBlogPosts(blogId)
       renderer.removePostFiles(blogId, slug)
       renderer.deletePostMarkdown(blogId, slug)
+      renderer.pruneLanguageHomes(blogId)
     }
   } catch (renderErr) {
     try {
@@ -562,7 +671,7 @@ export function deletePost(
   // it; custom renderers that reach this primitive must provide it too.
   // Same manifests-before-destructive-cleanup ordering as the updatePost
   // published→draft branch. Index refresh + manifest regen first; per-post
-  // file removal last.
+  // file removal and the language-home prune last.
   if (prior.status === 'published') {
     renderer.renderBlog(blogId)
     renderer.renderManifests(blogId)
@@ -570,6 +679,7 @@ export function deletePost(
     renderer.deletePostMarkdown(blogId, slug)
   }
   renderer.removePostFiles(blogId, slug)
+  renderer.pruneLanguageHomes(blogId)
 
   return { deleted: true }
 }

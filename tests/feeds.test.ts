@@ -100,7 +100,7 @@ describe('buildSitemap', () => {
   const blogRoot = 'https://b.slopit.io/'
 
   it('emits a valid sitemap envelope', () => {
-    const out = buildSitemap({ blogRoot, posts: [], updatedAt: '2026-05-01T00:00:00Z' })
+    const out = buildSitemap({ blogRoot, homes: [], posts: [], updatedAt: '2026-05-01T00:00:00Z' })
     expect(out).toContain('<?xml version="1.0" encoding="UTF-8"?>')
     expect(out).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
     expect(out).toContain('</urlset>')
@@ -109,6 +109,7 @@ describe('buildSitemap', () => {
   it('always includes the blog root with the latest updatedAt', () => {
     const out = buildSitemap({
       blogRoot,
+      homes: [],
       posts: [],
       updatedAt: '2026-05-01T12:00:00Z',
     })
@@ -121,7 +122,7 @@ describe('buildSitemap', () => {
       { canonicalUrl: 'https://b.slopit.io/a/', updatedAt: '2026-04-01T00:00:00Z' },
       { canonicalUrl: 'https://b.slopit.io/b/', updatedAt: '2026-04-02T00:00:00Z' },
     ]
-    const out = buildSitemap({ blogRoot, posts, updatedAt: '2026-05-01T00:00:00Z' })
+    const out = buildSitemap({ blogRoot, homes: [], posts, updatedAt: '2026-05-01T00:00:00Z' })
     expect(out).toContain('<loc>https://b.slopit.io/a/</loc>')
     expect(out).toContain('<loc>https://b.slopit.io/b/</loc>')
     expect((out.match(/<url>/g) ?? []).length).toBe(3) // root + 2 posts
@@ -130,6 +131,7 @@ describe('buildSitemap', () => {
   it('emits weekly changefreq for every <url>', () => {
     const out = buildSitemap({
       blogRoot,
+      homes: [],
       posts: [{ canonicalUrl: 'https://b.slopit.io/a/', updatedAt: '2026-04-01T00:00:00Z' }],
       updatedAt: '2026-05-01T00:00:00Z',
     })
@@ -139,6 +141,7 @@ describe('buildSitemap', () => {
   it('xml-escapes URL chars', () => {
     const out = buildSitemap({
       blogRoot: 'https://b.slopit.io/?x=1&y=2',
+      homes: [],
       posts: [],
       updatedAt: '2026-05-01T00:00:00Z',
     })

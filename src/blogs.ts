@@ -291,6 +291,9 @@ export function updateBlog(
       }
       renderer.renderManifests(blogId)
     }
+    // A default-language change can move a language from `/lang/<tag>/`
+    // to `/` (its old home is now stale). Destructive, so last.
+    renderer.pruneLanguageHomes(blogId)
   } catch (renderErr) {
     try {
       compensate()

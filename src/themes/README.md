@@ -7,9 +7,10 @@ Core ships one built-in theme in v1: `minimal`. The theme system is designed to 
 ```
 Title
 Date
+Languages (only when the post has translations: the other languages' names, linked)
 Body (rendered markdown)
 Tags
-More from this blog (the 3 newest other posts: title + description, clamped to two lines)
+More from this blog (the 3 newest other posts in this language: title + description, clamped to two lines)
 Powered by SlopIt footer link
 ```
 
@@ -28,6 +29,8 @@ Explicitly *not* shipped in v1:
 - Tag-based "related" scoring, newsletter sign-ups, popovers
 - Comment sections
 - Any JavaScript for interactivity
+- Redirecting a post page to another language (search engines route by `hreflang`; a consumer may negotiate on the home page only)
+- Guessing a reader's language from their IP address
 
 The content *is* the product. The template just makes it readable.
 
@@ -43,6 +46,8 @@ Think "a GitHub README rendered as a webpage" — not "a Medium article."
 ## Blog-level pages
 
 A blog's index (`/` on the subdomain, or `/b/:id/` on the path-based route) is a simple reverse-chronological list of posts. Title + date + excerpt (if present) + link. Same typography, same constraints.
+
+A blog that publishes in more than one language gets one such home page per language: `/` for its root language and `/lang/<tag>/` for every other (`/lang/de/`, `/lang/pt-br/`), each listing only that language's posts in that language's chrome, plus a language row under the masthead. `/lang/` is a reserved directory (the post slug `lang` is refused) so post URLs and language homes never collide. Spec: `docs/superpowers/specs/2026-09-15-translations-design.md`.
 
 ## Nav on a blog page
 

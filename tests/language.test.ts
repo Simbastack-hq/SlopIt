@@ -188,6 +188,14 @@ describe('language — store and lifecycle', () => {
       body: 'نص',
       language: 'ar',
     })
+    // "More from this blog" lists same-language posts only, so a second
+    // Arabic post is what makes the Arabic heading appear.
+    createPost(store, renderer, blog.id, {
+      title: 'ثانية',
+      slug: 'thania',
+      body: 'نص',
+      language: 'ar',
+    })
 
     const ar = read(blog.id, 'marhaba', 'index.html')
     expect(ar).toContain('<html lang="ar" dir="rtl">')
@@ -268,14 +276,15 @@ describe('language — store and lifecycle', () => {
     expect(body).toContain('BCP-47')
   })
 
-  it('migration 009 upgrades a pre-009 database: blogs read en, posts read no override', () => {
+  it('migrations 009 + 010 upgrade a pre-009 database: blogs read en, posts read no override', () => {
     // Build a database that predates 009: open it (all migrations run),
-    // then drop the two columns and forget that 009 ran. Legacy rows go
+    // then drop the three columns (and 010's index on one of them) and
+    // forget that 009 and 010 ran. Legacy rows go
     // in through raw SQL because the app-level writers now set language.
     const { blog } = createBlog(store, { name: 'legacy' })
     createPost(store, renderer, blog.id, { title: 'T', slug: 'tt', body: 'b' })
     store.db.exec(
-      "ALTER TABLE blogs DROP COLUMN language; ALTER TABLE posts DROP COLUMN language; DELETE FROM schema_migrations WHERE filename = '009_language.sql'",
+      "DROP INDEX idx_posts_translation_lang; ALTER TABLE posts DROP COLUMN translation_group; ALTER TABLE blogs DROP COLUMN language; ALTER TABLE posts DROP COLUMN language; DELETE FROM schema_migrations WHERE filename IN ('009_language.sql', '010_translations.sql')",
     )
     expect(() => store.db.prepare('SELECT language FROM blogs').all()).toThrow()
     const dbPath = join(dir, 'test.db')
