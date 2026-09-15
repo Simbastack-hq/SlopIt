@@ -147,7 +147,9 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       input = await c.req.json()
     }
 
-    const { post, postUrl } = createPost(config.store, renderer, c.var.blog.id, input)
+    const { post, postUrl } = createPost(config.store, renderer, c.var.blog.id, input, {
+      translationPolicy: config.translationPolicy,
+    })
     return c.json({
       post,
       ...(postUrl !== undefined ? { post_url: postUrl } : {}),
@@ -185,6 +187,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       c.var.blog.id,
       c.req.param('slug'),
       raw,
+      { translationPolicy: config.translationPolicy },
     )
     return c.json({
       post,

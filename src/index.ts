@@ -27,7 +27,15 @@ export { requestRecoveryByEmail, consumeRecoveryToken } from './recovery.js'
 export type { RecoveryRequestResult, RecoveryConsumeResult } from './recovery.js'
 
 // Post primitives
-export { createPost, updatePost, deletePost, getPost, listPosts } from './posts.js'
+export {
+  createPost,
+  updatePost,
+  deletePost,
+  getPost,
+  listPosts,
+  listBlogLanguages,
+} from './posts.js'
+export type { TranslationPolicy } from './posts.js'
 
 // Media primitives
 export { uploadMedia, listMedia, getMedia, deleteMedia } from './media.js'

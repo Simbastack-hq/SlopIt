@@ -19,6 +19,7 @@ const makeRenderer = (baseUrl: string): Renderer => ({
   renderPost: () => {},
   renderBlog: () => {},
   renderBlogPosts: () => {},
+  pruneLanguageHomes: () => {},
 })
 
 describe('buildLinks', () => {

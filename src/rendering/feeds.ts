@@ -70,8 +70,16 @@ export interface SitemapPost {
   updatedAt: string
 }
 
+/** A non-root language home page (`/lang/<tag>/`). */
+export interface SitemapHome {
+  url: string
+  updatedAt: string // most-recent updatedAt among that language's posts
+}
+
 export interface SitemapInput {
   blogRoot: string
+  /** Language home pages other than the root. Empty on a monolingual blog. */
+  homes: readonly SitemapHome[]
   posts: readonly SitemapPost[]
   updatedAt: string // most-recent updatedAt across the blog (for the root entry)
 }
@@ -82,6 +90,9 @@ function urlEntry(loc: string, lastmod: string): string {
 
 export function buildSitemap(input: SitemapInput): string {
   const entries = [urlEntry(input.blogRoot, input.updatedAt)]
+  for (const h of input.homes) {
+    entries.push(urlEntry(h.url, h.updatedAt))
+  }
   for (const p of input.posts) {
     entries.push(urlEntry(p.canonicalUrl, p.updatedAt))
   }
