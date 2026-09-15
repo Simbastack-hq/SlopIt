@@ -2,7 +2,7 @@ import { getBlogInternal } from './blogs.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId, generateSlug } from './ids.js'
-import type { Renderer, MutationRenderer } from './rendering/generator.js'
+import type { MutationRenderer } from './rendering/generator.js'
 import { PostInputSchema, type Blog, type Post, type PostInput } from './schema/index.js'
 import { PostPatchSchema, type PostPatchInput } from './schema/index.js'
 
@@ -313,15 +313,32 @@ function assertLanguageFree(
 }
 
 /**
+ * Re-derive every blog-level page from the rows as they stand now: home
+ * pages, manifests and feeds, every post page, then prune stale language
+ * homes. Used after a compensated write failure so public output matches
+ * the restored rows — a failed publish must not leave a readable page, a
+ * feed entry or a language home behind (Codex audit 2026-09-16, #1).
+ *
+ * @internal
+ */
+export function rederiveBlogOutput(renderer: MutationRenderer, blogId: string): void {
+  renderer.renderBlog(blogId)
+  renderer.renderManifests(blogId)
+  renderer.renderBlogPosts(blogId)
+  renderer.pruneLanguageHomes(blogId)
+}
+
+/**
  * Create a post. For published posts, also renders the post page + blog
  * index + CSS to disk, and returns a postUrl. For drafts, writes the DB
  * row only and returns { post } without postUrl.
  *
  * See docs/superpowers/specs/2026-04-22-create-post-design.md for the full
- * contract, including the weakened atomicity invariant: if render fails,
- * createPost attempts compensation via DELETE FROM posts. If the DELETE
- * also fails (extraordinarily rare — usually indicates DB corruption or
- * I/O failure), the row persists and operator cleanup is needed.
+ * contract. If rendering fails, createPost compensates: the row (and an
+ * adopted translation target) is restored, the new post's files are
+ * removed, and every blog-level page is re-derived from the restored rows.
+ * Compensation is best-effort: if the DELETE or the re-render also fails
+ * (DB corruption, I/O failure), operator cleanup is needed.
  *
  * `translationOf` links the new post into the target's translation group
  * (docs/superpowers/specs/2026-09-15-translations-design.md): the target
@@ -330,7 +347,7 @@ function assertLanguageFree(
  */
 export function createPost(
   store: Store,
-  renderer: Renderer,
+  renderer: MutationRenderer,
   blogId: string,
   input: PostInput,
   opts?: PostWriteOptions,
@@ -438,8 +455,14 @@ export function createPost(
           store.db.prepare('DELETE FROM posts WHERE id = ?').run(id)
           unadopt(store, link)
         })()
+        // Public output must not outlive the row: drop what renderPost
+        // wrote for this post, then rebuild the pages that embedded it
+        // (homes, feeds, sibling hreflang) from the restored rows.
+        renderer.removePostFiles(blogId, slug)
+        renderer.deletePostMarkdown(blogId, slug)
+        rederiveBlogOutput(renderer, blogId)
       } catch {
-        /* best-effort; see spec decision #6 */
+        /* best-effort; see the function doc */
       }
       throw renderErr
     }
@@ -636,8 +659,19 @@ export function updatePost(
   } catch (renderErr) {
     try {
       compensate()
+      // Put public output back in step with the restored rows: a post that
+      // was published gets its prior page, .md and manifests back; one
+      // that was a draft loses whatever the failed publish wrote. Then the
+      // blog-level pages are re-derived.
+      if (prior.status === 'published') {
+        renderer.renderPost(blogId, prior)
+      } else {
+        renderer.removePostFiles(blogId, slug)
+        renderer.deletePostMarkdown(blogId, slug)
+      }
+      rederiveBlogOutput(renderer, blogId)
     } catch {
-      /* best-effort; weakened invariant */
+      /* best-effort; a second failure needs operator cleanup */
     }
     throw renderErr
   }

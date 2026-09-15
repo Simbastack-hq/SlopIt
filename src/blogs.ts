@@ -2,7 +2,7 @@ import { generateApiKey, hashApiKey } from './auth/api-key.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId } from './ids.js'
-import { listPublishedPostsForBlog } from './posts.js'
+import { listPublishedPostsForBlog, rederiveBlogOutput } from './posts.js'
 import type { MutationRenderer } from './rendering/generator.js'
 import {
   BlogAnalyticsSchema,
@@ -297,8 +297,17 @@ export function updateBlog(
   } catch (renderErr) {
     try {
       compensate()
+      // Re-derive public output from the restored row (same contract as
+      // updatePost): .md files carry the effective language, so a failed
+      // language change rewrites them too.
+      if (languageChanged) {
+        for (const post of listPublishedPostsForBlog(store, blogId)) {
+          renderer.renderPostMarkdown(blogId, post)
+        }
+      }
+      rederiveBlogOutput(renderer, blogId)
     } catch {
-      /* best-effort; weakened invariant per updatePost precedent */
+      /* best-effort; a second failure needs operator cleanup */
     }
     throw renderErr
   }

@@ -59,14 +59,24 @@ const STRINGS: Record<string, ThemeStrings> = {
     mainSite: 'Tovuti kuu',
     otherLanguages: 'Lugha nyingine',
   },
+  // Traditional-script Chinese differs from `zh` (Simplified) in one of
+  // the three labels; keyed by language-script so `zh-Hant`, `zh-TW` and
+  // `zh-HK` (which all maximise to Hant) get it.
+  'zh-Hant': { moreFrom: '更多文章', mainSite: '主站', otherLanguages: '其他語言' },
 }
 
 /** Languages with a translated chrome. Exported for the drift-guard test. */
 export const THEME_LANGUAGES: readonly string[] = Object.keys(STRINGS)
 
-/** Strings for a (canonical) BCP-47 tag; English when not translated. */
+/**
+ * Strings for a (canonical) BCP-47 tag: the language-script entry when
+ * one exists (`zh-Hant`), else the language (`pt-BR` → `pt`), else
+ * English. The script comes from likely subtags, so `zh-TW` finds the
+ * Traditional entry without listing every region.
+ */
 export function stringsFor(tag: string): ThemeStrings {
-  return STRINGS[new Intl.Locale(tag).language] ?? STRINGS.en
+  const locale = new Intl.Locale(tag).maximize()
+  return STRINGS[`${locale.language}-${locale.script}`] ?? STRINGS[locale.language] ?? STRINGS.en
 }
 
 /**
