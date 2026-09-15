@@ -126,7 +126,7 @@ export const PostPatchSchema = z
     // leaves membership unchanged.
     translationOf: z
       .string()
-      .min(2)
+      .min(1)
       .max(100)
       .describe(
         'Slug of a post in this blog to link as a translation of this one. Send null to unlink this post from its translation group.',

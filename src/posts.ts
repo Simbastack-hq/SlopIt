@@ -429,6 +429,9 @@ export function createPost(
       renderer.renderPost(blogId, post)
       renderer.renderBlog(blogId)
       renderer.renderBlogPosts(blogId)
+      // A publish can make another language the root (listBlogLanguages),
+      // moving its home from lang/<tag>/ to /. Destructive, so last.
+      renderer.pruneLanguageHomes(blogId)
     } catch (renderErr) {
       try {
         store.db.transaction(() => {

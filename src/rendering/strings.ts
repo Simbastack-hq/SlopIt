@@ -54,6 +54,11 @@ const STRINGS: Record<string, ThemeStrings> = {
     otherLanguages: 'لغات أخرى',
   },
   hi: { moreFrom: 'इस ब्लॉग के और लेख', mainSite: 'मुख्य साइट', otherLanguages: 'अन्य भाषाएँ' },
+  sw: {
+    moreFrom: 'Zaidi kutoka blogu hii',
+    mainSite: 'Tovuti kuu',
+    otherLanguages: 'Lugha nyingine',
+  },
 }
 
 /** Languages with a translated chrome. Exported for the drift-guard test. */

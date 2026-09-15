@@ -94,7 +94,7 @@ describe('language helpers', () => {
   it('stringsFor looks up by primary subtag and falls back to English', () => {
     expect(stringsFor('pt-BR').moreFrom).toBe('Mais deste blog')
     expect(stringsFor('ru').mainSite).toBe('Основной сайт')
-    expect(stringsFor('sw')).toEqual(stringsFor('en'))
+    expect(stringsFor('nl')).toEqual(stringsFor('en'))
   })
 
   it('every translated language has every key (no half-translated entries)', () => {

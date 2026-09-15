@@ -685,3 +685,90 @@ describe('translations — over REST and MCP', () => {
     expect(doc).toContain('TRANSLATIONS_DISABLED')
   })
 })
+
+describe('translations — code review round 2', () => {
+  let dir: string
+  let store: Store
+  let outputDir: string
+  let renderer: ReturnType<typeof createRenderer>
+
+  const read = (...p: string[]) => readFileSync(join(outputDir, ...p), 'utf8')
+  const exists = (...p: string[]) => existsSync(join(outputDir, ...p))
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-translations-r2-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+    outputDir = join(dir, 'out')
+    renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example' })
+  })
+
+  afterEach(() => {
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const publish = (blogId: string, input: Partial<PostInput> & { slug: string }) =>
+    createPost(store, renderer, blogId, {
+      title: input.slug,
+      body: `Body of ${input.slug}`,
+      ...input,
+    }).post
+
+  it('pruning touches directories only: a legacy `lang` post keeps its page on a monolingual blog', () => {
+    const { blog } = createBlog(store, { name: 'legacy-mono' })
+    publish(blog.id, { slug: 'hello' })
+    store.db
+      .prepare(
+        "INSERT INTO posts (id, blog_id, slug, title, body, status, published_at) VALUES ('legacy2', ?, 'lang', 'Lang', 'b', 'published', '2026-01-01T00:00:00Z')",
+      )
+      .run(blog.id)
+    renderer.renderPost(blog.id, getPost(store, blog.id, 'lang'))
+    expect(exists(blog.id, 'lang', 'index.html')).toBe(true)
+
+    // Any ordinary edit re-renders and then prunes; the legacy page survives.
+    updatePost(store, renderer, blog.id, 'hello', { title: 'Edited' })
+    expect(exists(blog.id, 'lang', 'index.html')).toBe(true)
+    expect(read(blog.id, 'lang', 'index.html')).toContain('Lang')
+  })
+
+  it("a publish that makes another language the root prunes that language's old home", () => {
+    const { blog } = createBlog(store, { name: 'root-flip' })
+    publish(blog.id, { slug: 'de-1', language: 'de' })
+    publish(blog.id, { slug: 'de-2', language: 'de' })
+    publish(blog.id, { slug: 'fr-1', language: 'fr' })
+    publish(blog.id, { slug: 'fr-2', language: 'fr' })
+    // No English post: the root is the most-published language, tie → alphabetical.
+    expect(listBlogLanguages(store, blog.id)).toEqual(['de', 'fr'])
+    expect(exists(blog.id, 'lang', 'fr', 'index.html')).toBe(true)
+    expect(exists(blog.id, 'lang', 'de')).toBe(false)
+
+    publish(blog.id, { slug: 'fr-3', language: 'fr' })
+    expect(listBlogLanguages(store, blog.id)).toEqual(['fr', 'de'])
+    expect(read(blog.id, 'index.html')).toContain('<html lang="fr"')
+    expect(exists(blog.id, 'lang', 'de', 'index.html')).toBe(true)
+    expect(exists(blog.id, 'lang', 'fr')).toBe(false)
+  })
+
+  it('translationOf accepts a one-character auto-generated slug', () => {
+    const { blog } = createBlog(store, { name: 'short' })
+    const a = createPost(store, renderer, blog.id, { title: 'A', body: 'b' }).post
+    expect(a.slug).toBe('a')
+    const de = publish(blog.id, { slug: 'aa', language: 'de', translationOf: 'a' })
+    expect(de.translationGroup).toBe(getPost(store, blog.id, 'a').translationGroup)
+    publish(blog.id, { slug: 'bonjour', language: 'fr' })
+    const fr = updatePost(store, renderer, blog.id, 'bonjour', { translationOf: 'a' }).post
+    expect(fr.translationGroup).toBe(de.translationGroup)
+  })
+
+  it('feeds cap at 20 after filtering by language, never before', () => {
+    const { blog } = createBlog(store, { name: 'feed-cap' })
+    publish(blog.id, { slug: 'einzig', language: 'de' })
+    for (let i = 0; i < 25; i++) publish(blog.id, { slug: `en-${i}` })
+    const en = read(blog.id, 'feed.xml')
+    expect((en.match(/<item>/g) ?? []).length).toBe(20)
+    expect(en).not.toContain('/einzig/')
+    const de = read(blog.id, 'lang', 'de', 'feed.xml')
+    expect((de.match(/<item>/g) ?? []).length).toBe(1)
+    expect(de).toContain('/einzig/')
+  })
+})

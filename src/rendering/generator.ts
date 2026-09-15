@@ -72,6 +72,17 @@ export interface Renderer {
    * only — `.md` and the manifests do not depend on sibling posts.
    */
   renderBlogPosts(blogId: string): void
+  /**
+   * Remove `lang/<tag>/` for every language that no longer has a
+   * published post (and `lang/` itself once empty). ENOENT-tolerant.
+   * Destructive, so every mutation primitive calls it LAST, after every
+   * render in the sequence has succeeded — a render failure then leaves
+   * the old home on disk for the compensated DB state, never a hole.
+   * `createPost` needs it too: publishing can change which language is
+   * the root (see `listBlogLanguages`), which moves a home from
+   * `lang/<tag>/` to `/`.
+   */
+  pruneLanguageHomes(blogId: string): void
 }
 
 /**
@@ -117,14 +128,6 @@ export interface MutationRenderer extends Renderer {
    * post in the blog changes lifecycle (publish, update, unpublish, delete).
    */
   renderManifests(blogId: string): void
-  /**
-   * Remove `lang/<tag>/` for every language that no longer has a
-   * published post (and `lang/` itself once empty). ENOENT-tolerant.
-   * Destructive, so the mutation primitives call it LAST, after every
-   * render in the sequence has succeeded — a render failure then leaves
-   * the old home on disk for the compensated DB state, never a hole.
-   */
-  pruneLanguageHomes(blogId: string): void
 }
 
 /**
@@ -765,8 +768,13 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       // `lang/` holds only what renderBlog and renderManifests wrote, so
       // anything not in the current non-root language set is stale.
       const keep = new Set(listBlogLanguages(config.store, blogId).slice(1).map(languageSegment))
-      for (const name of readdirSync(langDir)) {
-        if (!keep.has(name)) rmSync(join(langDir, name), { recursive: true, force: true })
+      // Directories only: a post written before the slug `lang` was
+      // reserved owns `lang/index.html` (a file), and that is not ours to
+      // remove. `lang/` itself goes only when nothing at all is left.
+      for (const entry of readdirSync(langDir, { withFileTypes: true })) {
+        if (entry.isDirectory() && !keep.has(entry.name)) {
+          rmSync(join(langDir, entry.name), { recursive: true, force: true })
+        }
       }
       if (readdirSync(langDir).length === 0) rmSync(langDir, { recursive: true, force: true })
     },
