@@ -806,6 +806,7 @@ describe('translations — audit round (2026-09-16)', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     store.close()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -910,5 +911,88 @@ describe('translations — audit round (2026-09-16)', () => {
     expect(stringsFor('zh-CN').otherLanguages).toBe('其他语言')
     expect(stringsFor('pt-BR').otherLanguages).toBe('Outros idiomas')
     expect(stringsFor('nl')).toEqual(stringsFor('en'))
+  })
+})
+
+describe('translations — review of the audit fixes (2026-09-16)', () => {
+  let dir: string
+  let store: Store
+  let outputDir: string
+  let renderer: ReturnType<typeof createRenderer>
+
+  const read = (...p: string[]) => readFileSync(join(outputDir, ...p), 'utf8')
+  const exists = (...p: string[]) => existsSync(join(outputDir, ...p))
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'slopit-translations-r4-'))
+    store = createStore({ dbPath: join(dir, 'test.db') })
+    outputDir = join(dir, 'out')
+    renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example' })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    store.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const publish = (blogId: string, input: Partial<PostInput> & { slug: string }) =>
+    createPost(store, renderer, blogId, {
+      title: input.slug,
+      body: `Body of ${input.slug}`,
+      ...input,
+    }).post
+
+  it('a persistent render failure still removes the row, the post files and the stale language home, and reports the incomplete recovery', () => {
+    const { blog } = createBlog(store, { name: 'persist' })
+    publish(blog.id, { slug: 'hello' })
+    publish(blog.id, { slug: 'hallo', language: 'de', translationOf: 'hello' })
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(renderer, 'renderBlogPosts').mockImplementation(() => {
+      throw new Error('synthetic')
+    })
+    expect(() =>
+      publish(blog.id, { slug: 'ola', language: 'pt-BR', translationOf: 'hello' }),
+    ).toThrow(/^synthetic \(compensation incomplete: synthetic\)$/)
+    expect(quiet).toHaveBeenCalled()
+    expect(codeOf(() => getPost(store, blog.id, 'ola'))).toBe('POST_NOT_FOUND')
+    expect(exists(blog.id, 'ola', 'index.html')).toBe(false)
+    expect(exists(blog.id, 'ola.md')).toBe(false)
+    // pruneLanguageHomes and renderManifests ran although renderBlogPosts failed again.
+    expect(exists(blog.id, 'lang', 'pt-br')).toBe(false)
+    expect(exists(blog.id, 'lang', 'de', 'index.html')).toBe(true)
+    expect(read(blog.id, 'feed.xml')).not.toContain('/ola/')
+    expect(read(blog.id, 'sitemap.xml')).not.toContain('/lang/pt-br/')
+  })
+
+  it('a one-shot failure whose recovery completes rethrows the original error untouched', () => {
+    const { blog } = createBlog(store, { name: 'oneshot' })
+    publish(blog.id, { slug: 'hello' })
+    vi.spyOn(renderer, 'renderBlogPosts').mockImplementationOnce(() => {
+      throw new Error('synthetic')
+    })
+    let thrown: unknown
+    try {
+      publish(blog.id, { slug: 'hallo', language: 'de' })
+    } catch (e) {
+      thrown = e
+    }
+    expect((thrown as Error).message).toBe('synthetic')
+    expect(exists(blog.id, 'lang')).toBe(false)
+  })
+
+  it('deletePost removes the files and prunes even when the re-render fails, since a retry can never reach them', () => {
+    const { blog } = createBlog(store, { name: 'del' })
+    publish(blog.id, { slug: 'hello' })
+    publish(blog.id, { slug: 'hallo', language: 'de' })
+    expect(exists(blog.id, 'lang', 'de', 'index.html')).toBe(true)
+    vi.spyOn(renderer, 'renderBlog').mockImplementationOnce(() => {
+      throw new Error('synthetic')
+    })
+    expect(() => deletePost(store, renderer, blog.id, 'hallo')).toThrow('synthetic')
+    expect(codeOf(() => getPost(store, blog.id, 'hallo'))).toBe('POST_NOT_FOUND')
+    expect(exists(blog.id, 'hallo', 'index.html')).toBe(false)
+    expect(exists(blog.id, 'hallo.md')).toBe(false)
+    expect(exists(blog.id, 'lang')).toBe(false)
   })
 })

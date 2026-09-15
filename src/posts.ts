@@ -321,11 +321,49 @@ function assertLanguageFree(
  *
  * @internal
  */
-export function rederiveBlogOutput(renderer: MutationRenderer, blogId: string): void {
-  renderer.renderBlog(blogId)
-  renderer.renderManifests(blogId)
-  renderer.renderBlogPosts(blogId)
-  renderer.pruneLanguageHomes(blogId)
+export function rederiveBlogOutput(renderer: MutationRenderer, blogId: string): unknown[] {
+  return attemptAll([
+    () => renderer.renderBlog(blogId),
+    () => renderer.renderManifests(blogId),
+    () => renderer.renderBlogPosts(blogId),
+    () => renderer.pruneLanguageHomes(blogId),
+  ])
+}
+
+/**
+ * Run compensation steps independently: one failing step never stops
+ * the rest (a home page that cannot be rewritten is no reason to leave
+ * a stale language directory behind). Returns the failures, in order.
+ *
+ * @internal
+ */
+export function attemptAll(steps: readonly (() => void)[]): unknown[] {
+  const failures: unknown[] = []
+  for (const step of steps) {
+    try {
+      step()
+    } catch (e) {
+      failures.push(e)
+    }
+  }
+  return failures
+}
+
+/**
+ * Rethrow the error that started a compensation. When compensation
+ * itself was incomplete, say so loudly in the thrown message and on the
+ * console, with the original as `cause`, so an operator knows there is
+ * something to clean up rather than a merely failed request.
+ *
+ * @internal
+ */
+export function rethrowWithRecovery(original: unknown, failures: readonly unknown[]): never {
+  if (failures.length === 0) throw original
+  const text = (e: unknown) => (e instanceof Error ? e.message : String(e))
+  console.error('[slopit] compensation incomplete after a failed write:', ...failures)
+  throw new Error(`${text(original)} (compensation incomplete: ${failures.map(text).join('; ')})`, {
+    cause: original,
+  })
 }
 
 /**
@@ -450,21 +488,32 @@ export function createPost(
       // moving its home from lang/<tag>/ to /. Destructive, so last.
       renderer.pruneLanguageHomes(blogId)
     } catch (renderErr) {
+      const failures: unknown[] = []
+      let rolledBack = false
       try {
         store.db.transaction(() => {
           store.db.prepare('DELETE FROM posts WHERE id = ?').run(id)
           unadopt(store, link)
         })()
-        // Public output must not outlive the row: drop what renderPost
-        // wrote for this post, then rebuild the pages that embedded it
-        // (homes, feeds, sibling hreflang) from the restored rows.
-        renderer.removePostFiles(blogId, slug)
-        renderer.deletePostMarkdown(blogId, slug)
-        rederiveBlogOutput(renderer, blogId)
-      } catch {
-        /* best-effort; see the function doc */
+        rolledBack = true
+      } catch (e) {
+        failures.push(e)
       }
-      throw renderErr
+      // Public output must not outlive the row: drop what renderPost
+      // wrote for this post (only once the row is really gone — while it
+      // exists, its files are what the rows describe), then rebuild the
+      // pages that embedded it (homes, feeds, sibling hreflang) from the
+      // rows as they stand. Every step runs even if another fails.
+      if (rolledBack) {
+        failures.push(
+          ...attemptAll([
+            () => renderer.removePostFiles(blogId, slug),
+            () => renderer.deletePostMarkdown(blogId, slug),
+          ]),
+        )
+      }
+      failures.push(...rederiveBlogOutput(renderer, blogId))
+      rethrowWithRecovery(renderErr, failures)
     }
     return { post, postUrl: renderer.baseUrl + post.slug + '/' }
   }
@@ -657,23 +706,33 @@ export function updatePost(
       renderer.pruneLanguageHomes(blogId)
     }
   } catch (renderErr) {
+    const failures: unknown[] = []
+    let restored = false
     try {
       compensate()
-      // Put public output back in step with the restored rows: a post that
-      // was published gets its prior page, .md and manifests back; one
-      // that was a draft loses whatever the failed publish wrote. Then the
-      // blog-level pages are re-derived.
-      if (prior.status === 'published') {
-        renderer.renderPost(blogId, prior)
-      } else {
-        renderer.removePostFiles(blogId, slug)
-        renderer.deletePostMarkdown(blogId, slug)
-      }
-      rederiveBlogOutput(renderer, blogId)
-    } catch {
-      /* best-effort; a second failure needs operator cleanup */
+      restored = true
+    } catch (e) {
+      failures.push(e)
     }
-    throw renderErr
+    // Put public output back in step with the rows: once the prior row is
+    // back, a post that was published gets its prior page, .md and
+    // manifests back and one that was a draft loses whatever the failed
+    // publish wrote. Then the blog-level pages are re-derived. Every step
+    // runs even if another fails.
+    if (restored) {
+      failures.push(
+        ...attemptAll(
+          prior.status === 'published'
+            ? [() => renderer.renderPost(blogId, prior)]
+            : [
+                () => renderer.removePostFiles(blogId, slug),
+                () => renderer.deletePostMarkdown(blogId, slug),
+              ],
+        ),
+      )
+    }
+    failures.push(...rederiveBlogOutput(renderer, blogId))
+    rethrowWithRecovery(renderErr, failures)
   }
 
   return newStatus === 'published'
@@ -709,14 +768,26 @@ export function deletePost(
   // Same manifests-before-destructive-cleanup ordering as the updatePost
   // published→draft branch. Index refresh + manifest regen first; per-post
   // file removal and the language-home prune last.
+  let renderErr: unknown = undefined
   if (prior.status === 'published') {
-    renderer.renderBlog(blogId)
-    renderer.renderManifests(blogId)
-    renderer.renderBlogPosts(blogId)
-    renderer.deletePostMarkdown(blogId, slug)
+    try {
+      renderer.renderBlog(blogId)
+      renderer.renderManifests(blogId)
+      renderer.renderBlogPosts(blogId)
+    } catch (e) {
+      renderErr = e
+    }
   }
-  renderer.removePostFiles(blogId, slug)
-  renderer.pruneLanguageHomes(blogId)
+  // The row is gone, so a retry can never reach these: the post's files
+  // and any language home it alone kept alive are removed whether or not
+  // the re-render above succeeded, and every failure is reported.
+  const failures = attemptAll([
+    () => renderer.deletePostMarkdown(blogId, slug),
+    () => renderer.removePostFiles(blogId, slug),
+    () => renderer.pruneLanguageHomes(blogId),
+  ])
+  if (renderErr !== undefined) rethrowWithRecovery(renderErr, failures)
+  if (failures.length > 0) rethrowWithRecovery(failures[0], failures.slice(1))
 
   return { deleted: true }
 }

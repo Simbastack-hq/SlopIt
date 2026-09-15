@@ -226,3 +226,9 @@ Four findings from an independent audit of the shipped feature, folded in on `fi
 4. **Traditional Chinese chrome (audit #5).** `stringsFor` looks up `language-script` (from likely subtags) before `language`, and a `zh-Hant` entry supplies `其他語言`; `zh-TW` and `zh-HK` resolve to it, `zh`/`zh-CN`/`zh-Hans` keep the Simplified strings.
 
 Platform companion: the Pro card bullet reads "Linked translations + automatic language selection" (audit #4; standalone multilingual posts and language homes are free). Monolingual blogs are unaffected by every item above.
+
+### Amendment follow-ups (Codex review of the fixes, 2026-09-16)
+
+- **Compensation steps are independent and loud.** `attemptAll` runs every recovery step even when one fails; `rethrowWithRecovery` rethrows the original error unchanged when recovery completed, and otherwise throws an error whose message carries both the original and the recovery failures (`cause` = original) after a `console.error`. Files are only removed once the row rollback actually succeeded; while the row exists, its files are what the rows describe.
+- **`deletePost` cleans up whether or not the re-render succeeds.** The row is deleted first, so a retry could never reach the file removal; `deletePostMarkdown`, `removePostFiles` and `pruneLanguageHomes` now run in every case and any failure is reported with the render error.
+- **Deliberately kept: `lang/` exists only while the blog publishes in two or more languages.** A blog that returns to a single language (every post of a language unpublished or deleted) loses `/lang/<tag>/`; its content is at `/`. Keeping the tree for ever would give a monolingual blog language homes it never asked for, and a failed multilingual publish would leave one behind. This is an owner's deliberate removal of a whole language, not the ordinary publish that audit #2 was about.

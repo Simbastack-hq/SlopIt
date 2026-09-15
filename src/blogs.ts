@@ -2,7 +2,12 @@ import { generateApiKey, hashApiKey } from './auth/api-key.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId } from './ids.js'
-import { listPublishedPostsForBlog, rederiveBlogOutput } from './posts.js'
+import {
+  attemptAll,
+  listPublishedPostsForBlog,
+  rederiveBlogOutput,
+  rethrowWithRecovery,
+} from './posts.js'
 import type { MutationRenderer } from './rendering/generator.js'
 import {
   BlogAnalyticsSchema,
@@ -295,21 +300,27 @@ export function updateBlog(
     // to `/` (its old home is now stale). Destructive, so last.
     renderer.pruneLanguageHomes(blogId)
   } catch (renderErr) {
+    const failures: unknown[] = []
     try {
       compensate()
-      // Re-derive public output from the restored row (same contract as
-      // updatePost): .md files carry the effective language, so a failed
-      // language change rewrites them too.
-      if (languageChanged) {
-        for (const post of listPublishedPostsForBlog(store, blogId)) {
-          renderer.renderPostMarkdown(blogId, post)
-        }
-      }
-      rederiveBlogOutput(renderer, blogId)
-    } catch {
-      /* best-effort; a second failure needs operator cleanup */
+    } catch (e) {
+      failures.push(e)
     }
-    throw renderErr
+    // Re-derive public output from the rows as they stand (same contract
+    // as updatePost): .md files carry the effective language, so a failed
+    // language change rewrites them too. Every step runs even if another
+    // fails, and an incomplete recovery is reported with the original.
+    if (languageChanged) {
+      failures.push(
+        ...attemptAll(
+          listPublishedPostsForBlog(store, blogId).map(
+            (post) => () => renderer.renderPostMarkdown(blogId, post),
+          ),
+        ),
+      )
+    }
+    failures.push(...rederiveBlogOutput(renderer, blogId))
+    rethrowWithRecovery(renderErr, failures)
   }
 
   return updated

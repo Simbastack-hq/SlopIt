@@ -426,16 +426,15 @@ describe('createPost', () => {
       caught = e
     }
 
-    // Must be the original OS error, not a wrapped SlopItError — spec
-    // decision #6: createPost always throws the original render error.
+    // The output path is a file, so every render — the failed publish and
+    // the compensating re-render — hits the same OS error. Compensation is
+    // therefore incomplete, and the contract is: say so in the thrown
+    // message, keep the original OS error as `cause`, never a SlopItError.
     expect(caught).toBeInstanceOf(Error)
     expect(caught).not.toBeInstanceOf(SlopItError)
-
-    // The underlying failure is a filesystem error from node:fs. Assert the
-    // code is one of the expected OS codes so we can confirm we did not
-    // accidentally swallow the original error and rethrow something else.
-    const code = (caught as NodeJS.ErrnoException).code
-    expect(code === 'ENOTDIR' || code === 'EEXIST').toBe(true)
+    expect((caught as Error).message).toContain('compensation incomplete')
+    const original = (caught as Error).cause as NodeJS.ErrnoException
+    expect(original.code === 'ENOTDIR' || original.code === 'EEXIST').toBe(true)
 
     // Compensation ran: no post row remains.
     const count = store.db
@@ -566,7 +565,7 @@ describe('createPost — compensation DELETE best-effort', () => {
     vi.restoreAllMocks()
   })
 
-  it('swallows a DELETE failure during compensation and still throws the original render error', () => {
+  it('reports a DELETE failure during compensation alongside the original render error', () => {
     const { blog } = createBlog(store, {})
     const r = createRenderer({ store, outputDir, baseUrl: 'https://test.example.com' })
 
@@ -589,9 +588,12 @@ describe('createPost — compensation DELETE best-effort', () => {
       caught = e
     }
 
-    // Original render error bubbles, not the DELETE failure.
+    // An incomplete compensation is loud: the thrown message carries the
+    // DELETE failure, and the original render error rides along as `cause`.
     expect(caught).toBeInstanceOf(Error)
-    expect((caught as Error).message).not.toContain('simulated DELETE failure')
+    expect((caught as Error).message).toContain('compensation incomplete')
+    expect((caught as Error).message).toContain('simulated DELETE failure')
+    expect((caught as Error).cause).toBeInstanceOf(Error)
     expect(caught).not.toBeInstanceOf(SlopItError)
   })
 })
