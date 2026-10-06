@@ -112,7 +112,11 @@ export const PostPatchSchema = z
     seoTitle: z.string().max(200).optional(),
     seoDescription: z.string().max(300).optional(),
     author: z.string().max(100).optional(),
-    coverImage: httpUrl.optional(),
+    // `null` removes the cover; omitting the key leaves it unchanged.
+    coverImage: httpUrl
+      .describe('Cover image URL (http/https). Send null to remove the cover.')
+      .nullable()
+      .optional(),
     // `null` clears a per-post override so the post follows the blog's
     // language again; omitting the key leaves it unchanged.
     language: languageTag

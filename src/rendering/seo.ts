@@ -1,4 +1,5 @@
 import type { Blog, Post } from '../schema/index.js'
+import { bodyMedia } from './markdown.js'
 import { escapeHtml } from './templates.js'
 
 /**
@@ -83,6 +84,32 @@ export function resolveTitle(post: Post): string {
  */
 export function resolveDescription(post: Post): string {
   return nonBlank(post.seoDescription) ?? nonBlank(post.excerpt) ?? extractDescription(post.body)
+}
+
+/**
+ * Share images for a post (og:image, twitter:image, JSON-LD image), best
+ * first; [] when it has none:
+ *   cover → first YouTube embed's thumbnail → first body image
+ * A video yields two URLs: maxresdefault (1280×720) is missing on some
+ * videos, so hqdefault (480×360, always there) follows as a second
+ * og:image. Rendering is offline, so we can't check which exists.
+ * Body images are resolved against the post URL; non-http(s) ones skipped.
+ */
+export function resolveShareImages(post: Post, canonicalUrl: string): string[] {
+  if (post.coverImage) return [post.coverImage]
+  const { videos, images } = bodyMedia(post.body)
+  if (videos.length > 0) {
+    return [
+      `https://i.ytimg.com/vi/${videos[0]}/maxresdefault.jpg`,
+      `https://i.ytimg.com/vi/${videos[0]}/hqdefault.jpg`,
+    ]
+  }
+  for (const src of images) {
+    if (!URL.canParse(src, canonicalUrl)) continue
+    const url = new URL(src, canonicalUrl)
+    if (url.protocol === 'http:' || url.protocol === 'https:') return [url.href]
+  }
+  return []
 }
 
 /**
@@ -177,8 +204,9 @@ export function buildJsonLd(input: SeoInput): string {
   if (author) {
     data.author = { '@type': 'Person', name: author }
   }
-  if (post.coverImage) {
-    data.image = post.coverImage
+  const [image] = resolveShareImages(post, canonicalUrl)
+  if (image) {
+    data.image = image
   }
   if (description) {
     data.description = description
@@ -207,7 +235,7 @@ export function buildSeoMeta(input: SeoInput): string {
   const description = resolveDescription(post)
   const author = nonBlank(post.author)
   const siteName = nonBlank(blog.name) ?? blog.id
-  const hasImage = Boolean(post.coverImage)
+  const images = resolveShareImages(post, canonicalUrl)
   const hasModified = Boolean(
     post.updatedAt && post.publishedAt && post.updatedAt !== post.publishedAt,
   )
@@ -234,8 +262,8 @@ export function buildSeoMeta(input: SeoInput): string {
   for (const alt of input.alternateLanguages ?? []) {
     lines.push(`<meta property="og:locale:alternate" content="${escapeHtml(ogLocale(alt))}">`)
   }
-  if (post.coverImage) {
-    lines.push(`<meta property="og:image" content="${escapeHtml(post.coverImage)}">`)
+  for (const image of images) {
+    lines.push(`<meta property="og:image" content="${escapeHtml(image)}">`)
     lines.push(`<meta property="og:image:alt" content="${escapeHtml(title)}">`)
   }
 
@@ -256,13 +284,15 @@ export function buildSeoMeta(input: SeoInput): string {
   }
 
   // Twitter Card
-  lines.push(`<meta name="twitter:card" content="${hasImage ? 'summary_large_image' : 'summary'}">`)
+  lines.push(
+    `<meta name="twitter:card" content="${images.length > 0 ? 'summary_large_image' : 'summary'}">`,
+  )
   lines.push(`<meta name="twitter:title" content="${escapeHtml(title)}">`)
   if (description) {
     lines.push(`<meta name="twitter:description" content="${escapeHtml(description)}">`)
   }
-  if (post.coverImage) {
-    lines.push(`<meta name="twitter:image" content="${escapeHtml(post.coverImage)}">`)
+  if (images.length > 0) {
+    lines.push(`<meta name="twitter:image" content="${escapeHtml(images[0])}">`)
   }
 
   return lines.join('\n')

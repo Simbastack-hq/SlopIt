@@ -101,7 +101,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     'update_post',
     {
       description:
-        "Edit an existing post. Pass the post's `slug` and a `patch` of fields to change. Slug itself can't change; delete and republish if you need a new URL.",
+        "Edit an existing post. Pass the post's `slug` and a `patch` of fields to change; `coverImage: null` removes the cover. Slug itself can't change; delete and republish if you need a new URL.",
       inputSchema: UpdatePostInputSchema,
     },
     wrapTool<z.infer<typeof UpdatePostInputSchema>>(

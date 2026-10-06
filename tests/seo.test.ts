@@ -7,6 +7,7 @@ import {
   normalizeBaseUrl,
   buildJsonLd,
   buildSeoMeta,
+  resolveShareImages,
 } from '../src/rendering/seo.js'
 import type { Post, Blog } from '../src/schema/index.js'
 
@@ -545,5 +546,91 @@ describe('buildSeoMeta', () => {
     const blog: Blog = { ...minimalBlog, name: '' }
     const out = buildSeoMeta({ post: minimalPost, blog, canonicalUrl: canonical })
     expect(out).toContain('<meta property="og:site_name" content="b1">')
+  })
+})
+
+describe('resolveShareImages', () => {
+  const ID = '3mlRiF-LeMc'
+  const MAXRES = `https://i.ytimg.com/vi/${ID}/maxresdefault.jpg`
+  const HQ = `https://i.ytimg.com/vi/${ID}/hqdefault.jpg`
+  const images = (body: string, coverImage?: string) =>
+    resolveShareImages({ ...minimalPost, body, coverImage }, canonical)
+
+  it('is the cover alone when one is set, even with a video in the body', () => {
+    expect(images(`https://youtu.be/${ID}`, 'https://cdn.example/c.png')).toEqual([
+      'https://cdn.example/c.png',
+    ])
+  })
+
+  it.each([
+    `https://youtu.be/${ID}`,
+    `https://www.youtube.com/watch?v=${ID}&t=90`,
+    `https://www.youtube.com/shorts/${ID}`,
+  ])('without a cover, is the thumbnail of a bare YouTube URL (%s): maxres, then hq', (url) => {
+    expect(images(`Intro.\n\n${url}\n\nOutro.`)).toEqual([MAXRES, HQ])
+  })
+
+  it('uses the first video when there are several', () => {
+    expect(images(`https://youtu.be/${ID}\n\nhttps://youtu.be/aaaaaaaaaaa`)).toEqual([MAXRES, HQ])
+  })
+
+  it.each([
+    ['a markdown link', `[watch](https://youtu.be/${ID})`],
+    ['a URL with text on the same line', `Watch https://youtu.be/${ID}`],
+    ['a URL in a code fence', '```\nhttps://youtu.be/' + ID + '\n```'],
+    ['a malformed id', 'https://youtu.be/short'],
+  ])('ignores %s — only what renders as a player counts', (_label, body) => {
+    expect(images(body)).toEqual([])
+  })
+
+  it('prefers the video over an image earlier in the body', () => {
+    expect(images(`![a](https://cdn.example/a.png)\n\nhttps://youtu.be/${ID}`)).toEqual([
+      MAXRES,
+      HQ,
+    ])
+  })
+
+  it('falls back to the first body image, made absolute against the post URL', () => {
+    expect(images('![a](https://cdn.example/a.png)\n\n![b](https://cdn.example/b.png)')).toEqual([
+      'https://cdn.example/a.png',
+    ])
+    expect(images('![a](/_media/a.png)')).toEqual(['https://blog.slopit.io/_media/a.png'])
+    expect(images('![a](a.png)')).toEqual(['https://blog.slopit.io/post-title/a.png'])
+  })
+
+  it('skips body images with a non-http scheme', () => {
+    expect(images('![x](javascript:alert(1))\n\n![b](https://cdn.example/b.png)')).toEqual([
+      'https://cdn.example/b.png',
+    ])
+    expect(images('![x](data:image/png;base64,AAAA)')).toEqual([])
+  })
+
+  it('is empty for a post with no cover, video or image', () => {
+    expect(images('Just words.')).toEqual([])
+  })
+})
+
+describe('share image fallback in buildSeoMeta / buildJsonLd', () => {
+  const post: Post = { ...minimalPost, body: 'https://youtu.be/3mlRiF-LeMc\n\nNotes.' }
+  const MAXRES = 'https://i.ytimg.com/vi/3mlRiF-LeMc/maxresdefault.jpg'
+  const HQ = 'https://i.ytimg.com/vi/3mlRiF-LeMc/hqdefault.jpg'
+
+  it('emits the video thumbnail as og:image (maxres, then hq) and twitter:image, large card', () => {
+    const out = buildSeoMeta({ post, blog: minimalBlog, canonicalUrl: canonical })
+    expect(out).toContain('<meta name="twitter:card" content="summary_large_image">')
+    expect(out).toContain(`<meta name="twitter:image" content="${MAXRES}">`)
+    const ogImages = [...out.matchAll(/<meta property="og:image" content="([^"]+)">/g)].map(
+      (m) => m[1],
+    )
+    expect(ogImages).toEqual([MAXRES, HQ])
+  })
+
+  it('uses the same thumbnail as the JSON-LD image', () => {
+    const out = buildJsonLd({ post, blog: minimalBlog, canonicalUrl: canonical })
+    const json = JSON.parse(out.replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '')) as Record<
+      string,
+      unknown
+    >
+    expect(json.image).toBe(MAXRES)
   })
 })
