@@ -20,12 +20,18 @@ The schema permits `seoTitle: ''`, `seoDescription: '   '`, etc. (the optional S
 |------------|------------------------------|
 | description, og:description, twitter:description | `post.seoDescription → post.excerpt → extractDescription(post.body)` — markdown stripped, whitespace collapsed, 160-char word-boundary truncation |
 | og:title, twitter:title, JSON-LD headline | `resolveTitle(post)` = `nonBlank(post.seoTitle) ?? post.title` (post.title is schema-guaranteed non-empty via `.trim().min(1)`) |
-| og:image, twitter:image | omitted (no default image; YAGNI for v1) |
+| og:image, twitter:image, JSON-LD image | `resolveShareImages(post, canonicalUrl)`: `post.coverImage` → first YouTube embed's thumbnail → first body image → omitted (twitter:card drops to `summary`) |
 | og:site_name | `nonBlank(blog.name) ?? blog.id` |
 | article:author / JSON-LD author | omitted when blank |
 | article:modified_time / JSON-LD dateModified | omitted when `updatedAt === publishedAt` |
 
-Single source of truth: `resolveTitle(post)` and `resolveDescription(post)` in `src/rendering/seo.ts`. Both `buildSeoMeta` and `buildJsonLd` call them; Phase 2's `.md`/RSS/`llms.txt` generators will too.
+Single source of truth: `resolveTitle(post)`, `resolveDescription(post)` and `resolveShareImages(post, canonicalUrl)` in `src/rendering/seo.ts`. Both `buildSeoMeta` and `buildJsonLd` call them; Phase 2's `.md`/RSS/`llms.txt` generators will too.
+
+## Share image without a cover (2026-10-06)
+
+- **Same tokens as the page.** `bodyMedia(md)` in `markdown.ts` walks the lexer tokens the renderer uses, so a YouTube URL counts only where it renders as a player (bare-URL paragraph) and nothing inside a code fence or raw HTML counts. A regex over the body would pick up both.
+- **maxres isn't guaranteed.** `i.ytimg.com/vi/<id>/maxresdefault.jpg` (1280×720) 404s for some videos; `hqdefault.jpg` (480×360) always exists but is small enough that Facebook shows a small card. Rendering is offline, so we can't probe. We emit maxres then hq as two `og:image` tags (scrapers that skip a broken image take the next); `twitter:image` and JSON-LD get maxres. If a video has no HD thumbnail, set `coverImage`.
+- **Body images resolve against the post URL**, because `og:image` must be absolute. Non-http(s) srcs are skipped.
 
 ## JSON-LD script-tag safety
 

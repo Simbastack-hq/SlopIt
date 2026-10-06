@@ -78,6 +78,26 @@ describe('MCP tool: update_post', () => {
     expect(post.body).toBe('Edited')
   })
 
+  it('patch { coverImage: null } clears the cover', async () => {
+    await callTool(client, 'update_post', {
+      blog_id: blogId,
+      slug: 'seed',
+      patch: { coverImage: 'https://cdn.example/cover.png' },
+    })
+    expect(getPost(store, blogId, 'seed').coverImage).toBe('https://cdn.example/cover.png')
+
+    const result = await callTool(client, 'update_post', {
+      blog_id: blogId,
+      slug: 'seed',
+      patch: { coverImage: null },
+    })
+    expect(result.isError).toBeFalsy()
+    expect(
+      (result.structuredContent as { post: { coverImage?: string } }).post.coverImage,
+    ).toBeUndefined()
+    expect(getPost(store, blogId, 'seed').coverImage).toBeUndefined()
+  })
+
   it('slug in patch → SDK-shaped validation error', async () => {
     const result = await callTool(client, 'update_post', {
       blog_id: blogId,

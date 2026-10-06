@@ -51,6 +51,11 @@ describe('PostPatchSchema', () => {
     )
     expect(() => PostPatchSchema.parse({ coverImage: 'javascript:alert(1)' })).toThrow()
   })
+
+  it('accepts coverImage: null (clear the cover) but still rejects an empty string', () => {
+    expect(PostPatchSchema.parse({ coverImage: null }).coverImage).toBeNull()
+    expect(PostPatchSchema.safeParse({ coverImage: '' }).success).toBe(false)
+  })
 })
 
 describe('BlogAnalyticsSchema', () => {
