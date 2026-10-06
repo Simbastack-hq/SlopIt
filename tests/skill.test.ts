@@ -136,6 +136,14 @@ describe('generateSkillFile', () => {
     expect(text).toMatch(/analytics.{0,10}null/)
   })
 
+  it('documents the YouTube embed: bare URL on its own line, raw HTML stripped', () => {
+    expect(text).toContain('## Posts with a YouTube video')
+    expect(text).toContain('https://youtu.be/')
+    expect(text).toContain('youtube.com/shorts/')
+    expect(text).toMatch(/own line/)
+    expect(text).toMatch(/Raw HTML is stripped.{0,40}<iframe>/)
+  })
+
   it('documents language on blog and post, with the null-clears rule', () => {
     expect(text).toContain('## Language')
     expect(text).toMatch(/BCP-47/)

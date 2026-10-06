@@ -195,6 +195,17 @@ article img {
   margin: 24px auto;
   border-radius: 8px;
 }
+article iframe {
+  /* The only iframe a post can contain: the YouTube player renderMarkdown
+     builds from a bare YouTube URL. Full column width at 16:9. */
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  margin: 24px 0;
+  border-radius: 8px;
+}
 
 .tags {
   margin-top: 32px;
