@@ -491,6 +491,86 @@ describe('renderMarkdown — URL scheme allowlist (v1 XSS defense, part 2)', () 
   })
 })
 
+describe('renderMarkdown — YouTube embeds (the one allowlisted embed)', () => {
+  const ID = '3mlRiF-LeMc'
+  const SRC = `https://www.youtube-nocookie.com/embed/${ID}`
+
+  it.each([
+    `https://youtu.be/${ID}`,
+    `https://www.youtube.com/watch?v=${ID}`,
+    `https://youtube.com/watch?v=${ID}`,
+    `https://m.youtube.com/watch?v=${ID}`,
+    `https://www.youtube.com/shorts/${ID}`,
+    `https://youtu.be/${ID}?si=AbCdEf123`,
+    `https://www.youtube.com/watch?v=${ID}&list=PL123&index=2`,
+  ])('turns a paragraph holding only %s into a player', (url) => {
+    const out = renderMarkdown(`Intro.\n\n${url}\n\nOutro.`)
+    expect(out).toContain(`<iframe src="${SRC}"`)
+    expect(out).not.toContain('<a href')
+    expect(out).toContain('<p>Intro.</p>')
+    expect(out).toContain('<p>Outro.</p>')
+  })
+
+  it('emits a lazy, titled, permission-limited player', () => {
+    const out = renderMarkdown(`https://youtu.be/${ID}`)
+    expect(out).toContain('loading="lazy"')
+    expect(out).toContain('title="YouTube video"')
+    expect(out).toContain('allow="autoplay; encrypted-media; picture-in-picture"')
+    expect(out).toContain('allowfullscreen')
+    expect(out).toContain('referrerpolicy="strict-origin-when-cross-origin"')
+    expect(out).not.toContain('<p>')
+  })
+
+  it.each([
+    ['90', 90],
+    ['90s', 90],
+    ['1m30s', 90],
+    ['1h2m3s', 3723],
+  ])('maps t=%s to start=%i', (t, start) => {
+    expect(renderMarkdown(`https://youtu.be/${ID}?t=${t}`)).toContain(`src="${SRC}?start=${start}"`)
+  })
+
+  it('ignores an unparseable or zero t=', () => {
+    expect(renderMarkdown(`https://youtu.be/${ID}?t=soon`)).toContain(`src="${SRC}"`)
+    expect(renderMarkdown(`https://youtu.be/${ID}?t=0`)).toContain(`src="${SRC}"`)
+  })
+
+  it.each([
+    ['a 10-char id', 'https://youtu.be/3mlRiF-LeM'],
+    ['a 12-char id', 'https://youtu.be/3mlRiF-LeMcc'],
+    ['a bad char in the id', 'https://youtu.be/3mlRiF-LeM!'],
+    ['an html-ish id', 'https://www.youtube.com/watch?v=%22%3E%3Cb%3Ex'],
+    ['plain http', `http://youtu.be/${ID}`],
+    ['a look-alike host', `https://youtube.com.evil.example/watch?v=${ID}`],
+    ['an unknown youtube path', `https://www.youtube.com/embed/${ID}`],
+    ['extra text on the line', `Watch this: https://youtu.be/${ID}`],
+    ['a second line in the paragraph', `https://youtu.be/${ID}\nmore words`],
+    ['an explicit markdown link', `[the video](https://youtu.be/${ID})`],
+  ])('keeps %s as a normal link, no player', (_label, md) => {
+    const out = renderMarkdown(md)
+    expect(out).not.toContain('<iframe')
+    expect(out).not.toContain('youtube-nocookie')
+  })
+
+  it('does not embed a URL inside a code block', () => {
+    const out = renderMarkdown('```\nhttps://youtu.be/' + ID + '\n```')
+    expect(out).not.toContain('<iframe')
+    expect(out).toContain('<code>')
+  })
+
+  it('still strips a raw <iframe> pointing at YouTube', () => {
+    const out = renderMarkdown(`<iframe src="${SRC}"></iframe>`)
+    expect(out).not.toContain('<iframe')
+    expect(out).not.toContain('youtube')
+  })
+
+  it('renders a plain link instead of a player when embeds are off (feeds)', () => {
+    const out = renderMarkdown(`https://youtu.be/${ID}`, { embeds: false })
+    expect(out).not.toContain('<iframe')
+    expect(out).toContain(`<a href="https://youtu.be/${ID}">https://youtu.be/${ID}</a>`)
+  })
+})
+
 describe('createRenderer — renderPost', () => {
   let dir: string
   let store: Store
@@ -838,6 +918,24 @@ describe('createRenderer — renderPost', () => {
     expect(feed).toContain('<title>X Post</title>')
     expect(feed).toContain('<link>https://b.example.com/xp/</link>')
     expect(feed).toContain('<content:encoded><![CDATA[')
+  })
+
+  it('embeds a bare YouTube URL on the page; feed.xml and <slug>.md keep a plain link', () => {
+    const { blog } = createBlog(store, { name: 'yt' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    const url = 'https://youtu.be/3mlRiF-LeMc'
+    createPost(store, renderer, blog.id, { title: 'Video', slug: 'vid', body: `Hi.\n\n${url}\n` })
+
+    const html = readFileSync(join(outputDir, blog.id, 'vid', 'index.html'), 'utf8')
+    expect(html).toContain('<iframe src="https://www.youtube-nocookie.com/embed/3mlRiF-LeMc"')
+
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed).not.toContain('<iframe')
+    expect(feed).toContain(`<a href="${url}">${url}</a>`)
+
+    const md = readFileSync(join(outputDir, blog.id, 'vid.md'), 'utf8')
+    expect(md).toContain(`\n${url}\n`)
+    expect(md).not.toContain('iframe')
   })
 
   it('emits a sitemap with the blog root plus every published post URL', () => {

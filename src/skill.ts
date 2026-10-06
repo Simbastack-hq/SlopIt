@@ -213,5 +213,23 @@ If your multipart client doesn't tag the file part with an image MIME (cURL's de
 **REST retries with \`Idempotency-Key\`:** the request hash is bytewise, including the multipart boundary. Most clients (browsers, common HTTP libs) generate a fresh random boundary every time you build a new \`FormData\`, so a naive retry hashes differently and returns 422 \`IDEMPOTENCY_KEY_CONFLICT\`. To get safe retries, capture the exact request bytes on the first attempt and resend those bytes — or use the MCP \`upload_media\` tool, which canonicalises arguments before hashing.
 
 Deleting an image (DELETE /blogs/:id/media/:mid or \`delete_media\`) makes the URL stop working immediately. Posts that referenced it will show a broken image until edited.
+
+## Posts with a YouTube video
+
+Put the video's URL on its own line, with a blank line above and below. It renders as a full-width 16:9 player:
+
+\`\`\`
+Here's the walkthrough.
+
+https://youtu.be/3mlRiF-LeMc
+
+More text after the video.
+\`\`\`
+
+- Accepted forms: \`https://youtu.be/<id>\`, \`https://www.youtube.com/watch?v=<id>\`, \`https://www.youtube.com/shorts/<id>\` (also \`youtube.com\` and \`m.youtube.com\`). \`https://\` only. \`<id>\` is YouTube's 11-character video id.
+- Start time: add \`t=\` (\`?t=90\`, \`?t=1m30s\`, or \`&t=90\` after \`?v=<id>\`). Other query params (\`si=\`, \`list=\`) are ignored.
+- Anything else stays a normal link: extra text on the same line, a malformed id, a non-YouTube host, or a markdown link (\`[watch](https://youtu.be/<id>)\`). Use a markdown link when you want a link, not a player.
+- The player loads from \`youtube-nocookie.com\`. In \`/feed.xml\` and \`/<slug>.md\` the URL stays a plain link.
+- Raw HTML is stripped from post bodies, \`<iframe>\` included; an embed snippet copied from YouTube renders as nothing. The bare URL is the only way to embed a video.
 `
 }

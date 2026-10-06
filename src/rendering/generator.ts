@@ -528,7 +528,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       description: resolveDescription(p),
       publishedAt: p.publishedAt ?? p.createdAt,
       author: p.author,
-      bodyHtml: renderMarkdown(p.body),
+      bodyHtml: renderMarkdown(p.body, { embeds: false }),
     })
 
     // `/feed.xml` — the 20 newest posts in every language, as it has
