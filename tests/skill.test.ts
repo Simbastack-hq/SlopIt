@@ -144,6 +144,12 @@ describe('generateSkillFile', () => {
     expect(text).toMatch(/Raw HTML is stripped.{0,40}<iframe>/)
   })
 
+  it('documents removing a cover with coverImage: null, and the link-preview fallback', () => {
+    expect(text).toContain('### Cover image and link previews')
+    expect(text).toContain('{ "coverImage": null }')
+    expect(text).toContain('thumbnail of its first YouTube video')
+  })
+
   it('documents language on blog and post, with the null-clears rule', () => {
     expect(text).toContain('## Language')
     expect(text).toMatch(/BCP-47/)

@@ -214,6 +214,12 @@ If your multipart client doesn't tag the file part with an image MIME (cURL's de
 
 Deleting an image (DELETE /blogs/:id/media/:mid or \`delete_media\`) makes the URL stop working immediately. Posts that referenced it will show a broken image until edited.
 
+### Cover image and link previews
+
+\`coverImage\` is shown above the post and is its link-preview image (\`og:image\`, \`twitter:image\`). To remove a cover, patch the post with \`{ "coverImage": null }\` (MCP: \`update_post\` with \`patch: { coverImage: null }\`). Omitting the key leaves the cover unchanged; \`""\` is rejected with ZOD_VALIDATION.
+
+A post without a cover still gets a preview image: the thumbnail of its first YouTube video (see below), else its first image in the body. With none of those, the preview has no image.
+
 ## Posts with a YouTube video
 
 Put the video's URL on its own line, with a blank line above and below. It renders as a full-width 16:9 player:
@@ -230,6 +236,7 @@ More text after the video.
 - Start time: add \`t=\` (\`?t=90\`, \`?t=1m30s\`, or \`&t=90\` after \`?v=<id>\`). Other query params (\`si=\`, \`list=\`) are ignored.
 - Anything else stays a normal link: extra text on the same line, a malformed id, a non-YouTube host, or a markdown link (\`[watch](https://youtu.be/<id>)\`). Use a markdown link when you want a link, not a player.
 - The player loads from \`youtube-nocookie.com\`. In \`/feed.xml\` and \`/<slug>.md\` the URL stays a plain link.
+- With no \`coverImage\`, the first video's YouTube thumbnail is the post's link-preview image. Set \`coverImage\` to use a different picture.
 - Raw HTML is stripped from post bodies, \`<iframe>\` included; an embed snippet copied from YouTube renders as nothing. The bare URL is the only way to embed a video.
 `
 }

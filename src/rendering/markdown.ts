@@ -119,12 +119,12 @@ function startSeconds(t: string | null): number {
   return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0)
 }
 
-// The player URL for a bare YouTube link (youtu.be/ID, youtube.com/watch?v=ID,
-// youtube.com/shorts/ID), or null when `text` is anything else. The output is
-// built only from the 11-char id and a number, so nothing the author typed
-// reaches the attribute unvalidated. Other query params (si=, list=, …) are
+// The video in a bare YouTube link (youtu.be/ID, youtube.com/watch?v=ID,
+// youtube.com/shorts/ID), or null when `text` is anything else. Only the
+// validated 11-char id and a number come out, so nothing the author typed
+// reaches an attribute unvalidated. Other query params (si=, list=, …) are
 // dropped.
-function youtubeEmbedSrc(text: string): string | null {
+function youtubeVideo(text: string): { id: string; start: number } | null {
   if (/\s/.test(text) || !URL.canParse(text)) return null
   const url = new URL(text)
   if (url.protocol !== 'https:') return null
@@ -136,8 +136,7 @@ function youtubeEmbedSrc(text: string): string | null {
     else if (url.pathname.startsWith('/shorts/')) id = url.pathname.slice('/shorts/'.length)
   }
   if (id === null || !/^[A-Za-z0-9_-]{11}$/.test(id)) return null
-  const start = startSeconds(url.searchParams.get('t'))
-  return `https://www.youtube-nocookie.com/embed/${id}${start > 0 ? `?start=${start}` : ''}`
+  return { id, start: startSeconds(url.searchParams.get('t')) }
 }
 
 // youtube-nocookie skips YouTube's tracking cookies until the reader hits
@@ -147,8 +146,9 @@ function youtubeEmbedSrc(text: string): string | null {
 const youtubeEmbeds: MarkedExtension = {
   renderer: {
     paragraph(token: Tokens.Paragraph): string | false {
-      const src = youtubeEmbedSrc(token.text.trim())
-      if (src === null) return false // a normal paragraph
+      const video = youtubeVideo(token.text.trim())
+      if (video === null) return false // a normal paragraph
+      const src = `https://www.youtube-nocookie.com/embed/${video.id}${video.start > 0 ? `?start=${video.start}` : ''}`
       return `<iframe src="${src}" title="YouTube video" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>\n`
     },
   },
@@ -163,4 +163,24 @@ const feedMarked = new Marked(safeHtml)
 // plain link it was written as.
 export function renderMarkdown(md: string, { embeds = true }: { embeds?: boolean } = {}): string {
   return (embeds ? pageMarked : feedMarked).parse(md, { async: false })
+}
+
+// The YouTube videos (ids) and image srcs (as written: maybe relative, maybe
+// an unsafe scheme) a body shows on its page, in document order. Same tokens
+// the page renders from: a video is only a bare-URL paragraph, and nothing
+// inside code or raw HTML counts.
+export function bodyMedia(md: string): { videos: string[]; images: string[] } {
+  const videos: string[] = []
+  const images: string[] = []
+  // `void`: the callback is sync, so walkTokens' promise array is empty.
+  void pageMarked.walkTokens(pageMarked.lexer(stripDangerousBlocks(md)), (token) => {
+    // Casts: `Token` includes marked's catch-all Generic, so `type` alone doesn't narrow.
+    if (token.type === 'paragraph') {
+      const video = youtubeVideo((token as Tokens.Paragraph).text.trim())
+      if (video !== null) videos.push(video.id)
+    } else if (token.type === 'image') {
+      images.push((token as Tokens.Image).href)
+    }
+  })
+  return { videos, images }
 }
