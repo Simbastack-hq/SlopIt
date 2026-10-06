@@ -1,4 +1,4 @@
-import { marked } from 'marked'
+import { Marked, type MarkedExtension, type Tokens } from 'marked'
 
 // v1 XSS defense: strip all raw HTML tokens (block and inline) via a
 // renderer override PLUS a preprocess pass that removes the payload of
@@ -13,9 +13,10 @@ import { marked } from 'marked'
 // are preserved verbatim by the preprocess pass (their HTML-like contents
 // are later entity-escaped by marked's code renderer).
 //
-// Note: marked.use() modifies the shared default marked instance. This is
-// fine because src/rendering/markdown.ts is the only module in core that
-// imports marked; no other code path depends on marked's default behavior.
+// The one exception is a YouTube player, and it never comes from author
+// HTML: a paragraph holding nothing but a YouTube URL is rebuilt from the
+// validated video id (see youtubeEmbedSrc). A raw <iframe> is still
+// stripped like any other HTML.
 
 // Strip <script>...</script>, <style>...</style>, <iframe>...</iframe>
 // (case-insensitive) — but only outside code contexts. The split regex
@@ -77,7 +78,7 @@ function escapeHtmlLocal(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
-marked.use({
+const safeHtml: MarkedExtension = {
   hooks: {
     preprocess(md: string): string {
       return stripDangerousBlocks(md)
@@ -106,10 +107,60 @@ marked.use({
       return false // fall through to default <img> rendering
     },
   },
-})
+}
+
+const YOUTUBE_HOSTS = new Set(['www.youtube.com', 'youtube.com', 'm.youtube.com'])
+
+// YouTube's `t=` start time: `90`, `90s`, `1m30s`, `1h2m3s`. Anything else
+// (or zero) plays from the start — a bad timestamp shouldn't cost the player.
+function startSeconds(t: string | null): number {
+  const m = t?.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/)
+  if (!m) return 0
+  return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0)
+}
+
+// The player URL for a bare YouTube link (youtu.be/ID, youtube.com/watch?v=ID,
+// youtube.com/shorts/ID), or null when `text` is anything else. The output is
+// built only from the 11-char id and a number, so nothing the author typed
+// reaches the attribute unvalidated. Other query params (si=, list=, …) are
+// dropped.
+function youtubeEmbedSrc(text: string): string | null {
+  if (/\s/.test(text) || !URL.canParse(text)) return null
+  const url = new URL(text)
+  if (url.protocol !== 'https:') return null
+  let id: string | null = null
+  if (url.hostname === 'youtu.be') {
+    id = url.pathname.slice(1)
+  } else if (YOUTUBE_HOSTS.has(url.hostname)) {
+    if (url.pathname === '/watch') id = url.searchParams.get('v')
+    else if (url.pathname.startsWith('/shorts/')) id = url.pathname.slice('/shorts/'.length)
+  }
+  if (id === null || !/^[A-Za-z0-9_-]{11}$/.test(id)) return null
+  const start = startSeconds(url.searchParams.get('t'))
+  return `https://www.youtube-nocookie.com/embed/${id}${start > 0 ? `?start=${start}` : ''}`
+}
+
+// youtube-nocookie skips YouTube's tracking cookies until the reader hits
+// play. The player refuses to load without a Referer (YouTube error 153),
+// hence the explicit referrerpolicy. `allow` grants only what playback uses:
+// no sensors, clipboard or web-share.
+const youtubeEmbeds: MarkedExtension = {
+  renderer: {
+    paragraph(token: Tokens.Paragraph): string | false {
+      const src = youtubeEmbedSrc(token.text.trim())
+      if (src === null) return false // a normal paragraph
+      return `<iframe src="${src}" title="YouTube video" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>\n`
+    },
+  },
+}
+
+const pageMarked = new Marked(safeHtml, youtubeEmbeds)
+const feedMarked = new Marked(safeHtml)
 
 // Markdown → HTML. Synchronous because blog posts are short and we render
-// once at publish time; no reason to reach for async here.
-export function renderMarkdown(md: string): string {
-  return marked.parse(md, { async: false })
+// once at publish time; no reason to reach for async here. `embeds: false`
+// is for RSS: feed readers strip iframes, so a bare YouTube URL stays the
+// plain link it was written as.
+export function renderMarkdown(md: string, { embeds = true }: { embeds?: boolean } = {}): string {
+  return (embeds ? pageMarked : feedMarked).parse(md, { async: false })
 }
