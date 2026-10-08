@@ -1,6 +1,6 @@
 /**
- * Theme chrome strings — the three fixed labels a reader sees on a page
- * that are not the author's content. Everything else on a page is
+ * Theme chrome strings — the fixed labels a reader (or a screen reader)
+ * meets on a page that are not the author's content. Everything else on a page is
  * either the author's markdown, a date (formatted by ICU for the page's
  * language), a language name (also from ICU), or brand ("Powered by
  * SlopIt", kept English on purpose).
@@ -20,49 +20,87 @@ export interface ThemeStrings {
   mainSite: string
   /** `aria-label` of the language switcher (the row of language names). */
   otherLanguages: string
+  /** `aria-label` of the contents rail beside a long post. */
+  contents: string
 }
 
 const STRINGS: Record<string, ThemeStrings> = {
-  en: { moreFrom: 'More from this blog', mainSite: 'Main site', otherLanguages: 'Other languages' },
+  en: {
+    moreFrom: 'More from this blog',
+    mainSite: 'Main site',
+    otherLanguages: 'Other languages',
+    contents: 'Contents',
+  },
   es: {
     moreFrom: 'Más de este blog',
     mainSite: 'Sitio principal',
     otherLanguages: 'Otros idiomas',
+    contents: 'Contenido',
   },
   de: {
     moreFrom: 'Mehr aus diesem Blog',
     mainSite: 'Hauptseite',
     otherLanguages: 'Andere Sprachen',
+    contents: 'Inhalt',
   },
   fr: {
     moreFrom: 'Plus d’articles de ce blog',
     mainSite: 'Site principal',
     otherLanguages: 'Autres langues',
+    contents: 'Sommaire',
   },
-  pt: { moreFrom: 'Mais deste blog', mainSite: 'Site principal', otherLanguages: 'Outros idiomas' },
+  pt: {
+    moreFrom: 'Mais deste blog',
+    mainSite: 'Site principal',
+    otherLanguages: 'Outros idiomas',
+    contents: 'Conteúdo',
+  },
   it: {
     moreFrom: 'Altri articoli da questo blog',
     mainSite: 'Sito principale',
     otherLanguages: 'Altre lingue',
+    contents: 'Indice',
   },
-  ru: { moreFrom: 'Ещё в этом блоге', mainSite: 'Основной сайт', otherLanguages: 'Другие языки' },
-  ja: { moreFrom: 'このブログの他の記事', mainSite: 'メインサイト', otherLanguages: '他の言語' },
-  zh: { moreFrom: '更多文章', mainSite: '主站', otherLanguages: '其他语言' },
+  ru: {
+    moreFrom: 'Ещё в этом блоге',
+    mainSite: 'Основной сайт',
+    otherLanguages: 'Другие языки',
+    contents: 'Содержание',
+  },
+  ja: {
+    moreFrom: 'このブログの他の記事',
+    mainSite: 'メインサイト',
+    otherLanguages: '他の言語',
+    contents: '目次',
+  },
+  zh: { moreFrom: '更多文章', mainSite: '主站', otherLanguages: '其他语言', contents: '目录' },
   ar: {
     moreFrom: 'المزيد من هذه المدونة',
     mainSite: 'الموقع الرئيسي',
     otherLanguages: 'لغات أخرى',
+    contents: 'المحتويات',
   },
-  hi: { moreFrom: 'इस ब्लॉग के और लेख', mainSite: 'मुख्य साइट', otherLanguages: 'अन्य भाषाएँ' },
+  hi: {
+    moreFrom: 'इस ब्लॉग के और लेख',
+    mainSite: 'मुख्य साइट',
+    otherLanguages: 'अन्य भाषाएँ',
+    contents: 'विषय-सूची',
+  },
   sw: {
     moreFrom: 'Zaidi kutoka blogu hii',
     mainSite: 'Tovuti kuu',
     otherLanguages: 'Lugha nyingine',
+    contents: 'Yaliyomo',
   },
-  // Traditional-script Chinese differs from `zh` (Simplified) in one of
-  // the three labels; keyed by language-script so `zh-Hant`, `zh-TW` and
+  // Traditional-script Chinese differs from `zh` (Simplified) in two of
+  // the labels; keyed by language-script so `zh-Hant`, `zh-TW` and
   // `zh-HK` (which all maximise to Hant) get it.
-  'zh-Hant': { moreFrom: '更多文章', mainSite: '主站', otherLanguages: '其他語言' },
+  'zh-Hant': {
+    moreFrom: '更多文章',
+    mainSite: '主站',
+    otherLanguages: '其他語言',
+    contents: '目錄',
+  },
 }
 
 /** Languages with a translated chrome. Exported for the drift-guard test. */

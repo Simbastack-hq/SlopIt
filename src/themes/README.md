@@ -8,7 +8,7 @@ Core ships one built-in theme in v1: `minimal`. The theme system is designed to 
 Title
 Date
 Languages (only when the post has translations: the other languages' names, linked)
-Body (rendered markdown)
+Body (rendered markdown), with a contents rail beside it on long posts
 Tags
 More from this blog (the 3 newest other posts in this language: title + description, clamped to two lines)
 Powered by SlopIt footer link
@@ -17,6 +17,8 @@ Powered by SlopIt footer link
 **That's it.** Nothing else on the post page.
 
 "More from this blog" is the one piece of chrome that earned its place: readers mostly land on old posts from search, and three fresh links keep them on the blog and give every new post inbound links the moment it's published. It is fixed at three, blog-level (not author-level), zero JavaScript, and disappears entirely on a one-post blog. Because it embeds blog-wide state, every post page is re-rendered whenever the blog's published set changes (`Renderer.renderBlogPosts`). Spec: `docs/superpowers/specs/2026-09-02-related-posts-design.md`.
+
+The contents rail is the second: on a post with at least three `##` sections and about 1,000 words, the sections are listed in the margin beside the column, on screens 1240px and wider. Every `##`–`######` heading gets an id slugged from its text, so sections are linkable on every post, rail or not. The rail is the one place a theme ships JavaScript: an inline module script, only on pages that have a rail, that marks the section being read and moves the marker. Without it the rail is a list of working links. Spec: `docs/superpowers/specs/2026-10-08-contents-rail-design.md`.
 
 Explicitly *not* shipped in v1:
 
@@ -28,7 +30,7 @@ Explicitly *not* shipped in v1:
 - Styled pull-quotes or drop caps
 - Tag-based "related" scoring, newsletter sign-ups, popovers
 - Comment sections
-- Any JavaScript for interactivity
+- Any other JavaScript for interactivity
 - Redirecting a post page to another language (search engines route by `hreflang`; a consumer may negotiate on the home page only)
 - Guessing a reader's language from their IP address
 
