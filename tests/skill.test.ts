@@ -201,7 +201,7 @@ describe('generateSkillFile', () => {
 
   it('documents section anchors and when the contents list appears', () => {
     expect(text).toContain('## Sections and the contents list')
-    expect(text).toContain('/<slug>/#why-it-works')
+    expect(text).toContain('{blog_url}{post-slug}/#why-it-works')
     expect(text).toMatch(/at least 3 `##` sections and about 1,000 words/)
   })
 
