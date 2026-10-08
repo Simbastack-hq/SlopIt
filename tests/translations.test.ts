@@ -691,7 +691,7 @@ describe('translations — over REST and MCP', () => {
   it('SKILL.md documents translationOf and the language homes', () => {
     const doc = generateSkillFile({ baseUrl: 'https://api.example/api' })
     expect(doc).toContain('translationOf')
-    expect(doc).toContain('/lang/{tag}/')
+    expect(doc).toContain('{blog_url}lang/{tag}/')
     expect(doc).toContain('TRANSLATION_CONFLICT')
     expect(doc).toContain('TRANSLATIONS_DISABLED')
   })

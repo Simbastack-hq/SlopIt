@@ -127,6 +127,30 @@ describe('generateSkillFile', () => {
     expect(section).not.toContain('relative to blog root')
   })
 
+  it('never gives a per-blog URL as a bare root path anywhere in the doc', () => {
+    // `/lang/…` and `/{post-slug}/` resolved against a /b/{id}/ blog drop its
+    // prefix, and against the API host miss every named or custom-domain blog.
+    expect(text).not.toMatch(/`\/lang\//)
+    expect(text).not.toMatch(/`\/\{post-slug\}/)
+    expect(text).not.toMatch(/`\/(llms\.txt|feed\.xml|sitemap\.xml)`/)
+  })
+
+  it('does not tell self-hosted instances their blog is off the API host', () => {
+    expect(text).not.toContain('not at the root of the host serving this document')
+    expect(text).not.toContain('not under the API base')
+    expect(text).toContain('Always build them from `blog_url`')
+  })
+
+  it('keeps the per-language feed example templated (a real blog may have no such language)', () => {
+    const hosted = generateSkillFile({
+      baseUrl: 'https://svc.example/api',
+      blogUrlForms: ['`https://{blog-name}.svc.example/` for a named blog'],
+      example: { blogUrl: 'https://acme.svc.example/', postSlug: 'first-post' },
+    })
+    expect(hosted).not.toContain('https://acme.svc.example/lang/')
+    expect(hosted).toContain('`{blog_url}lang/de/feed.xml`')
+  })
+
   it('shows a concrete example before the table', () => {
     const section = text.slice(text.indexOf('## Agent-readable endpoints'))
     const example = section.indexOf('https://blog.example.com/hello-world.md')
