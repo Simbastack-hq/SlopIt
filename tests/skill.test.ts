@@ -144,6 +144,12 @@ describe('generateSkillFile', () => {
     expect(text).toMatch(/Raw HTML is stripped.{0,40}<iframe>/)
   })
 
+  it('documents section anchors and when the contents list appears', () => {
+    expect(text).toContain('## Sections and the contents list')
+    expect(text).toContain('/<slug>/#why-it-works')
+    expect(text).toMatch(/at least 3 `##` sections and about 1,000 words/)
+  })
+
   it('documents removing a cover with coverImage: null, and the link-preview fallback', () => {
     expect(text).toContain('### Cover image and link previews')
     expect(text).toContain('{ "coverImage": null }')

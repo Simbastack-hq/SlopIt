@@ -82,6 +82,7 @@ Only what a post page or a blog index actually renders.
 - **Link** — `color: accent`, underline on hover, `accent-dark` on `:hover`/`:active`. No fancy transitions.
 - **Tag pill** — `surface` fill, `text-muted` text, `0.25rem` radius, `4px 8px` padding, `caption` type. That's the only "component" on a post page beyond prose.
 - **Date / meta line** — `caption` type, `text-muted` color. Above or below the title, theme's choice.
+- **Contents rail** — long posts only (3+ `##` sections, ~1,000+ words). A list of the sections in the margin beside the column, on screens 1240px and wider; hidden below that. `text-muted` at 13px on a `border` hairline; the section being read turns `text`, and a 2px `accent` marker glides along the hairline to it. That marker is the one motion on a post page. Spec: `docs/superpowers/specs/2026-10-08-contents-rail-design.md`.
 - **"Powered by SlopIt" footer** — one line, `caption` type, `text-muted`, link to `https://slopit.io`. Platform can hide it per plan; core always emits it.
 - **Blog nav** — blog name only, linking to the blog index. `body` type, `text`, left-aligned. No marketing nav. Ever.
 
@@ -89,12 +90,12 @@ If a theme wants to vary, it varies the above — nothing new gets introduced.
 
 ## What we don't do
 
-- **No JavaScript.** Not for interactivity, not for "progressive enhancement," not for analytics. Themes are static HTML + one CSS file.
+- **No JavaScript**, with one exception. Not for interactivity, not for analytics. Themes are static HTML + one CSS file. The exception: a long post's contents rail carries ~30 lines of inline script that marks the section being read. It ships only on pages that have a rail, and the rail is plain working links without it.
 - **No Tailwind build.** No PostCSS, no utility CSS compiler. Plain CSS in a sibling `style.css`, loaded via `<link>`.
 - **No inline `<style>` in templates.** CSS lives in one file per theme. One.
 - **No fonts beyond Satoshi + JetBrains Mono.** If a theme wants a different feel, it changes weight, not family.
 - **No color tokens beyond the seven above.** If you need "another shade of grey," you don't — use `text-muted` or `border`.
-- **No chrome on a post page** (see `src/themes/README.md`): no avatars, no share buttons, no "X min read," no category badges, no pull-quote styling, no related-posts block, no newsletter widget.
+- **No chrome on a post page** (see `src/themes/README.md`): no avatars, no share buttons, no "X min read," no category badges, no pull-quote styling, no newsletter widget. ("More from this blog" and the contents rail are the two earned exceptions; both disappear when they have nothing to show.)
 - **No MD3 token vocabulary.** No `on-surface`, `surface-container-high`, `outline-variant`. The Stitch reference render (`docs/themes-reference/`) uses those; we ignore them.
 - **No dark mode, no theme switcher, no user preferences.** Agents publish, readers read.
 

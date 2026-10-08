@@ -207,6 +207,100 @@ article iframe {
   border-radius: 8px;
 }
 
+/* Contents rail — a long post's sections (renderToc), hung in the margin
+   beside the column on screens wide enough to have one. Below that it
+   is hidden: on a phone or tablet it could only push the post down. The
+   rail spans the post body and its list sticks while you read, then
+   scrolls away with the body's end. One motion idea: a short accent
+   marker that glides along the hairline to the section being read. */
+.post-body {
+  position: relative;
+}
+.post-body :is(h2, h3, h4, h5, h6) {
+  scroll-margin-top: 32px;
+}
+.toc {
+  display: none;
+}
+@media (min-width: 1240px) {
+  .toc {
+    display: block;
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: calc(100% + 56px);
+    width: 188px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html:has(.toc) {
+      scroll-behavior: smooth;
+    }
+  }
+}
+.toc ol {
+  position: sticky;
+  top: 96px;
+  max-height: calc(100vh - 128px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* The hairline is drawn by the items, not the list: the list scrolls when
+   a post has more sections than fit, and a scroller clips anything drawn
+   over its own border, which would halve the marker. */
+.toc ol::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  width: 2px;
+  height: var(--toc-h, 0);
+  border-radius: 1px;
+  background: var(--accent);
+  transform: translateY(var(--toc-y, 0));
+  opacity: 0;
+  transition:
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.4s ease;
+}
+.toc ol:has([aria-current])::before {
+  opacity: 1;
+}
+.toc li {
+  margin: 0;
+  border-inline-start: 1px solid var(--border);
+}
+.toc a {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-block: 6px;
+  padding-inline-start: 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+.toc a:hover,
+.toc a[aria-current] {
+  color: var(--text);
+}
+.toc a:focus-visible {
+  outline: 1.5px solid var(--accent);
+  outline-offset: -1.5px;
+  border-radius: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .toc ol::before,
+  .toc a {
+    transition: none;
+  }
+}
+
 .tags {
   margin-top: 32px;
 }
