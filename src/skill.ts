@@ -238,5 +238,9 @@ More text after the video.
 - The player loads from \`youtube-nocookie.com\`. In \`/feed.xml\` and \`/<slug>.md\` the URL stays a plain link.
 - With no \`coverImage\`, the first video's YouTube thumbnail is the post's link-preview image. Set \`coverImage\` to use a different picture.
 - Raw HTML is stripped from post bodies, \`<iframe>\` included; an embed snippet copied from YouTube renders as nothing. The bare URL is the only way to embed a video.
+
+## Sections and the contents list
+
+Use \`##\` headings for a post's sections. Every heading from \`##\` down gets a link anchor made from its text (\`## Why it works\` → \`/<slug>/#why-it-works\`), so you can link a reader straight to a section. A post with at least 3 \`##\` sections and about 1,000 words or more also gets a contents list of those sections beside it on wide screens. Nothing to set; shorter posts don't get one, and phones never show it.
 `
 }

@@ -154,7 +154,44 @@ const youtubeEmbeds: MarkedExtension = {
   },
 }
 
-const pageMarked = new Marked(safeHtml, youtubeEmbeds)
+// A heading's id: its visible text, lowercased, apostrophes dropped, every
+// run of anything but letters, combining marks and digits (any script)
+// turned into one hyphen. `Don&#39;t <code>&amp;</code> panic` →
+// `dont-panic`, `Über uns` → `über-uns`, `概要` → `概要`. Only those
+// characters and `-` come out, so the id is safe in an attribute and a
+// fragment unescaped.
+function slugify(innerHtml: string): string {
+  return innerHtml
+    .replace(/<[^>]*>/g, '')
+    .replace(/&#39;|’/g, '')
+    .replace(/&(amp|lt|gt|quot);/g, ' ')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+    .replace(/^-|-$/g, '')
+}
+
+// Section anchors: every h2–h6 on a post page gets an id, so a reader can
+// link to `#a-section` and the contents rail (toc.ts) has targets. A repeat
+// gets `-2`, `-3`, and a heading with no letters at all is `section`. h1
+// keeps no id: in a body it repeats the page title. Runs on the finished
+// HTML, where author HTML is already stripped and code is entity-escaped,
+// so the only heading tags are marked's own.
+const headingIds: MarkedExtension = {
+  hooks: {
+    postprocess(html: string): string {
+      const used = new Set<string>()
+      return html.replace(/<h([2-6])>([\s\S]*?)<\/h\1>/g, (_m, level: string, inner: string) => {
+        const base = slugify(inner) || 'section'
+        let id = base
+        for (let n = 2; used.has(id); n++) id = `${base}-${n}`
+        used.add(id)
+        return `<h${level} id="${id}">${inner}</h${level}>`
+      })
+    },
+  },
+}
+
+const pageMarked = new Marked(safeHtml, youtubeEmbeds, headingIds)
 const feedMarked = new Marked(safeHtml)
 
 // Markdown → HTML. Synchronous because blog posts are short and we render

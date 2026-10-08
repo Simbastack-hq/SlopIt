@@ -25,6 +25,7 @@ import {
 } from './seo.js'
 import { escapeHtml, loadTheme, render, type ThemeAssets } from './templates.js'
 import { languageLabel, stringsFor } from './strings.js'
+import { renderToc } from './toc.js'
 
 export interface RendererConfig {
   store: Store
@@ -628,6 +629,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     // (the root language has one too), never to `/`, which a consumer may
     // negotiate — a reader who chose a language keeps it while navigating.
     const blogHomeHref = languages.length === 1 ? '..' : `../lang/${languageSegment(lang)}/`
+    const postBody = renderMarkdown(post.body)
 
     const html = render(theme.post, {
       lang,
@@ -657,7 +659,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         lang,
         strings.otherLanguages,
       ),
-      postBody: renderMarkdown(post.body),
+      postBody,
+      toc: renderToc(postBody, lang, strings.contents),
       tagList: renderTagList(post.tags),
       moreFrom: renderMoreFrom(post, sameLanguage, strings.moreFrom),
       poweredBy: renderPoweredBy(),
