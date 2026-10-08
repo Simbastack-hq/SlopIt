@@ -691,7 +691,11 @@ describe('translations — over REST and MCP', () => {
   it('SKILL.md documents translationOf and the language homes', () => {
     const doc = generateSkillFile({ baseUrl: 'https://api.example/api' })
     expect(doc).toContain('translationOf')
-    expect(doc).toContain('{blog_url}lang/{tag}/')
+    // Scoped to the Language section: the endpoint table already carries
+    // the template, so a doc-wide check wouldn't catch a bare /lang/ there.
+    const language = doc.slice(doc.indexOf('## Language'), doc.indexOf('### Translations'))
+    expect(language).toContain('{blog_url}lang/{tag}/')
+    expect(language).not.toMatch(/`\/lang\//)
     expect(doc).toContain('TRANSLATION_CONFLICT')
     expect(doc).toContain('TRANSLATIONS_DISABLED')
   })
