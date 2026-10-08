@@ -100,14 +100,93 @@ describe('generateSkillFile', () => {
     expect(text).toContain('GET https://api.example/schema')
   })
 
-  it('documents the four agent-readable endpoints (Phase 2)', () => {
+  it('documents the five agent-readable files as {blog_url} templates', () => {
     expect(text).toContain('## Agent-readable endpoints')
-    expect(text).toContain('/llms.txt')
-    expect(text).toContain('/<slug>.md')
-    expect(text).toContain('/feed.xml')
-    expect(text).toContain('/sitemap.xml')
+    for (const t of [
+      '{blog_url}llms.txt',
+      '{blog_url}{post-slug}.md',
+      '{blog_url}feed.xml',
+      '{blog_url}lang/{tag}/feed.xml',
+      '{blog_url}sitemap.xml',
+    ]) {
+      expect(text, `missing template ${t}`).toContain(t)
+    }
     // Reassures agents that these are read-only and unauthenticated
     expect(text).toMatch(/No authentication required/i)
+    // Points at the real source of the blog URL
+    expect(text).toContain('`blog_url` returned by signup')
+    expect(text).toContain('`_links.view`')
+  })
+
+  it('never lists per-blog files as bare root paths (agents resolve them against the API host)', () => {
+    const section = text.slice(
+      text.indexOf('## Agent-readable endpoints'),
+      text.indexOf('## Schema'),
+    )
+    expect(section).not.toMatch(/^\| \/(llms\.txt|feed\.xml|sitemap\.xml|<slug>\.md)/m)
+    expect(section).not.toContain('relative to blog root')
+  })
+
+  it('never gives a per-blog URL as a bare root path anywhere in the doc', () => {
+    // `/lang/…` and `/{post-slug}/` resolved against a /b/{id}/ blog drop its
+    // prefix, and against the API host miss every named or custom-domain blog.
+    expect(text).not.toMatch(/`\/lang\//)
+    expect(text).not.toMatch(/`\/\{post-slug\}/)
+    expect(text).not.toMatch(/`\/(llms\.txt|feed\.xml|sitemap\.xml)`/)
+  })
+
+  it('does not tell self-hosted instances their blog is off the API host', () => {
+    expect(text).not.toContain('not at the root of the host serving this document')
+    expect(text).not.toContain('not under the API base')
+    expect(text).toContain('Always build them from `blog_url`')
+  })
+
+  it('keeps the per-language feed example templated (a real blog may have no such language)', () => {
+    const hosted = generateSkillFile({
+      baseUrl: 'https://svc.example/api',
+      blogUrlForms: ['`https://{blog-name}.svc.example/` for a named blog'],
+      example: { blogUrl: 'https://acme.svc.example/', postSlug: 'first-post' },
+    })
+    expect(hosted).not.toContain('https://acme.svc.example/lang/')
+    expect(hosted).toContain('`{blog_url}lang/de/feed.xml`')
+  })
+
+  it('shows a concrete example before the table', () => {
+    const section = text.slice(text.indexOf('## Agent-readable endpoints'))
+    const example = section.indexOf('https://blog.example.com/hello-world.md')
+    const table = section.indexOf('| URL template |')
+    expect(example).toBeGreaterThan(-1)
+    expect(example).toBeLessThan(table)
+  })
+
+  it('uses {curly} placeholders in URLs, never <angle> ones', () => {
+    expect(text).not.toMatch(/<slug>|<tag>|<blog_id>|<media\.url>|<slug of/)
+  })
+
+  it('does not claim the API root is not a blog unless the host lists its blog URL forms', () => {
+    expect(text).not.toContain('itself is not a blog')
+  })
+
+  it('lists host blog URL forms, the not-a-blog warning, and the host example when given', () => {
+    const hosted = generateSkillFile({
+      baseUrl: 'https://svc.example/api',
+      blogUrlForms: [
+        '`https://{blog-name}.svc.example/` for a named blog',
+        '`https://svc.example/b/{blog_id}/` for an unnamed blog',
+      ],
+      example: { blogUrl: 'https://acme.svc.example/', postSlug: 'first-post' },
+    })
+    expect(hosted).toContain('- `https://{blog-name}.svc.example/` for a named blog')
+    expect(hosted).toContain('- `https://svc.example/b/{blog_id}/` for an unnamed blog')
+    expect(hosted).toContain('`https://svc.example/` itself is not a blog')
+    expect(hosted).toContain('https://acme.svc.example/first-post.md')
+    expect(hosted).not.toContain('blog.example.com')
+  })
+
+  it('documents the MCP Accept header that avoids 406', () => {
+    const mcp = text.slice(text.indexOf('## MCP tools'))
+    expect(mcp).toContain('Accept: application/json, text/event-stream')
+    expect(mcp).toContain('406')
   })
 
   it('includes the MCP tools section with all tool names', () => {
@@ -146,7 +225,7 @@ describe('generateSkillFile', () => {
 
   it('documents section anchors and when the contents list appears', () => {
     expect(text).toContain('## Sections and the contents list')
-    expect(text).toContain('/<slug>/#why-it-works')
+    expect(text).toContain('{blog_url}{post-slug}/#why-it-works')
     expect(text).toMatch(/at least 3 `##` sections and about 1,000 words/)
   })
 
