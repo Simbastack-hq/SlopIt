@@ -2,6 +2,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -12,7 +13,13 @@ import { getBlogInternal } from '../blogs.js'
 import type { Store } from '../db/store.js'
 import { listBlogLanguages, listPublishedPostsForBlog } from '../posts.js'
 import type { Blog, Post } from '../schema/index.js'
-import { buildLlmsTxt, buildRssFeed, buildSitemap } from './feeds.js'
+import {
+  buildLlmsTxt,
+  buildRobotsTxt,
+  buildRssFeed,
+  buildSitemap,
+  ROBOTS_TXT_HEADER,
+} from './feeds.js'
 import { buildFrontmatter } from './frontmatter.js'
 import { renderMarkdown } from './markdown.js'
 import {
@@ -36,7 +43,7 @@ export interface RendererConfig {
    * returns transformed HTML before it's written to disk. Called for
    * every HTML write: `renderPost` (one post page), `renderBlogPosts`
    * (every post page), and `renderBlog` (every home page). NOT called
-   * for non-HTML outputs (.md, llms.txt, feed.xml, sitemap.xml).
+   * for non-HTML outputs (.md, llms.txt, feed.xml, sitemap.xml, robots.txt).
    *
    * `blogId` is passed so the caller can look up per-blog config like
    * `blog.analytics` without re-resolving it. Identity is the default.
@@ -123,8 +130,8 @@ export interface MutationRenderer extends Renderer {
   deletePostMarkdown(blogId: string, slug: string): void
   /**
    * (Re)emit the per-blog manifest files together — `llms.txt`,
-   * `sitemap.xml`, `feed.xml` and one `lang/<tag>/feed.xml` per other
-   * language. They share the same per-blog published-posts query so one
+   * `sitemap.xml`, `robots.txt`, `feed.xml` and one `lang/<tag>/feed.xml`
+   * per other language. They share the same per-blog published-posts query so one
    * method is cheaper than several. Atomic per file. Called whenever any
    * post in the blog changes lifecycle (publish, update, unpublish, delete).
    */
@@ -396,13 +403,14 @@ export function renderParentSiteLink(
 }
 
 /**
- * Write `content` to `path` atomically: write to `${path}.tmp` first,
+ * Write `content` to `path` atomically: write to `${path}.<pid>.tmp` first,
  * then rename. POSIX rename is atomic, so a concurrent reader (Caddy)
  * never sees a partially-written file.
  *
  * Used by all renderer write paths: per-post `<slug>/index.html` and
  * `<slug>.md`, plus per-blog `index.html`, `llms.txt`, `feed.xml`,
- * `sitemap.xml` and the `lang/<tag>/` copies of the first and third.
+ * `sitemap.xml`, `robots.txt` and the `lang/<tag>/` copies of the first
+ * and third.
  *
  * Caller is responsible for `mkdirSync(dirname(path), { recursive: true })`
  * if the parent directory doesn't exist (matches the existing pattern in
@@ -411,9 +419,32 @@ export function renderParentSiteLink(
  * @internal
  */
 function writeFileAtomic(path: string, content: string): void {
-  const tmp = `${path}.tmp`
+  // Per-process temp name: a consumer's ops script can render beside its
+  // live server, and a shared `.tmp` lets one process rename the other's
+  // file away mid-write (ENOENT, which rolls back a live publish).
+  const tmp = `${path}.${process.pid}.tmp`
   writeFileSync(tmp, content, 'utf8')
   renameSync(tmp, path)
+}
+
+/**
+ * Whether the renderer may (re)write the robots.txt at `path`: it is
+ * missing, or it starts with ROBOTS_TXT_HEADER. Anything else is the
+ * operator's crawl policy. That includes a file we can't read: the
+ * renderer always writes files it can read back, so an unreadable one
+ * was put there by someone else.
+ *
+ * @internal
+ */
+function isRendererRobotsTxt(path: string): boolean {
+  try {
+    return readFileSync(path, 'utf8').startsWith(ROBOTS_TXT_HEADER)
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return true
+    if (code === 'EACCES' || code === 'EPERM') return false
+    throw e
+  }
 }
 
 /**
@@ -579,6 +610,14 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       updatedAt: latestUpdatedAt(all),
     })
     writeFileAtomic(join(blogDir, 'sitemap.xml'), sitemapXml)
+
+    // robots.txt — allow all, AI crawlers named, point at the sitemap.
+    // Only takes effect when the blog is served at a host root. A file
+    // without our header is the operator's crawl policy: leave it alone.
+    const robotsPath = join(blogDir, 'robots.txt')
+    if (isRendererRobotsTxt(robotsPath)) {
+      writeFileAtomic(robotsPath, buildRobotsTxt({ sitemapUrl: root + 'sitemap.xml' }))
+    }
   }
 
   // Single template render path for a post page, shared by renderPost

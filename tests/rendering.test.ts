@@ -1,4 +1,12 @@
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -849,6 +857,8 @@ describe('createRenderer — renderPost', () => {
     expect(sitemap.startsWith('<?xml')).toBe(true)
     const llms = readFileSync(join(outputDir, blog.id, 'llms.txt'), 'utf8')
     expect(llms.startsWith('#')).toBe(true)
+    const robots = readFileSync(join(outputDir, blog.id, 'robots.txt'), 'utf8')
+    expect(robots.startsWith('# ')).toBe(true)
   })
 
   // Phase 2 — agent-readable file outputs (.md, llms.txt, feed.xml, sitemap.xml)
@@ -861,6 +871,63 @@ describe('createRenderer — renderPost', () => {
     expect(existsSync(join(outputDir, blog.id, 'llms.txt'))).toBe(true)
     expect(existsSync(join(outputDir, blog.id, 'feed.xml'))).toBe(true)
     expect(existsSync(join(outputDir, blog.id, 'sitemap.xml'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'robots.txt'))).toBe(true)
+  })
+
+  it("points robots.txt at the blog's own sitemap, from the resolved baseUrl", () => {
+    const { blog } = createBlog(store, { name: 'robots' })
+    // No trailing slash: the Sitemap line must still be a clean absolute URL.
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://blog.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    const robots = readFileSync(join(outputDir, blog.id, 'robots.txt'), 'utf8')
+    expect(robots).toContain('User-agent: *\nAllow: /\n')
+    expect(robots).toContain('\nSitemap: https://blog.example.com/sitemap.xml\n')
+  })
+
+  it("never overwrites an operator's own robots.txt", () => {
+    const { blog } = createBlog(store, { name: 'own-robots' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://blog.example.com' })
+    const own = 'User-agent: *\nDisallow: /private/\n'
+    mkdirSync(join(outputDir, blog.id), { recursive: true })
+    writeFileSync(join(outputDir, blog.id, 'robots.txt'), own)
+
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    expect(readFileSync(join(outputDir, blog.id, 'robots.txt'), 'utf8')).toBe(own)
+  })
+
+  it("an unreadable robots.txt is the operator's: publish and unpublish still succeed", async () => {
+    const { blog } = createBlog(store, { name: 'locked-robots' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://blog.example.com' })
+    const path = join(outputDir, blog.id, 'robots.txt')
+    const own = 'User-agent: *\nDisallow: /\n'
+    mkdirSync(join(outputDir, blog.id), { recursive: true })
+    writeFileSync(path, own)
+    chmodSync(path, 0o000) // e.g. root:www-data 0640, served by the web server, unreadable to us
+    try {
+      createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+      const { updatePost } = await import('../src/posts.js')
+      updatePost(store, renderer, blog.id, 'aa', { status: 'draft' })
+      expect(existsSync(join(outputDir, blog.id, 'aa', 'index.html'))).toBe(false)
+    } finally {
+      chmodSync(path, 0o644)
+    }
+    expect(readFileSync(path, 'utf8')).toBe(own)
+  })
+
+  it('keeps its own robots.txt current when the base URL moves', () => {
+    const { blog } = createBlog(store, { name: 'moved' })
+    const before = createRenderer({ store, outputDir, baseUrl: 'https://moved.example.com' })
+    createPost(store, before, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    // e.g. a custom domain is added and the consumer re-renders
+    const after = createRenderer({ store, outputDir, baseUrl: 'https://blog.moved.test' })
+    after.renderManifests(blog.id)
+
+    const robots = readFileSync(join(outputDir, blog.id, 'robots.txt'), 'utf8')
+    expect(robots).toContain('\nSitemap: https://blog.moved.test/sitemap.xml\n')
+    expect(robots).not.toContain('moved.example.com')
   })
 
   it('emits frontmatter + raw body in <slug>.md, not the rendered HTML', () => {
