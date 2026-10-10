@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { updateBlog } from '../blogs.js'
 import { SlopItError } from '../errors.js'
 import { uploadMedia, listMedia, deleteMedia } from '../media.js'
@@ -8,18 +9,91 @@ import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts
 import { BlogPatchSchema, CreateBlogInputSchema, PostPatchSchema } from '../schema/index.js'
 import { PostInputBaseSchema, slugTitleRefinement } from '../schema/post-input-base.js'
 import { signupBlog } from '../signup.js'
+import {
+  BlogOutput,
+  DeletedOutput,
+  MediaListOutput,
+  MediaOutput,
+  PostListOutput,
+  PostOutput,
+  PostWriteOutput,
+  ReportBugOutput,
+  SignupOutput,
+} from './output-schemas.js'
 import type { McpServerConfig } from './server.js'
 import { wrapTool } from './wrap-tool.js'
 
+// Behaviour hints for clients. Every tool talks only to this blog
+// backend, so openWorldHint is false throughout.
+const READ: ToolAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+}
+// Each call creates something new (a blog, a post, an image).
+const CREATE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+}
+// The same patch twice leaves the same state.
+const UPDATE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+}
+// Permanent; a repeat finds nothing left to delete.
+const DELETE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: false,
+}
+
+/** `title` + `annotations` for registerTool; spec puts the title in both. */
+function meta(title: string, hints: ToolAnnotations) {
+  return { title, annotations: { title, ...hints } }
+}
+
+const BlogId = z
+  .string()
+  .describe(
+    "Your blog's id: the `blog_id` returned by signup. With an API key, it must be that key's blog.",
+  )
+
+const PostSlug = z
+  .string()
+  .describe('Slug of the post, e.g. "hello-world", as returned by create_post or list_posts.')
+
+const IdempotencyKey = z
+  .string()
+  .describe(
+    'Optional retry key, any unique string (e.g. a UUID). Retrying with the same key and identical arguments returns the first result instead of writing again; the same key with different arguments fails with IDEMPOTENCY_KEY_CONFLICT. Scoped to your API key and this tool.',
+  )
+  .optional()
+
 export function registerTools(server: McpServer, config: McpServerConfig): void {
+  // Descriptions for the three tools an agent meets first say when to use
+  // the tool, what to tell the human afterwards, and how to recover from
+  // the likely failures. Every claim maps to behaviour in signup.ts /
+  // posts.ts; keep them in step.
   const signupDescription = [
     'Create a SlopIt blog and get an API key, live URL, and onboarding text.',
-    ...(config.requireEmail === true
-      ? ['Email is required and is the only API-key recovery channel.']
-      : []),
+    'Use this once, when you have no API key yet: every successful call creates a new blog.',
+    config.requireEmail === true
+      ? 'Email is required and is the only API-key recovery channel.'
+      : "Pass the human's email when you have it: it is the only way to recover the key.",
     ...(config.termsUrl !== undefined
       ? [`Creating a blog accepts the operator's terms: ${config.termsUrl}.`]
       : []),
+    'Afterwards, send `api_key` as a Bearer token and pass `blog_id` on every later call, and give the human the `blog_url`.',
+    "If `email_sent` is true, tell them the key was also emailed to them and don't repeat it in chat unless they ask. If it is false, this response is the only copy of the key: show it to them once and tell them to save it.",
+    config.requireEmail === true
+      ? 'On BLOG_NAME_CONFLICT or BLOG_NAME_RESERVED, retry with another `name`. On EMAIL_REQUIRED, ask the human for their email and call again.'
+      : 'On BLOG_NAME_CONFLICT or BLOG_NAME_RESERVED, retry with another `name`.',
   ].join(' ')
 
   // 1. signup — create a blog + API key in one call.
@@ -29,8 +103,10 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'signup',
     {
+      ...meta('Create blog (sign up)', CREATE),
       description: signupDescription,
       inputSchema: CreateBlogInputSchema.strict(),
+      outputSchema: SignupOutput,
     },
     wrapTool<z.input<typeof CreateBlogInputSchema>>(
       config,
@@ -53,18 +129,28 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
 
   // 2. create_post — publish a new post.
   const CreatePostInputSchema = z
-    .object({ blog_id: z.string() })
+    .object({ blog_id: BlogId })
     .extend(PostInputBaseSchema.shape)
-    .extend({ idempotency_key: z.string().optional() })
+    .extend({ idempotency_key: IdempotencyKey })
     .strict()
     .superRefine(slugTitleRefinement)
 
   server.registerTool(
     'create_post',
     {
-      description:
-        "Publish a post to the blog. Needs `title` and `body` (markdown). Returns the published post's live URL. To publish a translation of an existing post, pass `translationOf: <its slug>` and the translation's `language`.",
+      ...meta('Create post', CREATE),
+      description: [
+        "Publish a post to the blog. Needs `title` and `body` (markdown). Returns the published post's live URL.",
+        'Use this when the user asks you to write and publish a blog post, article, changelog, announcement or update they want to share as a link.',
+        '`status: "draft"` saves it without publishing.',
+        "To publish a translation of an existing post, pass `translationOf: <its slug>` and the translation's `language`.",
+        'Afterwards, always give the user the returned `post_url` (drafts have none).',
+        'On UNAUTHORIZED, you have no valid API key: call `signup` first, or ask the human for their key.',
+        'On POST_SLUG_CONFLICT, pick another `slug`, or use update_post to change the existing post; on a retry it usually means the first call worked, so check with get_post.',
+        'Pass an `idempotency_key` to make retries safe.',
+      ].join(' '),
       inputSchema: CreatePostInputSchema,
+      outputSchema: PostWriteOutput,
     },
     wrapTool<z.infer<typeof CreatePostInputSchema>>(
       config,
@@ -90,19 +176,29 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // 3. update_post — patch an existing post.
   const UpdatePostInputSchema = z
     .object({
-      blog_id: z.string(),
-      slug: z.string(),
-      patch: PostPatchSchema,
-      idempotency_key: z.string().optional(),
+      blog_id: BlogId,
+      slug: PostSlug,
+      patch: PostPatchSchema.describe(
+        'Fields to change; omitted fields stay as they are. Same fields as create_post except `slug`, which cannot change.',
+      ),
+      idempotency_key: IdempotencyKey,
     })
     .strict()
 
   server.registerTool(
     'update_post',
     {
-      description:
-        "Edit an existing post. Pass the post's `slug` and a `patch` of fields to change; `coverImage: null` removes the cover. Slug itself can't change; delete and republish if you need a new URL.",
+      ...meta('Update post', UPDATE),
+      description: [
+        "Edit an existing post. Pass the post's `slug` and a `patch` of fields to change; `coverImage: null` removes the cover.",
+        'Use this when the user wants a published post or draft changed.',
+        '`patch: { status: "draft" }` takes a live post offline and `"published"` puts a draft live.',
+        "Slug itself can't change; delete and republish if you need a new URL.",
+        'Afterwards, give the user the returned `post_url` when the post is published.',
+        'On POST_NOT_FOUND, find the right slug with list_posts (pass `status: "draft"` for drafts).',
+      ].join(' '),
       inputSchema: UpdatePostInputSchema,
+      outputSchema: PostWriteOutput,
     },
     wrapTool<z.infer<typeof UpdatePostInputSchema>>(
       config,
@@ -129,17 +225,19 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // 4. delete_post — hard-delete by slug.
   const DeletePostInputSchema = z
     .object({
-      blog_id: z.string(),
-      slug: z.string(),
-      idempotency_key: z.string().optional(),
+      blog_id: BlogId,
+      slug: PostSlug,
+      idempotency_key: IdempotencyKey,
     })
     .strict()
 
   server.registerTool(
     'delete_post',
     {
+      ...meta('Delete post', DELETE),
       description: "Remove a post permanently. This can't be undone.",
       inputSchema: DeletePostInputSchema,
+      outputSchema: DeletedOutput,
     },
     wrapTool<{ blog_id: string; slug: string; idempotency_key?: string }>(
       config,
@@ -157,18 +255,20 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // point. crossBlogGuard rejects mismatched blog_id.
   const UpdateBlogInputSchema = z
     .object({
-      blog_id: z.string(),
-      patch: BlogPatchSchema,
-      idempotency_key: z.string().optional(),
+      blog_id: BlogId,
+      patch: BlogPatchSchema.describe('Blog settings to change; omitted fields stay as they are.'),
+      idempotency_key: IdempotencyKey,
     })
     .strict()
 
   server.registerTool(
     'update_blog',
     {
+      ...meta('Update blog settings', UPDATE),
       description:
         'Edit a blog: set/clear the analytics config (Umami, Plausible, or Google Analytics) or set the default `language` (BCP-47 tag, e.g. "ru"). Send `patch: { analytics: null }` to remove analytics.',
       inputSchema: UpdateBlogInputSchema,
+      outputSchema: BlogOutput,
     },
     wrapTool<z.infer<typeof UpdateBlogInputSchema>>(
       config,
@@ -186,8 +286,10 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'get_blog',
     {
+      ...meta('Get blog', READ),
       description: "Get the blog's current metadata.",
-      inputSchema: z.object({ blog_id: z.string() }).strict(),
+      inputSchema: z.object({ blog_id: BlogId }).strict(),
+      outputSchema: BlogOutput,
     },
     wrapTool<{ blog_id: string }>(
       config,
@@ -201,8 +303,10 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'get_post',
     {
+      ...meta('Get post', READ),
       description: 'Get a single post by its slug.',
-      inputSchema: z.object({ blog_id: z.string(), slug: z.string() }).strict(),
+      inputSchema: z.object({ blog_id: BlogId, slug: PostSlug }).strict(),
+      outputSchema: PostOutput,
     },
     wrapTool<{ blog_id: string; slug: string }>(
       config,
@@ -215,17 +319,24 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // 7. list_posts — published by default; ?status=draft flips.
   const ListPostsInputSchema = z
     .object({
-      blog_id: z.string(),
-      status: z.enum(['draft', 'published']).optional(),
+      blog_id: BlogId,
+      status: z
+        .enum(['draft', 'published'])
+        .describe(
+          '"published" (default) lists live posts, newest published first; "draft" lists drafts, newest created first.',
+        )
+        .optional(),
     })
     .strict()
 
   server.registerTool(
     'list_posts',
     {
+      ...meta('List posts', READ),
       description:
         "List posts on the blog. Defaults to published posts. Pass `status: 'draft'` for drafts.",
       inputSchema: ListPostsInputSchema,
+      outputSchema: PostListOutput,
     },
     wrapTool<{ blog_id: string; status?: 'draft' | 'published' }>(
       config,
@@ -245,11 +356,18 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'report_bug',
     {
+      ...meta('Report a bug', READ),
       description: 'Report a bug or something unexpected. Returns a link to submit the report.',
       inputSchema: z.object({
-        summary: z.string().optional(),
-        details: z.unknown().optional(),
+        summary: z.string().describe('One line on what went wrong.').optional(),
+        details: z
+          .unknown()
+          .describe(
+            'Anything that helps reproduce it, e.g. the tool you called, its arguments and the error you got.',
+          )
+          .optional(),
       }),
+      outputSchema: ReportBugOutput,
     },
     wrapTool(config, 'report_bug', { auth: 'public' }, () => {
       throw new SlopItError(
@@ -269,23 +387,37 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     .refine((s) => /^[A-Za-z0-9+/]+={0,2}$/.test(s) && s.length % 4 === 0, {
       message: 'data_base64 must be valid standard base64',
     })
+    .describe(
+      'The image bytes as standard base64 (A-Z, a-z, 0-9, +, / with = padding). No "data:" prefix, no line breaks. Max 5 MB decoded unless the host sets another cap.',
+    )
 
   const UploadMediaInputSchema = z
     .object({
-      blog_id: z.string(),
-      filename: z.string().min(1).max(255),
-      content_type: z.string().min(1),
+      blog_id: BlogId,
+      filename: z
+        .string()
+        .min(1)
+        .max(255)
+        .describe(
+          'Original file name, e.g. "castle.jpg". Kept for reference; the public URL uses a generated id.',
+        ),
+      content_type: z
+        .string()
+        .min(1)
+        .describe('Image type: "image/jpeg", "image/png", "image/gif" or "image/webp".'),
       data_base64: Base64Schema,
-      idempotency_key: z.string().optional(),
+      idempotency_key: IdempotencyKey,
     })
     .strict()
 
   server.registerTool(
     'upload_media',
     {
+      ...meta('Upload image', CREATE),
       description:
         'Upload an image (JPEG/PNG/GIF/WebP, max 5MB) as base64 in `data_base64`. Returns a public URL — use it as ![alt](url) in post markdown or pass as coverImage.',
       inputSchema: UploadMediaInputSchema,
+      outputSchema: MediaOutput,
     },
     wrapTool<z.infer<typeof UploadMediaInputSchema>>(
       config,
@@ -321,9 +453,11 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'list_media',
     {
+      ...meta('List images', READ),
       description:
         "List uploaded images for the blog. Returns each image's id, public URL, content type, and byte size.",
-      inputSchema: z.object({ blog_id: z.string() }).strict(),
+      inputSchema: z.object({ blog_id: BlogId }).strict(),
+      outputSchema: MediaListOutput,
     },
     wrapTool<{ blog_id: string }>(
       config,
@@ -339,18 +473,22 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // 11. delete_media
   const DeleteMediaInputSchema = z
     .object({
-      blog_id: z.string(),
-      media_id: z.string(),
-      idempotency_key: z.string().optional(),
+      blog_id: BlogId,
+      media_id: z
+        .string()
+        .describe('Id of the image (`media.id` from upload_media or list_media).'),
+      idempotency_key: IdempotencyKey,
     })
     .strict()
 
   server.registerTool(
     'delete_media',
     {
+      ...meta('Delete image', DELETE),
       description:
         'Permanently delete an uploaded image by id. The URL stops working immediately. Posts that referenced it will show a broken image until edited.',
       inputSchema: DeleteMediaInputSchema,
+      outputSchema: DeletedOutput,
     },
     wrapTool<z.infer<typeof DeleteMediaInputSchema>>(
       config,
