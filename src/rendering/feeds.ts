@@ -120,9 +120,15 @@ const AI_CRAWLERS = [
   'Applebot-Extended',
 ]
 
+// First line of every robots.txt the renderer writes. The renderer only
+// rewrites a robots.txt that is missing or starts with this line, so an
+// operator's own file (or one with this line deleted) is never replaced.
+export const ROBOTS_TXT_HEADER =
+  '# Written by SlopIt on every publish. Delete this line to keep your own edits.'
+
 export function buildRobotsTxt(input: { sitemapUrl: string }): string {
   const groups = ['*', ...AI_CRAWLERS].map((ua) => `User-agent: ${ua}\nAllow: /\n`)
-  return `${groups.join('\n')}\nSitemap: ${input.sitemapUrl}\n`
+  return `${ROBOTS_TXT_HEADER}\n${groups.join('\n')}\nSitemap: ${input.sitemapUrl}\n`
 }
 
 // -----------------------------------------------------------------------------

@@ -35,6 +35,8 @@ Reversed ordering (destructive first, manifests after) would leave the DB compen
 
 `renderManifests` also writes `robots.txt`: `User-agent: *` / `Allow: /`, an explicit allow group per AI crawler (`AI_CRAWLERS` in `feeds.ts`, tokens checked against each vendor's docs), and `Sitemap: <blog root>sitemap.xml`. It is a manifest, not blog chrome, so it follows the same lifecycle as `sitemap.xml`:
 
+- **The operator's file wins.** The renderer rewrites `robots.txt` only when it is missing or its first line is `ROBOTS_TXT_HEADER`. A self-hoster who already serves their own robots.txt from the blog dir keeps it (and its `Disallow` rules); deleting the header line from a generated file takes ownership of it. Unlike `style.css` or `sitemap.xml`, this file encodes a site-wide policy someone may have set on purpose, so a publish must not erase it (Codex review, SlopIt#78).
+
 - A blog with no published post has neither file. A missing robots.txt (any 4xx) means "crawl everything" to crawlers, so that is safe.
 - Crawlers only read robots.txt at a host root. A blog served under a path (`https://host/b/<id>/`) still gets the file, but the host's own robots.txt governs it.
 - Blogs rendered before this file existed get it on their next manifest render. Consumers that host many blogs need a re-render sweep after upgrading core (platform: the `rerender-*` scripts).

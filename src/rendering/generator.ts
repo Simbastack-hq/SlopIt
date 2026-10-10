@@ -2,6 +2,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -12,7 +13,13 @@ import { getBlogInternal } from '../blogs.js'
 import type { Store } from '../db/store.js'
 import { listBlogLanguages, listPublishedPostsForBlog } from '../posts.js'
 import type { Blog, Post } from '../schema/index.js'
-import { buildLlmsTxt, buildRobotsTxt, buildRssFeed, buildSitemap } from './feeds.js'
+import {
+  buildLlmsTxt,
+  buildRobotsTxt,
+  buildRssFeed,
+  buildSitemap,
+  ROBOTS_TXT_HEADER,
+} from './feeds.js'
 import { buildFrontmatter } from './frontmatter.js'
 import { renderMarkdown } from './markdown.js'
 import {
@@ -582,11 +589,12 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     writeFileAtomic(join(blogDir, 'sitemap.xml'), sitemapXml)
 
     // robots.txt — allow all, AI crawlers named, point at the sitemap.
-    // Only takes effect when the blog is served at a host root.
-    writeFileAtomic(
-      join(blogDir, 'robots.txt'),
-      buildRobotsTxt({ sitemapUrl: root + 'sitemap.xml' }),
-    )
+    // Only takes effect when the blog is served at a host root. A file
+    // without our header is the operator's crawl policy: leave it alone.
+    const robotsPath = join(blogDir, 'robots.txt')
+    if (!existsSync(robotsPath) || readFileSync(robotsPath, 'utf8').startsWith(ROBOTS_TXT_HEADER)) {
+      writeFileAtomic(robotsPath, buildRobotsTxt({ sitemapUrl: root + 'sitemap.xml' }))
+    }
   }
 
   // Single template render path for a post page, shared by renderPost

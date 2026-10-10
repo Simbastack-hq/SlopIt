@@ -5,6 +5,7 @@ import {
   buildSitemap,
   buildRssFeed,
   buildRobotsTxt,
+  ROBOTS_TXT_HEADER,
 } from '../src/rendering/feeds.js'
 
 describe('escapeXml', () => {
@@ -158,8 +159,10 @@ describe('buildSitemap', () => {
 describe('buildRobotsTxt', () => {
   const out = buildRobotsTxt({ sitemapUrl: 'https://b.slopit.io/sitemap.xml' })
 
-  it('allows every crawler', () => {
-    expect(out.startsWith('User-agent: *\nAllow: /\n')).toBe(true)
+  it('opens with the ownership header, then allows every crawler', () => {
+    expect(out.startsWith(ROBOTS_TXT_HEADER + '\n')).toBe(true)
+    expect(ROBOTS_TXT_HEADER.startsWith('# ')).toBe(true) // a robots.txt comment
+    expect(out).toContain('\nUser-agent: *\nAllow: /\n')
     expect(out).not.toContain('Disallow')
   })
 
