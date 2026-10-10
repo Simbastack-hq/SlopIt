@@ -23,34 +23,46 @@ import {
 import type { McpServerConfig } from './server.js'
 import { wrapTool } from './wrap-tool.js'
 
-// Behaviour hints for clients. Every tool talks only to this blog
-// backend, so openWorldHint is false throughout.
+// Behaviour hints for clients, by OpenAI's app-review definitions
+// (developers.openai.com/plugins/deploy/app-review): a tool that publishes
+// to the public blog, or emails someone, is open-world; one that can
+// overwrite or delete is destructive. Reads only see the caller's own
+// blog, so they stay closed-world.
 const READ: ToolAnnotations = {
   readOnlyHint: true,
   destructiveHint: false,
   idempotentHint: true,
   openWorldHint: false,
 }
-// Each call creates something new (a blog, a post, an image).
+// Each call creates something new and public (an image).
 const CREATE: ToolAnnotations = {
   readOnlyHint: false,
   destructiveHint: false,
   idempotentHint: false,
-  openWorldHint: false,
+  openWorldHint: true,
 }
-// The same patch twice leaves the same state.
+// Creates something new and public, and can also do something that can't
+// be undone: signup emails the owner; create_post with `translationOf`
+// rewrites the source post's translation group and language.
+const CREATE_IRREVERSIBLE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: true,
+}
+// Overwrites what's live; the same patch twice leaves the same state.
 const UPDATE: ToolAnnotations = {
   readOnlyHint: false,
-  destructiveHint: false,
+  destructiveHint: true,
   idempotentHint: true,
-  openWorldHint: false,
+  openWorldHint: true,
 }
 // Permanent; a repeat finds nothing left to delete.
 const DELETE: ToolAnnotations = {
   readOnlyHint: false,
   destructiveHint: true,
   idempotentHint: true,
-  openWorldHint: false,
+  openWorldHint: true,
 }
 
 /** `title` + `annotations` for registerTool; spec puts the title in both. */
@@ -111,7 +123,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'signup',
     {
-      ...meta('Create blog (sign up)', CREATE),
+      ...meta('Create blog (sign up)', CREATE_IRREVERSIBLE),
       description: signupDescription,
       inputSchema: CreateBlogInputSchema.strict(),
       outputSchema: SignupOutput,
@@ -146,7 +158,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'create_post',
     {
-      ...meta('Create post', CREATE),
+      ...meta('Create post', CREATE_IRREVERSIBLE),
       description: [
         "Publish a post to the blog. Needs `title` and `body` (markdown). Returns the published post's live URL.",
         'Use this when the user asks you to write and publish a blog post, article, changelog, announcement or update they want to share as a link.',
