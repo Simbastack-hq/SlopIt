@@ -57,13 +57,14 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
   // Already normalized by the schema's preprocess (trim + lowercase).
   const email = parsed.email ?? null
   const language = parsed.language
+  const title = parsed.title ?? null
 
   const insert = store.db.prepare(
-    'INSERT INTO blogs (id, name, theme, email, language) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO blogs (id, name, title, theme, email, language) VALUES (?, ?, ?, ?, ?, ?)',
   )
 
   try {
-    insert.run(id, name, theme, email, language)
+    insert.run(id, name, title, theme, email, language)
   } catch (e) {
     if (isBlogNameConflict(e)) {
       throw new SlopItError('BLOG_NAME_CONFLICT', `Blog name "${name}" is already taken`)
@@ -75,10 +76,11 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
   // configured — both columns default to NULL. Skip those round-trip
   // SELECTs and build the Blog shape directly from the in-memory inputs.
   const row = store.db
-    .prepare('SELECT id, name, theme, created_at, language FROM blogs WHERE id = ?')
+    .prepare('SELECT id, name, title, theme, created_at, language FROM blogs WHERE id = ?')
     .get(id) as {
     id: string
     name: string | null
+    title: string | null
     theme: 'minimal'
     created_at: string
     language: string
@@ -87,6 +89,7 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
   const blog: Blog = {
     id: row.id,
     name: row.name,
+    title: row.title,
     theme: row.theme,
     createdAt: row.created_at,
     parentSiteUrl: null,
@@ -109,11 +112,12 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
 export function getBlogsByEmail(store: Store, email: string): Blog[] {
   const rows = store.db
     .prepare(
-      'SELECT id, name, theme, created_at, parent_site_url, language FROM blogs WHERE email = ?',
+      'SELECT id, name, title, theme, created_at, parent_site_url, language FROM blogs WHERE email = ?',
     )
     .all(email) as Array<{
     id: string
     name: string | null
+    title: string | null
     theme: 'minimal'
     created_at: string
     parent_site_url: string | null
@@ -123,6 +127,7 @@ export function getBlogsByEmail(store: Store, email: string): Blog[] {
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
+    title: row.title,
     theme: row.theme,
     createdAt: row.created_at,
     parentSiteUrl: row.parent_site_url,
@@ -171,12 +176,13 @@ export function getBlog(store: Store, blogId: string): Blog {
 export function getBlogByName(store: Store, name: string): Blog | null {
   const row = store.db
     .prepare(
-      'SELECT id, name, theme, created_at, analytics_json, parent_site_url, language FROM blogs WHERE name = ?',
+      'SELECT id, name, title, theme, created_at, analytics_json, parent_site_url, language FROM blogs WHERE name = ?',
     )
     .get(name) as
     | {
         id: string
         name: string
+        title: string | null
         theme: 'minimal'
         created_at: string
         analytics_json: string | null
@@ -190,6 +196,7 @@ export function getBlogByName(store: Store, name: string): Blog | null {
   return {
     id: row.id,
     name: row.name,
+    title: row.title,
     theme: row.theme,
     createdAt: row.created_at,
     analytics: parseAnalytics(row.analytics_json),
@@ -199,9 +206,9 @@ export function getBlogByName(store: Store, name: string): Blog | null {
 }
 
 /**
- * Patch fields on a blog row. v1 surface allows mutation of `analytics`,
- * `parentSiteUrl`, and `language`. Theme/name/id remain immutable through
- * this function.
+ * Patch fields on a blog row. v1 surface allows mutation of `title`,
+ * `analytics`, `parentSiteUrl`, and `language`. Theme/name/id remain
+ * immutable through this function.
  *
  * Side effects:
  *  - When any patched field changes (set, cleared, or modified), every
@@ -242,9 +249,12 @@ export function updateBlog(
   // `{ field: undefined }` in the parsed output (the key is present, value
   // is undefined). Treat it as "no change" — same effective semantics as
   // omitting the key.
+  const patchTouchesTitle = 'title' in parsed && parsed.title !== undefined
   const patchTouchesAnalytics = 'analytics' in parsed && parsed.analytics !== undefined
   const patchTouchesParentSiteUrl = 'parentSiteUrl' in parsed && parsed.parentSiteUrl !== undefined
   const patchTouchesLanguage = 'language' in parsed && parsed.language !== undefined
+
+  const newTitle: string | null = patchTouchesTitle ? (parsed.title ?? null) : prior.title
 
   const priorAnalyticsJson = prior.analytics === undefined ? null : JSON.stringify(prior.analytics)
   const newAnalyticsJson: string | null = patchTouchesAnalytics
@@ -260,33 +270,41 @@ export function updateBlog(
 
   const newLanguage = patchTouchesLanguage ? parsed.language! : prior.language
 
+  const titleChanged = newTitle !== prior.title
   const analyticsChanged = newAnalyticsJson !== priorAnalyticsJson
   const parentSiteUrlChanged = newParentSiteUrl !== priorParentSiteUrl
   const languageChanged = newLanguage !== prior.language
-  if (!analyticsChanged && !parentSiteUrlChanged && !languageChanged) return prior
+  if (!titleChanged && !analyticsChanged && !parentSiteUrlChanged && !languageChanged) return prior
 
-  // One UPDATE over all three columns; unchanged ones are rewritten with
+  // One UPDATE over all four columns; unchanged ones are rewritten with
   // their prior value. Compensation mirrors it exactly.
-  const write = (analyticsJson: string | null, parentSiteUrl: string | null, language: string) =>
+  const write = (
+    title: string | null,
+    analyticsJson: string | null,
+    parentSiteUrl: string | null,
+    language: string,
+  ) =>
     store.db
       .prepare(
-        'UPDATE blogs SET analytics_json = ?, parent_site_url = ?, language = ? WHERE id = ?',
+        'UPDATE blogs SET title = ?, analytics_json = ?, parent_site_url = ?, language = ? WHERE id = ?',
       )
-      .run(analyticsJson, parentSiteUrl, language, blogId)
+      .run(title, analyticsJson, parentSiteUrl, language, blogId)
 
-  write(newAnalyticsJson, newParentSiteUrl, newLanguage)
+  write(newTitle, newAnalyticsJson, newParentSiteUrl, newLanguage)
 
   // Hydrate the updated row
   const updated = getBlogInternal(store, blogId)
 
   // Compensation: restore prior column values on render failure.
-  const compensate = () => write(priorAnalyticsJson, priorParentSiteUrl, prior.language)
+  const compensate = () =>
+    write(prior.title, priorAnalyticsJson, priorParentSiteUrl, prior.language)
 
-  // Re-render side effects. The renderer reads blog.analytics,
+  // Re-render side effects. The renderer reads blog.title, blog.analytics,
   // blog.parentSiteUrl, and blog.language on every call, so rendered
   // output on disk is stale until we re-run it. Analytics and the parent
-  // link affect HTML only; language also lands in every post's `.md`
-  // frontmatter and in feed.xml, so a language change refreshes those too.
+  // link affect HTML only. The title is the masthead and <title> of every
+  // page and also heads feed.xml and llms.txt. Language also lands in
+  // every post's `.md` frontmatter and in feed.xml.
   try {
     renderer.renderBlogPosts(blogId)
     renderer.renderBlog(blogId)
@@ -294,8 +312,8 @@ export function updateBlog(
       for (const post of listPublishedPostsForBlog(store, blogId)) {
         renderer.renderPostMarkdown(blogId, post)
       }
-      renderer.renderManifests(blogId)
     }
+    if (languageChanged || titleChanged) renderer.renderManifests(blogId)
     // A default-language change can move a language from `/lang/<tag>/`
     // to `/` (its old home is now stale). Destructive, so last.
     renderer.pruneLanguageHomes(blogId)
@@ -337,12 +355,13 @@ export function updateBlog(
 export function getBlogInternal(store: Store, blogId: string): Blog {
   const row = store.db
     .prepare(
-      'SELECT id, name, theme, created_at, analytics_json, parent_site_url, language FROM blogs WHERE id = ?',
+      'SELECT id, name, title, theme, created_at, analytics_json, parent_site_url, language FROM blogs WHERE id = ?',
     )
     .get(blogId) as
     | {
         id: string
         name: string | null
+        title: string | null
         theme: 'minimal'
         created_at: string
         analytics_json: string | null
@@ -358,6 +377,7 @@ export function getBlogInternal(store: Store, blogId: string): Blog {
   return {
     id: row.id,
     name: row.name,
+    title: row.title,
     theme: row.theme,
     createdAt: row.created_at,
     analytics: parseAnalytics(row.analytics_json),

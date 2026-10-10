@@ -6,6 +6,7 @@ import type { Renderer } from '../src/rendering/generator.js'
 const blog: Blog = {
   id: 'b1',
   name: 'test',
+  title: null,
   theme: 'minimal',
   createdAt: '2026-04-23T00:00:00Z',
   parentSiteUrl: null,

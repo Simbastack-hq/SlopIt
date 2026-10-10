@@ -1,4 +1,5 @@
 import type { Blog } from '../schema/index.js'
+import { blogDisplayName } from './seo.js'
 
 /**
  * Escape the five canonical XML special characters. Ampersand MUST
@@ -26,7 +27,7 @@ export interface LlmsTxtPost {
 }
 
 export interface LlmsTxtInput {
-  blog: Pick<Blog, 'id' | 'name'>
+  blog: Pick<Blog, 'id' | 'name' | 'title'>
   posts: readonly LlmsTxtPost[]
 }
 
@@ -50,7 +51,7 @@ function escapeMdUrl(s: string): string {
  * responsibility, not this helper's.
  */
 export function buildLlmsTxt(input: LlmsTxtInput): string {
-  const heading = `# ${input.blog.name ?? input.blog.id}`
+  const heading = `# ${blogDisplayName(input.blog)}`
   const lines: string[] = [heading, '', LLMS_INTRO, '', '## Posts', '']
   for (const p of input.posts) {
     const title = escapeMdTitle(p.title)
@@ -145,7 +146,7 @@ export interface RssPost {
 }
 
 export interface RssFeedInput {
-  blog: Pick<Blog, 'id' | 'name' | 'language'>
+  blog: Pick<Blog, 'id' | 'name' | 'title' | 'language'>
   blogRoot: string
   feedUrl: string
   posts: readonly RssPost[]
@@ -189,7 +190,7 @@ function rssItem(p: RssPost, channelTitle: string): string {
 }
 
 export function buildRssFeed(input: RssFeedInput): string {
-  const channelTitle = input.blog.name ?? input.blog.id
+  const channelTitle = blogDisplayName(input.blog)
   const items = input.posts.map((p) => rssItem(p, channelTitle)).join('\n')
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',

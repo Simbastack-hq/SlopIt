@@ -90,6 +90,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   const signupDescription = [
     'Create a SlopIt blog and get an API key, live URL, and onboarding text.',
     'Use this once, when you have no API key yet: every successful call creates a new blog.',
+    "Set `title` to the blog's display name, e.g. the project or person's name.",
     config.requireEmail === true
       ? 'Email is required and is the only API-key recovery channel.'
       : "Pass the human's email when you have it: it is the only way to recover the key.",
@@ -257,9 +258,9 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     ),
   )
 
-  // 5. update_blog — patch the authenticated blog. v1 patch surface is
-  // analytics-only; theme/name/id stay immutable through this entry
-  // point. crossBlogGuard rejects mismatched blog_id.
+  // 5. update_blog — patch the authenticated blog: title, analytics,
+  // parentSiteUrl, language. theme/name/id stay immutable through this
+  // entry point. crossBlogGuard rejects mismatched blog_id.
   const UpdateBlogInputSchema = z
     .object({
       blog_id: BlogId,
@@ -273,7 +274,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     {
       ...meta('Update blog settings', UPDATE),
       description:
-        'Edit a blog: set/clear the analytics config (Umami, Plausible, or Google Analytics) or set the default `language` (BCP-47 tag, e.g. "ru"). Send `patch: { analytics: null }` to remove analytics.',
+        'Edit blog settings: `title`, `language` (BCP-47, e.g. "ru"), `parentSiteUrl`, `analytics`; null clears any but `language`. Set `title` to the blog\'s display name, e.g. the project or person\'s name; otherwise the URL name is shown.',
       inputSchema: UpdateBlogInputSchema,
       outputSchema: BlogOutput,
     },

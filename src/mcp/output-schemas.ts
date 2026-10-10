@@ -52,6 +52,11 @@ const PostShape = z.looseObject({
 const BlogShape = z.looseObject({
   id: z.string(),
   name: z.string().nullable().describe('null for an unnamed blog.'),
+  title: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Display name shown on the blog. null: the blog shows its name (or id) instead.'),
   theme: z.string(),
   createdAt: z.string().describe('ISO 8601.'),
   analytics: z

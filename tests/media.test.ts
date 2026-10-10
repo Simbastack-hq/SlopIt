@@ -27,6 +27,7 @@ function makeFixtures() {
   const blog: Blog = {
     id: 'blog_test',
     name: 'test',
+    title: null,
     theme: 'minimal',
     createdAt: '',
     parentSiteUrl: null,
@@ -118,6 +119,7 @@ describe('uploadMedia', () => {
     const blog: Blog = {
       id: 'blog_test',
       name: 'test',
+      title: null,
       theme: 'minimal',
       createdAt: '',
       parentSiteUrl: null,

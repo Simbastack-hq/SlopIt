@@ -215,6 +215,13 @@ describe('generateSkillFile', () => {
     expect(text).toMatch(/analytics.{0,10}null/)
   })
 
+  it('documents the blog title: set at signup, PATCH to change, null to clear', () => {
+    expect(text).toContain("- `title` — the blog's display name")
+    expect(text).toContain('Set it whenever you know the project or person the blog is for')
+    expect(text).toContain('{ "title": null }')
+    expect(text).toMatch(/PATCH .*\/blogs\/:id \| Patch blog metadata: `title`/)
+  })
+
   it('documents the YouTube embed: bare URL on its own line, raw HTML stripped', () => {
     expect(text).toContain('## Posts with a YouTube video')
     expect(text).toContain('https://youtu.be/')

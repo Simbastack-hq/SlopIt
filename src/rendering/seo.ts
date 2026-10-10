@@ -66,6 +66,15 @@ function nonBlank(s: string | undefined | null): string | undefined {
 }
 
 /**
+ * The name a blog shows readers: its `title`, else its URL `name`, else
+ * its id. The one definition behind the masthead, the page `<title>`,
+ * `og:site_name`, JSON-LD, the RSS channel title and the llms.txt heading.
+ */
+export function blogDisplayName(blog: Pick<Blog, 'id' | 'name' | 'title'>): string {
+  return nonBlank(blog.title) ?? nonBlank(blog.name) ?? blog.id
+}
+
+/**
  * Resolve a post's title for SEO surfaces. Returns `seoTitle` when set
  * (and non-blank), otherwise `post.title`. The schema guarantees
  * `post.title` is trim+min(1), so the result is always non-empty.
@@ -195,6 +204,7 @@ export function buildJsonLd(input: SeoInput): string {
     datePublished: post.publishedAt ?? post.createdAt,
     mainEntityOfPage: canonicalUrl,
     inLanguage: resolveLanguage(post, blog),
+    isPartOf: { '@type': 'Blog', name: blogDisplayName(blog) },
   }
 
   if (post.updatedAt && post.publishedAt && post.updatedAt !== post.publishedAt) {
@@ -234,7 +244,7 @@ export function buildSeoMeta(input: SeoInput): string {
   const title = resolveTitle(post)
   const description = resolveDescription(post)
   const author = nonBlank(post.author)
-  const siteName = nonBlank(blog.name) ?? blog.id
+  const siteName = blogDisplayName(blog)
   const images = resolveShareImages(post, canonicalUrl)
   const hasModified = Boolean(
     post.updatedAt && post.publishedAt && post.updatedAt !== post.publishedAt,

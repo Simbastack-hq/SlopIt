@@ -5,6 +5,7 @@ import type { Blog } from '../src/schema/index.js'
 const blog: Blog = {
   id: 'blog_xyz',
   name: 'ai-thoughts',
+  title: null,
   theme: 'minimal',
   createdAt: '2026-04-23T00:00:00Z',
   parentSiteUrl: null,
