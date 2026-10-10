@@ -78,6 +78,10 @@ describe('MCP tool: signup', () => {
     expect(result.structuredContent.onboarding_text).toContain(
       'Published my first post to SlopIt: <url>',
     )
+    expect(result.structuredContent.onboarding_text).toContain(
+      `This project's blog is on SlopIt: https://b.example/ (blog id ${result.structuredContent.blog_id}).`,
+    )
+    expect(result.structuredContent.onboarding_text).toContain('NEVER write the API key itself')
     expect(result.structuredContent.email_sent).toBe(false)
     expect(result.structuredContent).not.toHaveProperty('mcp_endpoint')
     expect(result.structuredContent).not.toHaveProperty('terms_url')

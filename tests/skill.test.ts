@@ -222,6 +222,36 @@ describe('generateSkillFile', () => {
     expect(text).toMatch(/PATCH .*\/blogs\/:id \| Patch blog metadata: `title`/)
   })
 
+  it('After signup: tells the agent to save a pointer to the blog, never the key', () => {
+    const start = text.indexOf('## After signup: remember this blog')
+    expect(start).toBeGreaterThan(text.indexOf('## Auth'))
+    expect(start).toBeLessThan(text.indexOf('## Endpoints'))
+    const section = text.slice(start, text.indexOf('## Endpoints'))
+    expect(section).toContain('`AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`')
+    expect(section).toContain('your own memory feature')
+    expect(section).toContain("This project's blog is on SlopIt: {blog_url} (blog id {blog_id}).")
+    expect(section).toContain(
+      'Publish with POST https://api.example/blogs/{blog_id}/posts or the MCP tool create_post.',
+    )
+    expect(section).toContain(
+      '**Never write the API key itself into the note or into any committed file**',
+    )
+    expect(section).toContain('Never commit it.')
+    expect(section).toContain("Don't sign up again")
+    // No skillUrl given (self-hosted): no Instructions line to point at.
+    expect(section).not.toContain('Instructions:')
+  })
+
+  it('After signup note links the instructions file when the host passes skillUrl', () => {
+    const hosted = generateSkillFile({
+      baseUrl: 'https://svc.example/api',
+      skillUrl: 'https://svc.example/slopit.SKILL.md',
+    })
+    expect(hosted).toContain(
+      '    Instructions: https://svc.example/slopit.SKILL.md\n    API key: in {',
+    )
+  })
+
   it('documents the YouTube embed: bare URL on its own line, raw HTML stripped', () => {
     expect(text).toContain('## Posts with a YouTube video')
     expect(text).toContain('https://youtu.be/')
