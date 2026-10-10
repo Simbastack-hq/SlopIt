@@ -17,11 +17,13 @@ const PNG_BASE64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 // readOnly / destructive / idempotent / openWorld per tool, by OpenAI's
 // app-review definitions (developers.openai.com/plugins/deploy/app-review):
 // anything that publishes to the public blog (or emails someone) is
-// open-world; anything that can overwrite or delete is destructive.
+// open-world; anything that can overwrite, delete or send something that
+// can't be unsent is destructive, including indirect side effects
+// (signup's welcome email, create_post relinking a translation source).
 // Reads only see the caller's own blog, so they stay closed-world.
 const HINTS: Record<string, [boolean, boolean, boolean, boolean]> = {
-  signup: [false, false, false, true],
-  create_post: [false, false, false, true],
+  signup: [false, true, false, true],
+  create_post: [false, true, false, true],
   update_post: [false, true, true, true],
   delete_post: [false, true, true, true],
   update_blog: [false, true, true, true],

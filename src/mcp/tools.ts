@@ -34,10 +34,19 @@ const READ: ToolAnnotations = {
   idempotentHint: true,
   openWorldHint: false,
 }
-// Each call creates something new and public (a blog, a post, an image).
+// Each call creates something new and public (an image).
 const CREATE: ToolAnnotations = {
   readOnlyHint: false,
   destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: true,
+}
+// Creates something new and public, and can also do something that can't
+// be undone: signup emails the owner; create_post with `translationOf`
+// rewrites the source post's translation group and language.
+const CREATE_IRREVERSIBLE: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
   idempotentHint: false,
   openWorldHint: true,
 }
@@ -114,7 +123,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'signup',
     {
-      ...meta('Create blog (sign up)', CREATE),
+      ...meta('Create blog (sign up)', CREATE_IRREVERSIBLE),
       description: signupDescription,
       inputSchema: CreateBlogInputSchema.strict(),
       outputSchema: SignupOutput,
@@ -149,7 +158,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'create_post',
     {
-      ...meta('Create post', CREATE),
+      ...meta('Create post', CREATE_IRREVERSIBLE),
       description: [
         "Publish a post to the blog. Needs `title` and `body` (markdown). Returns the published post's live URL.",
         'Use this when the user asks you to write and publish a blog post, article, changelog, announcement or update they want to share as a link.',
