@@ -81,6 +81,7 @@ Every authenticated request sends a bearer token:
 ${signupIntro}
 
 - \`name\` — DNS-safe blog name (lowercase, 2–63 chars). Omit for an unnamed blog.
+- \`title\` — the blog's display name, e.g. the project or person's name: 1–80 characters, one line. It is the blog's heading and its name in browser tabs, feeds and link previews. Set it whenever you know the project or person the blog is for: without one the blog shows its URL name, or a random id for an unnamed blog.
 ${emailBullet}
 - \`theme\` — currently only \`"minimal"\`.
 
@@ -97,7 +98,7 @@ All routes are absolute URLs against the API base **\`${baseUrl}\`**. Copy them 
 | GET ${baseUrl}/schema | Return the PostInput JSONSchema. No auth. |
 | POST ${baseUrl}/bridge/report_bug | Submit a bug report (501 in core; platform overrides). No auth. |
 | GET ${baseUrl}/blogs/:id | Get blog info. Auth required. |
-| PATCH ${baseUrl}/blogs/:id | Patch blog metadata: \`analytics\`, \`parentSiteUrl\`, \`language\`. |
+| PATCH ${baseUrl}/blogs/:id | Patch blog metadata: \`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`. |
 | POST ${baseUrl}/blogs/:id/posts | Create a post. JSON or \`text/markdown\` body. |
 | GET ${baseUrl}/blogs/:id/posts | List posts (query: ?status=draft|published). |
 | GET ${baseUrl}/blogs/:id/posts/:slug | Get a single post. |
@@ -136,6 +137,8 @@ A post's HTML page is \`{blog_url}{post-slug}/\` (e.g. \`${ex}${exSlug}/\`); its
 ## Schema
 
 Call \`GET ${baseUrl}/schema\` for the machine-readable JSONSchema of \`PostInput\`. Summary fields: \`title\` (required), \`body\` (required, markdown), optional \`slug\` (auto-derived from title otherwise), \`status\` (\`draft\`|\`published\`, default \`published\`), \`tags\`, \`excerpt\`, \`seoTitle\`, \`seoDescription\`, \`author\`, \`coverImage\`, \`language\`, \`translationOf\`.
+
+The blog object carries a \`title\`: its display name, or \`null\` when none is set (the blog then shows its URL name). Set or change it with \`PATCH ${baseUrl}/blogs/:id\` and body \`{ "title": "Jane's Travel Notes" }\` (or \`update_blog\` with \`patch: { title: "..." }\`); every page, the feeds and \`llms.txt\` are re-rendered with it. \`{ "title": null }\` removes it.
 
 The blog object additionally carries an optional \`analytics\` field — a per-blog configuration for third-party analytics. Set or change it via \`PATCH ${baseUrl}/blogs/:id\` (or the \`update_blog\` MCP tool). Three providers are supported and any combination is valid:
 
@@ -212,7 +215,7 @@ Over HTTP (the streamable HTTP transport), every \`POST\` to the MCP endpoint mu
 | create_post | bearer | yes | Publish a post. |
 | update_post | bearer | yes | Edit an existing post. |
 | delete_post | bearer | yes | Remove a post permanently. |
-| update_blog | bearer | yes | Edit blog metadata (\`analytics\`, \`parentSiteUrl\`, \`language\`). |
+| update_blog | bearer | yes | Edit blog metadata (\`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`). |
 | get_blog | bearer | — | Get blog metadata. |
 | get_post | bearer | — | Get a single post by slug. |
 | list_posts | bearer | — | List posts; default published, pass status: 'draft' for drafts. |

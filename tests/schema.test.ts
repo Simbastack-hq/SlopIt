@@ -124,6 +124,7 @@ describe('BlogSchema with analytics', () => {
     const blog = BlogSchema.parse({
       id: 'b1',
       name: 'x',
+      title: null,
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
       language: 'en',
@@ -137,6 +138,7 @@ describe('BlogSchema with analytics', () => {
     const blog = BlogSchema.parse({
       id: 'b1',
       name: 'x',
+      title: null,
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
       language: 'en',
@@ -151,6 +153,7 @@ describe('BlogSchema with parentSiteUrl', () => {
     const blog = BlogSchema.parse({
       id: 'b1',
       name: 'x',
+      title: null,
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
       language: 'en',
@@ -163,6 +166,7 @@ describe('BlogSchema with parentSiteUrl', () => {
     const blog = BlogSchema.parse({
       id: 'b1',
       name: 'x',
+      title: null,
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
       language: 'en',
@@ -176,6 +180,7 @@ describe('BlogSchema with parentSiteUrl', () => {
       BlogSchema.parse({
         id: 'b1',
         name: 'x',
+        title: null,
         theme: 'minimal',
         createdAt: '2026-05-06T00:00:00Z',
         language: 'en',
@@ -198,6 +203,7 @@ describe('BlogSchema with parentSiteUrl', () => {
         BlogSchema.parse({
           id: 'b1',
           name: 'x',
+          title: null,
           theme: 'minimal',
           createdAt: '2026-05-06T00:00:00Z',
           language: 'en',
@@ -211,6 +217,7 @@ describe('BlogSchema with parentSiteUrl', () => {
     const blog = BlogSchema.parse({
       id: 'b1',
       name: 'x',
+      title: null,
       theme: 'minimal',
       createdAt: '2026-05-06T00:00:00Z',
       language: 'en',

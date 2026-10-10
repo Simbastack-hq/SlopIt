@@ -110,7 +110,7 @@ describe('language helpers', () => {
     const fm = buildFrontmatter({ title: 'T', slug: 's', language: 'ru', date: null })
     expect(fm.split('\n').slice(0, 4)).toEqual(['---', 'title: "T"', 'slug: "s"', 'language: "ru"'])
     const rss = buildRssFeed({
-      blog: { id: 'b', name: 'b', language: 'pt-BR' },
+      blog: { id: 'b', name: 'b', title: null, language: 'pt-BR' },
       blogRoot: 'https://b.example/',
       feedUrl: 'https://b.example/feed.xml',
       posts: [],

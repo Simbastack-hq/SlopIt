@@ -23,6 +23,7 @@ import {
 import { buildFrontmatter } from './frontmatter.js'
 import { renderMarkdown } from './markdown.js'
 import {
+  blogDisplayName,
   buildJsonLd,
   buildSeoMeta,
   normalizeBaseUrl,
@@ -473,8 +474,6 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
   // form (`https://x.example` or `https://x.example/`) without surprise.
   const baseUrl = config.baseUrl.endsWith('/') ? config.baseUrl : config.baseUrl + '/'
 
-  const displayName = (blog: Blog): string => blog.name ?? blog.id
-
   const blogOutputDir = (blogId: string) => join(config.outputDir, blogId)
 
   // Identity-default postprocess hook. Platform passes a real transform
@@ -569,7 +568,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     writeFileAtomic(
       join(blogDir, 'feed.xml'),
       buildRssFeed({
-        blog: { id: blog.id, name: blog.name, language: rootLang },
+        blog: { ...blog, language: rootLang },
         blogRoot: root,
         feedUrl: root + 'feed.xml',
         posts: all.slice(0, 20).map(rssItem),
@@ -586,7 +585,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         mkdirSync(dir, { recursive: true })
         const home = root + 'lang/' + languageSegment(lang) + '/'
         const feedXml = buildRssFeed({
-          blog: { id: blog.id, name: blog.name, language: lang },
+          blog: { ...blog, language: lang },
           blogRoot: home,
           feedUrl: home + 'feed.xml',
           posts: all
@@ -673,7 +672,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     const html = render(theme.post, {
       lang,
       dir,
-      blogName: displayName(blog),
+      blogName: blogDisplayName(blog),
       postTitle: post.title,
       postPublishedAt: post.publishedAt ?? '',
       postPublishedAtDisplay: formatDate(post.publishedAt, lang),
@@ -801,7 +800,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         const html = render(theme.index, {
           lang,
           dir: dirAttr,
-          blogName: displayName(blog),
+          blogName: blogDisplayName(blog),
           themeCssHref: prefix + 'style.css',
           faviconHref: prefix + 'favicon.svg',
           canonicalUrl: homeUrl(root, lang, rootLang),

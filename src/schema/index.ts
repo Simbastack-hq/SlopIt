@@ -55,6 +55,23 @@ export const BlogAnalyticsSchema = z
   .optional()
 export type BlogAnalytics = z.infer<typeof BlogAnalyticsSchema>
 
+// A blog's display title. It lands in the masthead, <title>, og:site_name,
+// the RSS channel and the llms.txt `# ` heading, so it must be one line:
+// control characters (C0, DEL, C1; newlines included) and the Unicode
+// line/paragraph separators are rejected rather than stripped. Explicit
+// ranges, not `\p{Cc}`: the pattern ships in the JSON Schema clients see,
+// and not every client's regex engine knows Unicode property escapes.
+// Trimmed before the length check, so "  " is too short, not empty.
+const blogTitle = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(
+    /^[^\x00-\x1F\x7F-\x9F\u2028\u2029]*$/,
+    'Title must be one line with no control characters',
+  )
+
 // Blog — the top-level container. name is nullable because unnamed /b/:slug
 // blogs are allowed (see strategy: "instant" tier, path-based URLs).
 // `analytics` is optional and undefined for blogs that haven't configured
@@ -63,6 +80,8 @@ export type BlogAnalytics = z.infer<typeof BlogAnalyticsSchema>
 export const BlogSchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
+  // Human-readable display name. NULL = the renderer shows `name`, then `id`.
+  title: z.string().nullable(),
   theme: z.enum(['minimal']),
   createdAt: z.string(),
   analytics: BlogAnalyticsSchema,
@@ -79,17 +98,23 @@ export const BlogSchema = z.object({
 })
 export type Blog = z.infer<typeof BlogSchema>
 
-// Patch schema for updateBlog. v1 allows mutation of `analytics` and
-// `parentSiteUrl` — theme is immutable (no theme switcher UI yet), name
-// changes have their own flow (TBD), id is permanent. Strict rejects
-// unknown keys at the boundary.
+// Patch schema for updateBlog. Allows `title`, `analytics`,
+// `parentSiteUrl` and `language` — theme is immutable (no theme switcher
+// UI yet), name changes have their own flow (TBD), id is permanent.
+// Strict rejects unknown keys at the boundary.
 //
-// `analytics: null` and `parentSiteUrl: null` are the documented ways to
-// clear those columns; the PATCH body distinguishes "omit field from
-// patch" (no-op) vs "set field to null" (clear column) via
-// Object.keys(parsed) in updateBlog, same pattern as PostPatchSchema.
+// `title: null`, `analytics: null` and `parentSiteUrl: null` are the
+// documented ways to clear those columns; the PATCH body distinguishes
+// "omit field from patch" (no-op) vs "set field to null" (clear column)
+// via Object.keys(parsed) in updateBlog, same pattern as PostPatchSchema.
 export const BlogPatchSchema = z
   .object({
+    title: blogTitle
+      .nullable()
+      .describe(
+        "Display name shown as the blog's heading and in browser tabs, feeds and link previews, e.g. the project or person's name. 1–80 characters, one line. null removes it and the URL name is shown again.",
+      )
+      .optional(),
     analytics: BlogAnalyticsSchema.unwrap()
       .nullable()
       .describe(
@@ -223,6 +248,11 @@ export const CreateBlogInputSchema = z.object({
     .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/)
     .describe(
       'Blog name, e.g. "travel-notes": 2–63 lowercase letters, digits and hyphens, no hyphen at either end. The host may use it in the blog URL. Omit for an unnamed blog. A taken name fails with BLOG_NAME_CONFLICT.',
+    )
+    .optional(),
+  title: blogTitle
+    .describe(
+      "Display name shown as the blog's heading and in browser tabs, feeds and link previews, e.g. \"Jane's Travel Notes\" or the project's name. 1–80 characters, one line. Omit it and the URL name is shown.",
     )
     .optional(),
   email: z
