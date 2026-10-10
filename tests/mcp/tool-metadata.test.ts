@@ -14,20 +14,24 @@ import { attachAuth } from './helpers.js'
 
 const PNG_BASE64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64')
 
-// readOnly / destructive / idempotent per tool. openWorldHint is false on all.
-const HINTS: Record<string, [boolean, boolean, boolean]> = {
-  signup: [false, false, false],
-  create_post: [false, false, false],
-  update_post: [false, false, true],
-  delete_post: [false, true, true],
-  update_blog: [false, false, true],
-  get_blog: [true, false, true],
-  get_post: [true, false, true],
-  list_posts: [true, false, true],
-  report_bug: [true, false, true],
-  upload_media: [false, false, false],
-  list_media: [true, false, true],
-  delete_media: [false, true, true],
+// readOnly / destructive / idempotent / openWorld per tool, by OpenAI's
+// app-review definitions (developers.openai.com/plugins/deploy/app-review):
+// anything that publishes to the public blog (or emails someone) is
+// open-world; anything that can overwrite or delete is destructive.
+// Reads only see the caller's own blog, so they stay closed-world.
+const HINTS: Record<string, [boolean, boolean, boolean, boolean]> = {
+  signup: [false, false, false, true],
+  create_post: [false, false, false, true],
+  update_post: [false, true, true, true],
+  delete_post: [false, true, true, true],
+  update_blog: [false, true, true, true],
+  get_blog: [true, false, true, false],
+  get_post: [true, false, true, false],
+  list_posts: [true, false, true, false],
+  report_bug: [true, false, true, false],
+  upload_media: [false, false, false, true],
+  list_media: [true, false, true, false],
+  delete_media: [false, true, true, true],
 }
 
 interface JsonSchema {
@@ -148,17 +152,17 @@ describe('MCP tool metadata', () => {
   }
 
   describe('tools/list', () => {
-    it('every tool has a title, all four hints, and openWorldHint false', () => {
+    it('every tool has a title and all four hints, classified', () => {
       expect(tools.map((t) => t.name).sort()).toEqual(Object.keys(HINTS).sort())
       for (const t of tools) {
         expect(t.title, t.name).toBeTruthy()
         expect(t.annotations?.title, t.name).toBe(t.title)
-        const [readOnly, destructive, idempotent] = HINTS[t.name]
+        const [readOnly, destructive, idempotent, openWorld] = HINTS[t.name]
         expect(t.annotations, t.name).toMatchObject({
           readOnlyHint: readOnly,
           destructiveHint: destructive,
           idempotentHint: idempotent,
-          openWorldHint: false,
+          openWorldHint: openWorld,
         })
       }
     })
