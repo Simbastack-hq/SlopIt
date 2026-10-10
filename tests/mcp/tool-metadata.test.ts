@@ -259,12 +259,14 @@ describe('MCP tool metadata', () => {
       const sc = await ok('update_blog', {
         blog_id: blogId,
         patch: {
+          title: 'Bee Blog',
           analytics: { umami: { siteId: 'abc' } },
           parentSiteUrl: 'https://home.example',
           language: 'pt-BR',
         },
       })
       expect((sc.blog as { language: string }).language).toBe('pt-BR')
+      expect((sc.blog as { title: string }).title).toBe('Bee Blog')
       await fails('update_blog', { blog_id: otherBlogId, patch: {} }, 'BLOG_NOT_FOUND')
     })
 

@@ -216,6 +216,7 @@ describe('normalizeBaseUrl', () => {
 const minimalBlog: Blog = {
   id: 'b1',
   name: 'My Blog',
+  title: null,
   theme: 'minimal',
   createdAt: '2026-04-01T00:00:00Z',
   parentSiteUrl: null,
