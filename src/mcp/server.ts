@@ -45,7 +45,7 @@ export interface McpServerConfig {
 }
 
 /**
- * Build an SDK McpServer with the 8 SlopIt tools registered. Returns
+ * Build an SDK McpServer with every SlopIt tool registered. Returns
  * the server unattached — consumer calls `await server.connect(transport)`
  * with whichever transport they want (stdio, Streamable HTTP, etc).
  *
