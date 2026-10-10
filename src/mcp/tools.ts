@@ -11,6 +11,25 @@ import { signupBlog } from '../signup.js'
 import type { McpServerConfig } from './server.js'
 import { wrapTool } from './wrap-tool.js'
 
+// The API key already names exactly one blog, so blog_id is optional on
+// every bearer tool: omitted → the key's blog; given → still checked by
+// the cross-blog guard. Connector clients (ChatGPT, Claude.ai) hold a key
+// but never saw a signup response, so they have no blog_id to pass.
+// authMode 'none' has no key to fall back on and still requires it
+// (wrapTool enforces that).
+const blogIdArg = z
+  .string()
+  .optional()
+  .describe("The blog's id. Optional with an API key: defaults to the key's blog.")
+
+// Tool annotations. Claude's connector directory needs a title plus
+// readOnlyHint/destructiveHint on every tool; ChatGPT's app review wants
+// all three hints explicit. Edits count as destructive (they overwrite),
+// and anything that changes what the public blog shows is open-world.
+const READ = { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+const PUBLISH = { readOnlyHint: false, destructiveHint: false, openWorldHint: true }
+const OVERWRITE = { readOnlyHint: false, destructiveHint: true, openWorldHint: true }
+
 export function registerTools(server: McpServer, config: McpServerConfig): void {
   const signupDescription = [
     'Create a SlopIt blog and get an API key, live URL, and onboarding text.',
@@ -29,6 +48,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'signup',
     {
+      title: 'Create blog',
+      annotations: PUBLISH,
       description: signupDescription,
       inputSchema: CreateBlogInputSchema.strict(),
     },
@@ -53,7 +74,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
 
   // 2. create_post — publish a new post.
   const CreatePostInputSchema = z
-    .object({ blog_id: z.string() })
+    .object({ blog_id: blogIdArg })
     .extend(PostInputBaseSchema.shape)
     .extend({ idempotency_key: z.string().optional() })
     .strict()
@@ -62,6 +83,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'create_post',
     {
+      title: 'Publish post',
+      annotations: PUBLISH,
       description:
         "Publish a post to the blog. Needs `title` and `body` (markdown). Returns the published post's live URL. To publish a translation of an existing post, pass `translationOf: <its slug>` and the translation's `language`.",
       inputSchema: CreatePostInputSchema,
@@ -90,7 +113,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // 3. update_post — patch an existing post.
   const UpdatePostInputSchema = z
     .object({
-      blog_id: z.string(),
+      blog_id: blogIdArg,
       slug: z.string(),
       patch: PostPatchSchema,
       idempotency_key: z.string().optional(),
@@ -100,6 +123,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'update_post',
     {
+      title: 'Edit post',
+      annotations: OVERWRITE,
       description:
         "Edit an existing post. Pass the post's `slug` and a `patch` of fields to change; `coverImage: null` removes the cover. Slug itself can't change; delete and republish if you need a new URL.",
       inputSchema: UpdatePostInputSchema,
@@ -129,7 +154,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // 4. delete_post — hard-delete by slug.
   const DeletePostInputSchema = z
     .object({
-      blog_id: z.string(),
+      blog_id: blogIdArg,
       slug: z.string(),
       idempotency_key: z.string().optional(),
     })
@@ -138,10 +163,12 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'delete_post',
     {
+      title: 'Delete post',
+      annotations: OVERWRITE,
       description: "Remove a post permanently. This can't be undone.",
       inputSchema: DeletePostInputSchema,
     },
-    wrapTool<{ blog_id: string; slug: string; idempotency_key?: string }>(
+    wrapTool<{ blog_id?: string; slug: string; idempotency_key?: string }>(
       config,
       'delete_post',
       { auth: 'required', idempotent: true, crossBlogGuard: true },
@@ -157,7 +184,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // point. crossBlogGuard rejects mismatched blog_id.
   const UpdateBlogInputSchema = z
     .object({
-      blog_id: z.string(),
+      blog_id: blogIdArg,
       patch: BlogPatchSchema,
       idempotency_key: z.string().optional(),
     })
@@ -166,6 +193,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'update_blog',
     {
+      title: 'Edit blog settings',
+      annotations: OVERWRITE,
       description:
         'Edit a blog: set/clear the analytics config (Umami, Plausible, or Google Analytics) or set the default `language` (BCP-47 tag, e.g. "ru"). Send `patch: { analytics: null }` to remove analytics.',
       inputSchema: UpdateBlogInputSchema,
@@ -186,10 +215,12 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'get_blog',
     {
+      title: 'Get blog',
+      annotations: READ,
       description: "Get the blog's current metadata.",
-      inputSchema: z.object({ blog_id: z.string() }).strict(),
+      inputSchema: z.object({ blog_id: blogIdArg }).strict(),
     },
-    wrapTool<{ blog_id: string }>(
+    wrapTool<{ blog_id?: string }>(
       config,
       'get_blog',
       { auth: 'required', crossBlogGuard: true },
@@ -201,10 +232,12 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'get_post',
     {
+      title: 'Get post',
+      annotations: READ,
       description: 'Get a single post by its slug.',
-      inputSchema: z.object({ blog_id: z.string(), slug: z.string() }).strict(),
+      inputSchema: z.object({ blog_id: blogIdArg, slug: z.string() }).strict(),
     },
-    wrapTool<{ blog_id: string; slug: string }>(
+    wrapTool<{ blog_id?: string; slug: string }>(
       config,
       'get_post',
       { auth: 'required', crossBlogGuard: true },
@@ -215,7 +248,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // 7. list_posts — published by default; ?status=draft flips.
   const ListPostsInputSchema = z
     .object({
-      blog_id: z.string(),
+      blog_id: blogIdArg,
       status: z.enum(['draft', 'published']).optional(),
     })
     .strict()
@@ -223,11 +256,13 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'list_posts',
     {
+      title: 'List posts',
+      annotations: READ,
       description:
         "List posts on the blog. Defaults to published posts. Pass `status: 'draft'` for drafts.",
       inputSchema: ListPostsInputSchema,
     },
-    wrapTool<{ blog_id: string; status?: 'draft' | 'published' }>(
+    wrapTool<{ blog_id?: string; status?: 'draft' | 'published' }>(
       config,
       'list_posts',
       { auth: 'required', crossBlogGuard: true },
@@ -245,6 +280,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'report_bug',
     {
+      title: 'Report a bug',
+      annotations: READ,
       description: 'Report a bug or something unexpected. Returns a link to submit the report.',
       inputSchema: z.object({
         summary: z.string().optional(),
@@ -272,7 +309,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
 
   const UploadMediaInputSchema = z
     .object({
-      blog_id: z.string(),
+      blog_id: blogIdArg,
       filename: z.string().min(1).max(255),
       content_type: z.string().min(1),
       data_base64: Base64Schema,
@@ -283,6 +320,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'upload_media',
     {
+      title: 'Upload image',
+      annotations: PUBLISH,
       description:
         'Upload an image (JPEG/PNG/GIF/WebP, max 5MB) as base64 in `data_base64`. Returns a public URL — use it as ![alt](url) in post markdown or pass as coverImage.',
       inputSchema: UploadMediaInputSchema,
@@ -321,11 +360,13 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'list_media',
     {
+      title: 'List images',
+      annotations: READ,
       description:
         "List uploaded images for the blog. Returns each image's id, public URL, content type, and byte size.",
-      inputSchema: z.object({ blog_id: z.string() }).strict(),
+      inputSchema: z.object({ blog_id: blogIdArg }).strict(),
     },
-    wrapTool<{ blog_id: string }>(
+    wrapTool<{ blog_id?: string }>(
       config,
       'list_media',
       { auth: 'required', crossBlogGuard: true },
@@ -339,7 +380,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   // 11. delete_media
   const DeleteMediaInputSchema = z
     .object({
-      blog_id: z.string(),
+      blog_id: blogIdArg,
       media_id: z.string(),
       idempotency_key: z.string().optional(),
     })
@@ -348,6 +389,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   server.registerTool(
     'delete_media',
     {
+      title: 'Delete image',
+      annotations: OVERWRITE,
       description:
         'Permanently delete an uploaded image by id. The URL stops working immediately. Posts that referenced it will show a broken image until edited.',
       inputSchema: DeleteMediaInputSchema,
