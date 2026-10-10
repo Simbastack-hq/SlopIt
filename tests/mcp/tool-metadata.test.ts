@@ -189,6 +189,10 @@ describe('MCP tool metadata', () => {
       expect(text).toContain('Authorization: Bearer <api_key>')
       expect(text).toContain('`create_post`')
       expect(text).toContain('`post_url`')
+      expect(text).toContain(
+        "project's agent instructions file (AGENTS.md, CLAUDE.md) or your memory",
+      )
+      expect(text).toContain('never write the API key itself into that note or any committed file')
     })
 
     it("instructions drop the API-key step under authMode: 'none'", async () => {
@@ -197,6 +201,9 @@ describe('MCP tool metadata', () => {
       const text = client.getInstructions() ?? ''
       expect(text).toContain('No API key is needed')
       expect(text).not.toContain('Bearer')
+      expect(text).toContain(
+        "note the blog's URL and `blog_id` in the project's agent instructions file",
+      )
     })
 
     it('no tool metadata or instructions name a hosted domain', () => {
