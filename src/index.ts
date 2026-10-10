@@ -61,7 +61,11 @@ export { generateOnboardingBlock } from './onboarding.js'
 export type { OnboardingInputs } from './onboarding.js'
 export { generateSkillFile } from './skill.js'
 
-// MCP stub — kept exported per v2.1 spec P2 fix. feat/mcp-tools replaces
-// the stub body with the real implementation.
+// MCP server factory. Returns an unattached SDK McpServer with every core
+// tool registered; the consumer connects a transport.
 export { createMcpServer } from './mcp/server.js'
 export type { McpServerConfig } from './mcp/server.js'
+// Consumers can register their own tools on the returned server and wrap
+// them with wrapTool to get the same auth, cross-blog guard and error envelope.
+export { wrapTool } from './mcp/wrap-tool.js'
+export type { ToolCtx, WrapToolOpts } from './mcp/wrap-tool.js'
