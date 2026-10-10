@@ -58,10 +58,17 @@ function meta(title: string, hints: ToolAnnotations) {
   return { title, annotations: { title, ...hints } }
 }
 
+// The API key already names exactly one blog, so blog_id is optional on
+// every bearer tool: omitted → the key's blog; given → still checked by
+// the cross-blog guard. Connector clients (ChatGPT, Claude.ai) hold a key
+// but never saw a signup response, so they have no blog_id to pass.
+// authMode 'none' has no key to fall back on and still requires it
+// (wrapTool enforces that).
 const BlogId = z
   .string()
+  .optional()
   .describe(
-    "Your blog's id: the `blog_id` returned by signup. With an API key, it must be that key's blog.",
+    "Your blog's id, as returned by signup. Optional with an API key: it defaults to the key's blog, and any id you pass must be that blog. Required when the server runs without API keys.",
   )
 
 const PostSlug = z
@@ -89,7 +96,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     ...(config.termsUrl !== undefined
       ? [`Creating a blog accepts the operator's terms: ${config.termsUrl}.`]
       : []),
-    'Afterwards, send `api_key` as a Bearer token and pass `blog_id` on every later call, and give the human the `blog_url`.',
+    'Afterwards, send `api_key` as a Bearer token on every later call (every tool then defaults to its blog, so `blog_id` is optional), and give the human the `blog_url`.',
     "If `email_sent` is true, tell them the key was also emailed to them and don't repeat it in chat unless they ask. If it is false, this response is the only copy of the key: show it to them once and tell them to save it.",
     config.requireEmail === true
       ? 'On BLOG_NAME_CONFLICT or BLOG_NAME_RESERVED, retry with another `name`. On EMAIL_REQUIRED, ask the human for their email and call again.'
@@ -239,7 +246,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       inputSchema: DeletePostInputSchema,
       outputSchema: DeletedOutput,
     },
-    wrapTool<{ blog_id: string; slug: string; idempotency_key?: string }>(
+    wrapTool<{ blog_id?: string; slug: string; idempotency_key?: string }>(
       config,
       'delete_post',
       { auth: 'required', idempotent: true, crossBlogGuard: true },
@@ -291,7 +298,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       inputSchema: z.object({ blog_id: BlogId }).strict(),
       outputSchema: BlogOutput,
     },
-    wrapTool<{ blog_id: string }>(
+    wrapTool<{ blog_id?: string }>(
       config,
       'get_blog',
       { auth: 'required', crossBlogGuard: true },
@@ -308,7 +315,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       inputSchema: z.object({ blog_id: BlogId, slug: PostSlug }).strict(),
       outputSchema: PostOutput,
     },
-    wrapTool<{ blog_id: string; slug: string }>(
+    wrapTool<{ blog_id?: string; slug: string }>(
       config,
       'get_post',
       { auth: 'required', crossBlogGuard: true },
@@ -338,7 +345,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       inputSchema: ListPostsInputSchema,
       outputSchema: PostListOutput,
     },
-    wrapTool<{ blog_id: string; status?: 'draft' | 'published' }>(
+    wrapTool<{ blog_id?: string; status?: 'draft' | 'published' }>(
       config,
       'list_posts',
       { auth: 'required', crossBlogGuard: true },
@@ -459,7 +466,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       inputSchema: z.object({ blog_id: BlogId }).strict(),
       outputSchema: MediaListOutput,
     },
-    wrapTool<{ blog_id: string }>(
+    wrapTool<{ blog_id?: string }>(
       config,
       'list_media',
       { auth: 'required', crossBlogGuard: true },

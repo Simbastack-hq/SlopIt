@@ -223,6 +223,7 @@ Over HTTP (the streamable HTTP transport), every \`POST\` to the MCP endpoint mu
 
 **Caveats specific to MCP:**
 
+- **\`blog_id\` is optional with a bearer key.** The key belongs to exactly one blog, so every bearer tool defaults to it. Pass \`blog_id\` only as a check: a different blog's id returns BLOG_NOT_FOUND. Under \`authMode: 'none'\` (self-hosted stdio) it's required.
 - **Validation errors are SDK-shaped.** If you pass invalid arguments (missing required field, extra field on a strict schema), the server returns \`{ isError: true, content: [{ type: 'text', text: 'Input validation error: ...' }] }\` with no \`structuredContent\`. Business errors (POST_NOT_FOUND, IDEMPOTENCY_KEY_CONFLICT, etc.) return the full REST-parity envelope under \`structuredContent.error\`.
 - **Idempotency is api_key-mode only.** If the server is configured with \`authMode: 'none'\` (self-hosted stdio), retries re-execute and \`idempotency_key\` is a no-op.
 - **signup is not idempotent.** Passing \`idempotency_key\` to signup fails schema validation. Retries create distinct blogs unless \`name\` collisions occur.
