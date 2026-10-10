@@ -8,13 +8,13 @@ applies-to: [core, platform, self-hosted]
 
 ## Rule
 
-Every published post writes five files: `<slug>/index.html`, `<slug>.md`, plus the per-blog `llms.txt`, `feed.xml`, `sitemap.xml`. All emit at the same lifecycle moments (publish, update, unpublish, delete). All are static; Caddy serves them; Node never reads them.
+Every published post writes `<slug>/index.html`, `<slug>.md`, plus the per-blog manifests `llms.txt`, `feed.xml`, `sitemap.xml`, `robots.txt`. All emit at the same lifecycle moments (publish, update, unpublish, delete). All are static; Caddy serves them; Node never reads them.
 
 ## Lifecycle table
 
 | Trigger | Files written | Files deleted |
 |---|---|---|
-| `createPost({ status: 'published' })` | `<slug>/index.html`, `<slug>.md`, `llms.txt`, `feed.xml`, `sitemap.xml` | — |
+| `createPost({ status: 'published' })` | `<slug>/index.html`, `<slug>.md`, `llms.txt`, `feed.xml`, `sitemap.xml`, `robots.txt` | — |
 | `createPost({ status: 'draft' })` | — | — |
 | `updatePost` (still published) | same as published create | — |
 | `updatePost` (draft → published) | same as published create | — |
@@ -31,9 +31,19 @@ In `updatePost` (published→draft) and `deletePost`, the renderer calls are del
 
 Reversed ordering (destructive first, manifests after) would leave the DB compensated to "published" while the per-post HTML and `.md` were already gone — a state the renderer can't reconverge from without a separate `renderPost` call. Reviewer caught this in Phase 2 round 3; the fix lives at `src/posts.ts:482` and `:538`.
 
+## robots.txt
+
+`renderManifests` also writes `robots.txt`: `User-agent: *` / `Allow: /`, an explicit allow group per AI crawler (`AI_CRAWLERS` in `feeds.ts`, tokens checked against each vendor's docs), and `Sitemap: <blog root>sitemap.xml`. It is a manifest, not blog chrome, so it follows the same lifecycle as `sitemap.xml`:
+
+- **The operator's file wins.** The renderer rewrites `robots.txt` only when it is missing or its first line is `ROBOTS_TXT_HEADER`. A self-hoster who already serves their own robots.txt from the blog dir keeps it (and its `Disallow` rules); deleting the header line from a generated file takes ownership of it. A robots.txt the renderer can't read (`EACCES`/`EPERM`, e.g. root-owned `0640` for the web server) is the operator's too, and is skipped. Throwing there would roll back the publish or unpublish that triggered the render. Unlike `style.css` or `sitemap.xml`, this file encodes a site-wide policy someone may have set on purpose, so a publish must not erase it (Codex review, SlopIt#78).
+
+- A blog with no published post has neither file. A missing robots.txt (any 4xx) means "crawl everything" to crawlers, so that is safe.
+- Crawlers only read robots.txt at a host root. A blog served under a path (`https://host/b/<id>/`) still gets the file, but the host's own robots.txt governs it.
+- Blogs rendered before this file existed get it on their next manifest render. Consumers that host many blogs need a re-render sweep after upgrading core (platform: the `rerender-*` scripts).
+
 ## Atomicity
 
-All five file writes use `writeFileAtomic` (`src/rendering/generator.ts`): write to `<path>.tmp`, then `renameSync`. POSIX rename is atomic, so Caddy can race the renderer and never sees a partially-written file. Single helper, six call sites (per-post HTML, per-post `.md`, blog index, `llms.txt`, `feed.xml`, `sitemap.xml`).
+All five file writes use `writeFileAtomic` (`src/rendering/generator.ts`): write to `<path>.<pid>.tmp`, then `renameSync`. POSIX rename is atomic, so Caddy can race the renderer and never sees a partially-written file. The pid is in the temp name because a consumer may run an ops script that renders beside its live server: with one shared `<path>.tmp`, either process can rename the other's temp file away, and the loser's `ENOENT` rolls back a live publish (Codex review, SlopIt#78). Single helper, six call sites (per-post HTML, per-post `.md`, blog index, `llms.txt`, `feed.xml`, `sitemap.xml`).
 
 ## CDATA escape inside `<content:encoded>`
 
