@@ -71,21 +71,71 @@ export const languageTag = z
  * duplication.
  */
 export const PostInputBaseSchema = z.object({
-  title: z.string().trim().min(1).max(200),
+  title: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .describe('Post title, 1–200 characters. The slug is derived from it when `slug` is omitted.'),
   slug: z
     .string()
     .min(2)
     .max(100)
     .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/)
+    .describe(
+      'URL slug, e.g. "hello-world": 2–100 lowercase letters, digits and hyphens, no hyphen at either end. The post lives at {blog_url}{slug}/. Omit to derive it from the title. Cannot be changed later; "lang" is reserved.',
+    )
     .optional(),
-  body: z.string().trim().min(1),
-  excerpt: z.string().max(300).optional(),
-  tags: z.array(z.string()).default([]),
-  status: z.enum(['draft', 'published']).default('published'),
-  seoTitle: z.string().max(200).optional(),
-  seoDescription: z.string().max(300).optional(),
-  author: z.string().max(100).optional(),
-  coverImage: httpUrl.optional(),
+  body: z
+    .string()
+    .trim()
+    .min(1)
+    .describe(
+      'Post content as markdown. Raw HTML is stripped. A YouTube URL alone on its own line becomes an embedded player.',
+    ),
+  excerpt: z
+    .string()
+    .max(300)
+    .describe(
+      'Summary shown under the title in the post list, up to 300 characters. Omit to derive it from the body.',
+    )
+    .optional(),
+  tags: z
+    .array(z.string())
+    .describe('Tags shown on the post page, e.g. ["ai", "travel"]. Defaults to none.')
+    .default([]),
+  status: z
+    .enum(['draft', 'published'])
+    .describe(
+      '"published" (default) puts the post live immediately; "draft" saves it without publishing.',
+    )
+    .default('published'),
+  seoTitle: z
+    .string()
+    .max(200)
+    .describe(
+      'Title for search results and link previews, up to 200 characters. Defaults to `title`.',
+    )
+    .optional(),
+  seoDescription: z
+    .string()
+    .max(300)
+    .describe(
+      'Description for search results and link previews, up to 300 characters. Defaults to the excerpt.',
+    )
+    .optional(),
+  author: z
+    .string()
+    .max(100)
+    .describe(
+      "Author name, up to 100 characters. Used in the page's metadata, the feed and the markdown source.",
+    )
+    .optional(),
+  coverImage: httpUrl
+    .describe(
+      'Cover image URL (http/https), shown above the post and used as its link-preview image. Use an uploaded image URL or any public image URL.',
+    )
+    .optional(),
   language: languageTag
     .describe(
       'Language of this post as a BCP-47 tag, e.g. "en", "ru", "pt-BR". Omit to inherit the blog\'s language.',

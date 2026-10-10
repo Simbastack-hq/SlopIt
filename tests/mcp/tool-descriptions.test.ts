@@ -9,6 +9,10 @@ import { createRenderer } from '../../src/rendering/generator.js'
 import { createMcpServer } from '../../src/mcp/server.js'
 
 const BANNED = ['endpoint', 'mcp', 'middleware', 'primitive', 'bridge']
+// The tools an agent meets first also say when to use them, what to tell
+// the human afterwards, and how to recover from failures.
+const COACHED = new Set(['signup', 'create_post', 'update_post'])
+const maxLength = (name: string) => (COACHED.has(name) ? 900 : 240)
 const EXPECTED_TOOLS = [
   'signup',
   'create_post',
@@ -38,7 +42,7 @@ describe('MCP tool descriptions', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('all 12 tools are registered, each with a description under 240 chars and no banned vocab', async () => {
+  it('all 12 tools are registered, each with a short description and no banned vocab', async () => {
     const renderer = createRenderer({
       store,
       outputDir: join(dir, 'out'),
@@ -62,7 +66,7 @@ describe('MCP tool descriptions', () => {
       expect(
         tool.description!.length,
         `tool "${tool.name}" description too long: ${tool.description!.length}`,
-      ).toBeLessThan(240)
+      ).toBeLessThan(maxLength(tool.name))
       const lower = tool.description!.toLowerCase()
       for (const banned of BANNED) {
         expect(
@@ -100,7 +104,8 @@ describe('MCP tool descriptions', () => {
     expect(signup?.description).toContain('only API-key recovery channel')
     expect(signup?.description).toContain("accepts the operator's terms")
     expect(signup?.description).toContain('https://operator.example/legal')
-    expect(signup?.description?.length).toBeLessThan(240)
+    expect(signup?.description).toContain('On EMAIL_REQUIRED')
+    expect(signup?.description?.length).toBeLessThan(maxLength('signup'))
 
     await client.close()
     await server.close()
