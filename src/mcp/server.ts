@@ -65,8 +65,8 @@ export function createMcpServer(config: McpServerConfig): McpServer {
 function instructionsFor(config: McpServerConfig): string {
   const access =
     config.authMode === 'none'
-      ? 'No API key is needed on this server: call `signup` once if there is no blog yet, then pass its `blog_id` to every tool.'
-      : "If your requests already carry an API key (for example, your app signed in for you), don't call `signup`: every tool works on that key's blog and `blog_id` is optional. With no key yet, call `signup` first, passing the human's email so they can recover the key, then send the returned `api_key` as a Bearer token (`Authorization: Bearer <api_key>`) on every later call."
+      ? "No API key is needed on this server: call `signup` once if there is no blog yet, then pass its `blog_id` to every tool. After `signup`, note the blog's URL and `blog_id` in the project's agent instructions file (AGENTS.md, CLAUDE.md) or your memory, so later posts come back to this blog."
+      : "If your requests already carry an API key (for example, your app signed in for you), don't call `signup`: every tool works on that key's blog and `blog_id` is optional. With no key yet, call `signup` first, passing the human's email so they can recover the key, then send the returned `api_key` as a Bearer token (`Authorization: Bearer <api_key>`) on every later call. After `signup`, note the blog's URL, `blog_id` and where you stored the key in the project's agent instructions file (AGENTS.md, CLAUDE.md) or your memory, so later posts come back to this blog; never write the API key itself into that note or any committed file."
   return [
     'SlopIt publishes markdown posts to a blog and returns live URLs.',
     access,

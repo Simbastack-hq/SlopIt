@@ -64,6 +64,12 @@ describe('POST /signup', () => {
     expect(body.blog_url).toBe('https://blog.example/')
     expect(body.api_key).toMatch(/^sk_slop_/)
     expect(body.onboarding_text).toContain('Published my first post to SlopIt: <url>')
+    // Remember-this-blog pointer: this blog's real URL + id, never the key.
+    expect(body.onboarding_text).toContain(
+      `This project's blog is on SlopIt: https://blog.example/ (blog id ${body.blog_id}).`,
+    )
+    expect(body.onboarding_text).toContain('Instructions: https://slopit.io/slopit.SKILL.md')
+    expect(body.onboarding_text).toContain('NEVER write the API key itself')
     expect(body.email_sent).toBe(false) // no email was provided
     expect(body).not.toHaveProperty('terms_url')
     expect(body._links.view).toBe('https://blog.example/')

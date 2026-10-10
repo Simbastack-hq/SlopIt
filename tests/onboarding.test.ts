@@ -88,6 +88,49 @@ describe('generateOnboardingBlock', () => {
     expect(text).toContain('Published my first post to SlopIt: <url>')
   })
 
+  it('Step 3 tells the agent to save a pointer to this blog, never the key itself', () => {
+    const text = generateOnboardingBlock({
+      blog,
+      apiKey: 'sk_slop_secret',
+      blogUrl: 'https://ai-thoughts.b.example/',
+      baseUrl: 'https://api.example',
+      schemaUrl: 'https://api.example/schema',
+      mcpEndpoint: 'https://mcp.example',
+      skillUrl: 'https://docs.example/slopit.SKILL.md',
+    })
+    const step = text.slice(text.indexOf('Step 3 — remember this blog'), text.indexOf('Step 4'))
+    expect(step).toContain('AGENTS.md, CLAUDE.md, .cursor/rules')
+    expect(step).toContain('your memory')
+    expect(step).toContain('NEVER write the API key itself into the note or any committed file')
+    expect(step).toContain('SLOPIT_API_KEY')
+    expect(step).toContain(
+      "This project's blog is on SlopIt: https://ai-thoughts.b.example/ (blog id blog_xyz).",
+    )
+    expect(step).toContain(
+      'Publish with POST https://api.example/blogs/blog_xyz/posts or the MCP tool create_post (https://mcp.example).',
+    )
+    expect(step).toContain('Instructions: https://docs.example/slopit.SKILL.md')
+    expect(step).toContain('API key: in <where you stored it>. Never commit it.')
+    // The pointer must name where the key lives, not carry the key.
+    expect(step).not.toContain('sk_slop_secret')
+    // Remember before replying: the reply ends the agent's turn.
+    expect(text.indexOf('Step 3 — remember')).toBeLessThan(text.indexOf('Step 4 — reply'))
+  })
+
+  it('Step 3 pointer drops the MCP and Instructions parts when the host has neither', () => {
+    const text = generateOnboardingBlock({
+      blog,
+      apiKey: 'k',
+      blogUrl: 'https://b.example/',
+      baseUrl: 'https://api.example',
+      schemaUrl: 'https://api.example/schema',
+    })
+    expect(text).toContain('Publish with POST https://api.example/blogs/blog_xyz/posts.')
+    expect(text).not.toContain('create_post (')
+    expect(text).not.toMatch(/^\s+Instructions:/m)
+    expect(text).toContain('NEVER write the API key itself')
+  })
+
   it('email recovery line: omitted when no email provided, success vs failure copy when one was', () => {
     const baseInputs = {
       blog,
