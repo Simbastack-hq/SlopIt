@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -887,6 +895,25 @@ describe('createRenderer — renderPost', () => {
     createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
 
     expect(readFileSync(join(outputDir, blog.id, 'robots.txt'), 'utf8')).toBe(own)
+  })
+
+  it("an unreadable robots.txt is the operator's: publish and unpublish still succeed", async () => {
+    const { blog } = createBlog(store, { name: 'locked-robots' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://blog.example.com' })
+    const path = join(outputDir, blog.id, 'robots.txt')
+    const own = 'User-agent: *\nDisallow: /\n'
+    mkdirSync(join(outputDir, blog.id), { recursive: true })
+    writeFileSync(path, own)
+    chmodSync(path, 0o000) // e.g. root:www-data 0640, served by the web server, unreadable to us
+    try {
+      createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+      const { updatePost } = await import('../src/posts.js')
+      updatePost(store, renderer, blog.id, 'aa', { status: 'draft' })
+      expect(existsSync(join(outputDir, blog.id, 'aa', 'index.html'))).toBe(false)
+    } finally {
+      chmodSync(path, 0o644)
+    }
+    expect(readFileSync(path, 'utf8')).toBe(own)
   })
 
   it('keeps its own robots.txt current when the base URL moves', () => {

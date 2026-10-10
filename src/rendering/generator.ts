@@ -403,7 +403,7 @@ export function renderParentSiteLink(
 }
 
 /**
- * Write `content` to `path` atomically: write to `${path}.tmp` first,
+ * Write `content` to `path` atomically: write to `${path}.<pid>.tmp` first,
  * then rename. POSIX rename is atomic, so a concurrent reader (Caddy)
  * never sees a partially-written file.
  *
@@ -419,9 +419,32 @@ export function renderParentSiteLink(
  * @internal
  */
 function writeFileAtomic(path: string, content: string): void {
-  const tmp = `${path}.tmp`
+  // Per-process temp name: a consumer's ops script can render beside its
+  // live server, and a shared `.tmp` lets one process rename the other's
+  // file away mid-write (ENOENT, which rolls back a live publish).
+  const tmp = `${path}.${process.pid}.tmp`
   writeFileSync(tmp, content, 'utf8')
   renameSync(tmp, path)
+}
+
+/**
+ * Whether the renderer may (re)write the robots.txt at `path`: it is
+ * missing, or it starts with ROBOTS_TXT_HEADER. Anything else is the
+ * operator's crawl policy. That includes a file we can't read: the
+ * renderer always writes files it can read back, so an unreadable one
+ * was put there by someone else.
+ *
+ * @internal
+ */
+function isRendererRobotsTxt(path: string): boolean {
+  try {
+    return readFileSync(path, 'utf8').startsWith(ROBOTS_TXT_HEADER)
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return true
+    if (code === 'EACCES' || code === 'EPERM') return false
+    throw e
+  }
 }
 
 /**
@@ -592,7 +615,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     // Only takes effect when the blog is served at a host root. A file
     // without our header is the operator's crawl policy: leave it alone.
     const robotsPath = join(blogDir, 'robots.txt')
-    if (!existsSync(robotsPath) || readFileSync(robotsPath, 'utf8').startsWith(ROBOTS_TXT_HEADER)) {
+    if (isRendererRobotsTxt(robotsPath)) {
       writeFileAtomic(robotsPath, buildRobotsTxt({ sitemapUrl: root + 'sitemap.xml' }))
     }
   }
