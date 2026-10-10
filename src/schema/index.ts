@@ -24,21 +24,31 @@ export const BlogAnalyticsSchema = z
   .object({
     umami: z
       .object({
-        siteId: z.string().min(1).max(100),
+        siteId: z.string().min(1).max(100).describe('Umami Cloud website id.'),
       })
       .strict()
+      .describe('Umami Cloud analytics.')
       .optional(),
     plausible: z
       .object({
-        domain: z.string().min(1).max(253),
+        domain: z
+          .string()
+          .min(1)
+          .max(253)
+          .describe('Site domain as registered in Plausible Cloud, e.g. "blog.example.com".'),
       })
       .strict()
+      .describe('Plausible Cloud analytics.')
       .optional(),
     googleAnalytics: z
       .object({
-        measurementId: z.string().regex(/^G-[A-Z0-9]+$/),
+        measurementId: z
+          .string()
+          .regex(/^G-[A-Z0-9]+$/)
+          .describe('GA4 measurement id, e.g. "G-ABC123".'),
       })
       .strict()
+      .describe('Google Analytics 4.')
       .optional(),
   })
   .strict()
@@ -80,8 +90,18 @@ export type Blog = z.infer<typeof BlogSchema>
 // Object.keys(parsed) in updateBlog, same pattern as PostPatchSchema.
 export const BlogPatchSchema = z
   .object({
-    analytics: BlogAnalyticsSchema.unwrap().nullable().optional(),
-    parentSiteUrl: httpUrl.nullable().optional(),
+    analytics: BlogAnalyticsSchema.unwrap()
+      .nullable()
+      .describe(
+        'Analytics added to every page: any of `umami`, `plausible`, `googleAnalytics`. Replaces the whole analytics config; null removes it.',
+      )
+      .optional(),
+    parentSiteUrl: httpUrl
+      .nullable()
+      .describe(
+        "URL (http/https) of the author's main site, linked from the blog. null removes it.",
+      )
+      .optional(),
     // Not nullable: a blog always has a language. "Reset" is `'en'`.
     language: languageTag
       .describe('Default language for the blog as a BCP-47 tag, e.g. "en", "ru", "pt-BR".')
@@ -104,26 +124,55 @@ export type PostInput = z.input<typeof PostInputSchema>
 // corrupt both checks.
 export const PostPatchSchema = z
   .object({
-    title: z.string().trim().min(1).max(200).optional(),
-    body: z.string().trim().min(1).optional(),
-    excerpt: z.string().max(300).optional(),
-    tags: z.array(z.string()).optional(),
-    status: z.enum(['draft', 'published']).optional(),
-    seoTitle: z.string().max(200).optional(),
-    seoDescription: z.string().max(300).optional(),
-    author: z.string().max(100).optional(),
+    title: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .describe('New title, 1–200 characters. The slug stays the same.')
+      .optional(),
+    body: z
+      .string()
+      .trim()
+      .min(1)
+      .describe('New markdown body. Replaces the whole body.')
+      .optional(),
+    excerpt: z
+      .string()
+      .max(300)
+      .describe('New summary shown under the title in the post list, up to 300 characters.')
+      .optional(),
+    tags: z
+      .array(z.string())
+      .describe('New tag list, e.g. ["ai"]. Replaces all tags; [] removes them.')
+      .optional(),
+    status: z
+      .enum(['draft', 'published'])
+      .describe('"published" puts the post live; "draft" takes it offline.')
+      .optional(),
+    seoTitle: z
+      .string()
+      .max(200)
+      .describe('New title for search results and link previews, up to 200 characters.')
+      .optional(),
+    seoDescription: z
+      .string()
+      .max(300)
+      .describe('New description for search results and link previews, up to 300 characters.')
+      .optional(),
+    author: z.string().max(100).describe('New author name, up to 100 characters.').optional(),
     // `null` removes the cover; omitting the key leaves it unchanged.
     coverImage: httpUrl
-      .describe('Cover image URL (http/https). Send null to remove the cover.')
       .nullable()
+      .describe('Cover image URL (http/https). Send null to remove the cover.')
       .optional(),
     // `null` clears a per-post override so the post follows the blog's
     // language again; omitting the key leaves it unchanged.
     language: languageTag
+      .nullable()
       .describe(
         'Language of this post as a BCP-47 tag, e.g. "en", "ru", "pt-BR". Send null to clear the override and inherit the blog\'s language.',
       )
-      .nullable()
       .optional(),
     // A slug joins this post to that post's translation group (creating
     // the group if needed); `null` leaves the group; omitting the key
@@ -132,10 +181,10 @@ export const PostPatchSchema = z
       .string()
       .min(1)
       .max(100)
+      .nullable()
       .describe(
         'Slug of a post in this blog to link as a translation of this one. Send null to unlink this post from its translation group.',
       )
-      .nullable()
       .optional(),
   })
   .strict()
@@ -172,6 +221,9 @@ export const CreateBlogInputSchema = z.object({
     .min(2)
     .max(63)
     .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/)
+    .describe(
+      'Blog name, e.g. "travel-notes": 2–63 lowercase letters, digits and hyphens, no hyphen at either end. The host may use it in the blog URL. Omit for an unnamed blog. A taken name fails with BLOG_NAME_CONFLICT.',
+    )
     .optional(),
   email: z
     .preprocess((val) => {
@@ -179,8 +231,14 @@ export const CreateBlogInputSchema = z.object({
       const normalized = val.trim().toLowerCase()
       return normalized === '' ? undefined : normalized
     }, z.email().optional())
+    .describe(
+      "The blog owner's email address. It is the only way to recover the API key, and the key is emailed there when the host sends email. Some hosts require it. Pass it whenever the human gives one.",
+    )
     .optional(),
-  theme: z.enum(['minimal']).default('minimal'),
+  theme: z
+    .enum(['minimal'])
+    .describe('Blog theme. Only "minimal" exists today.')
+    .default('minimal'),
   language: languageTag
     .describe(
       'Default language for the blog as a BCP-47 tag, e.g. "en", "ru", "pt-BR". Defaults to "en". Individual posts may override it.',
