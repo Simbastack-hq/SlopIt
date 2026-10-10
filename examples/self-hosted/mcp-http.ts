@@ -16,7 +16,7 @@ import { createMcpServer } from '../../src/mcp/server.js'
 import { createRenderer } from '../../src/rendering/generator.js'
 import { createStore } from '../../src/db/store.js'
 
-async function main(): Promise<void> {
+function main(): void {
   const baseUrl = process.env.SLOPIT_BASE_URL ?? 'http://localhost:8080'
   const store = createStore({ dbPath: process.env.SLOPIT_DB ?? './slopit.db' })
   const renderer = createRenderer({
@@ -33,19 +33,23 @@ async function main(): Promise<void> {
   }
 
   const api = createApiRouter(apiConfig)
-  const mcp = createMcpServer(apiConfig)
-  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-  await mcp.connect(transport)
 
   const app = new Hono()
-  // MCP route registered first so it isn't swallowed by the REST router's catch-all auth middleware
-  app.all('/mcp', (c) => transport.handleRequest(c.req.raw))
+  // MCP route registered first so it isn't swallowed by the REST router's catch-all auth middleware.
+  // Stateless MCP needs a fresh transport + server per request: the SDK refuses to reuse a
+  // stateless transport across requests. createMcpServer only registers tool handlers (no I/O).
+  app.all('/mcp', async (c) => {
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    })
+    const mcp = createMcpServer(apiConfig)
+    await mcp.connect(transport)
+    return transport.handleRequest(c.req.raw)
+  })
   app.route('/', api)
 
   serve({ fetch: app.fetch, port: Number(process.env.PORT ?? 8080) })
 }
 
-main().catch((err) => {
-  console.error(err)
-  process.exit(1)
-})
+main()
