@@ -849,6 +849,8 @@ describe('createRenderer — renderPost', () => {
     expect(sitemap.startsWith('<?xml')).toBe(true)
     const llms = readFileSync(join(outputDir, blog.id, 'llms.txt'), 'utf8')
     expect(llms.startsWith('#')).toBe(true)
+    const robots = readFileSync(join(outputDir, blog.id, 'robots.txt'), 'utf8')
+    expect(robots.startsWith('User-agent: *')).toBe(true)
   })
 
   // Phase 2 — agent-readable file outputs (.md, llms.txt, feed.xml, sitemap.xml)
@@ -861,6 +863,18 @@ describe('createRenderer — renderPost', () => {
     expect(existsSync(join(outputDir, blog.id, 'llms.txt'))).toBe(true)
     expect(existsSync(join(outputDir, blog.id, 'feed.xml'))).toBe(true)
     expect(existsSync(join(outputDir, blog.id, 'sitemap.xml'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'robots.txt'))).toBe(true)
+  })
+
+  it("points robots.txt at the blog's own sitemap, from the resolved baseUrl", () => {
+    const { blog } = createBlog(store, { name: 'robots' })
+    // No trailing slash: the Sitemap line must still be a clean absolute URL.
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://blog.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    const robots = readFileSync(join(outputDir, blog.id, 'robots.txt'), 'utf8')
+    expect(robots).toContain('User-agent: *\nAllow: /\n')
+    expect(robots).toContain('\nSitemap: https://blog.example.com/sitemap.xml\n')
   })
 
   it('emits frontmatter + raw body in <slug>.md, not the rendered HTML', () => {

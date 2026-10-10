@@ -100,6 +100,32 @@ export function buildSitemap(input: SitemapInput): string {
 }
 
 // -----------------------------------------------------------------------------
+// robots.txt
+// -----------------------------------------------------------------------------
+
+// `User-agent: *` already allows these; naming them makes the welcome
+// explicit. Tokens as each vendor documents them (checked 2026-10-10):
+// developers.openai.com/api/docs/bots, Anthropic's "Does Anthropic crawl
+// data from the web" help article, docs.perplexity.ai/guides/bots, Google's
+// common-crawlers page (Google-Extended), support.apple.com/en-us/119829.
+const AI_CRAWLERS = [
+  'GPTBot',
+  'OAI-SearchBot',
+  'ChatGPT-User',
+  'ClaudeBot',
+  'Claude-SearchBot',
+  'Claude-User',
+  'PerplexityBot',
+  'Google-Extended',
+  'Applebot-Extended',
+]
+
+export function buildRobotsTxt(input: { sitemapUrl: string }): string {
+  const groups = ['*', ...AI_CRAWLERS].map((ua) => `User-agent: ${ua}\nAllow: /\n`)
+  return `${groups.join('\n')}\nSitemap: ${input.sitemapUrl}\n`
+}
+
+// -----------------------------------------------------------------------------
 // feed.xml — RSS 2.0 with content:encoded
 // -----------------------------------------------------------------------------
 

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { escapeXml, buildLlmsTxt, buildSitemap, buildRssFeed } from '../src/rendering/feeds.js'
+import {
+  escapeXml,
+  buildLlmsTxt,
+  buildSitemap,
+  buildRssFeed,
+  buildRobotsTxt,
+} from '../src/rendering/feeds.js'
 
 describe('escapeXml', () => {
   it('escapes the five XML special characters', () => {
@@ -146,6 +152,35 @@ describe('buildSitemap', () => {
       updatedAt: '2026-05-01T00:00:00Z',
     })
     expect(out).toContain('https://b.slopit.io/?x=1&amp;y=2')
+  })
+})
+
+describe('buildRobotsTxt', () => {
+  const out = buildRobotsTxt({ sitemapUrl: 'https://b.slopit.io/sitemap.xml' })
+
+  it('allows every crawler', () => {
+    expect(out.startsWith('User-agent: *\nAllow: /\n')).toBe(true)
+    expect(out).not.toContain('Disallow')
+  })
+
+  it('names each AI search and answer crawler in its own allow group', () => {
+    for (const ua of [
+      'GPTBot',
+      'OAI-SearchBot',
+      'ChatGPT-User',
+      'ClaudeBot',
+      'Claude-SearchBot',
+      'Claude-User',
+      'PerplexityBot',
+      'Google-Extended',
+      'Applebot-Extended',
+    ]) {
+      expect(out).toContain(`\nUser-agent: ${ua}\nAllow: /\n`)
+    }
+  })
+
+  it('ends with an absolute Sitemap line', () => {
+    expect(out.endsWith('\nSitemap: https://b.slopit.io/sitemap.xml\n')).toBe(true)
   })
 })
 

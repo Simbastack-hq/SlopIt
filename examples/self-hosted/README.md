@@ -16,7 +16,7 @@ examples/self-hosted/
 
 ## Reverse-proxy MIME types (when the `Caddyfile` lands)
 
-The renderer emits four agent-facing files alongside `<slug>/index.html`: `<slug>.md`, `llms.txt`, `feed.xml`, `sitemap.xml`. Browsers and HTTP clients only render these correctly if the reverse proxy advertises the right `Content-Type` header. The future `Caddyfile` (and any equivalent nginx / Traefik / Apache config a self-hoster writes today) must set:
+The renderer emits four agent-facing files alongside `<slug>/index.html`: `<slug>.md`, `llms.txt`, `feed.xml`, `sitemap.xml`. (It also writes `robots.txt`, which every server already sends as `text/plain`.) Browsers and HTTP clients only render these correctly if the reverse proxy advertises the right `Content-Type` header. The future `Caddyfile` (and any equivalent nginx / Traefik / Apache config a self-hoster writes today) must set:
 
 | Path | Content-Type |
 |---|---|
