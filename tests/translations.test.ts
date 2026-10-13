@@ -393,6 +393,19 @@ describe('translations — store, lifecycle and rendering', () => {
       expect(exists(blogId, 'lang', 'pt-br', 'index.html')).toBe(true)
     })
 
+    it('each home page advertises its own feed; post pages advertise the root feed', () => {
+      const rss = (href: string) =>
+        `<link rel="alternate" type="application/rss+xml" title="pair" href="${href}" />`
+      expect(read(blogId, 'index.html')).toContain(rss('https://b.example/feed.xml'))
+      for (const seg of ['en', 'de', 'pt-br']) {
+        expect(read(blogId, 'lang', seg, 'index.html')).toContain(
+          rss(`https://b.example/lang/${seg}/feed.xml`),
+        )
+        expect(exists(blogId, 'lang', seg, 'feed.xml')).toBe(true)
+      }
+      expect(read(blogId, 'hallo', 'index.html')).toContain(rss('https://b.example/feed.xml'))
+    })
+
     it('home pages cross-link with hreflang (x-default → root) and a switcher', () => {
       const root = read(blogId, 'index.html')
       expect(root).toContain('<link rel="alternate" hreflang="en" href="https://b.example/">')

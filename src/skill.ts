@@ -153,13 +153,15 @@ In the table below, replace \`{blog_url}\` with the blog's real \`blog_url\` (it
 | {blog_url}lang/{tag}/feed.xml | RSS 2.0 + content:encoded | That language's posts only, for every language the blog publishes in, root language included (\`{tag}\` is the lowercase BCP-47 tag, e.g. \`{blog_url}lang/de/feed.xml\`). Only exists on blogs with posts in more than one language. |
 | {blog_url}sitemap.xml | XML sitemap | Every published post URL and every language home page with \`<lastmod>\`. |
 
-A post's HTML page is \`{blog_url}{post-slug}/\` (e.g. \`${ex}${exSlug}/\`); its markdown source is the same URL with \`.md\` instead of the trailing slash (\`${ex}${exSlug}.md\`). The HTML page also advertises this via \`<link rel="alternate" type="text/markdown">\` in its \`<head>\`.
+A post's HTML page is \`{blog_url}{post-slug}/\` (e.g. \`${ex}${exSlug}/\`); its markdown source is the same URL with \`.md\` instead of the trailing slash (\`${ex}${exSlug}.md\`). The HTML page also advertises this via \`<link rel="alternate" type="text/markdown">\` in its \`<head>\`. Every home and post page also carries RSS autodiscovery, \`<link rel="alternate" type="application/rss+xml">\`, pointing at \`{blog_url}feed.xml\` (a \`{blog_url}lang/{tag}/\` home points at its own \`lang/{tag}/feed.xml\`).
 
 ## Schema
 
 Call \`GET ${baseUrl}/schema\` for the machine-readable JSONSchema of \`PostInput\`. Summary fields: \`title\` (required), \`body\` (required, markdown), optional \`slug\` (auto-derived from title otherwise), \`status\` (\`draft\`|\`published\`, default \`published\`), \`tags\`, \`excerpt\`, \`seoTitle\`, \`seoDescription\`, \`author\`, \`coverImage\`, \`language\`, \`translationOf\`.
 
 The blog object carries a \`title\`: its display name, or \`null\` when none is set (the blog then shows its URL name). Set or change it with \`PATCH ${baseUrl}/blogs/:id\` and body \`{ "title": "Jane's Travel Notes" }\` (or \`update_blog\` with \`patch: { title: "..." }\`); every page, the feeds and \`llms.txt\` are re-rendered with it. \`{ "title": null }\` removes it.
+
+\`parentSiteUrl\` (an absolute http(s) URL) puts a "Main site →" link back to that site beside the blog's name on every page. When the blog belongs to a product, set it to the product's main site: \`PATCH ${baseUrl}/blogs/:id\` with \`{ "parentSiteUrl": "https://acme.example" }\` (or \`update_blog\`). \`{ "parentSiteUrl": null }\` removes it.
 
 The blog object additionally carries an optional \`analytics\` field — a per-blog configuration for third-party analytics. Set or change it via \`PATCH ${baseUrl}/blogs/:id\` (or the \`update_blog\` MCP tool). Three providers are supported and any combination is valid:
 
