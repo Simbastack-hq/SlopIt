@@ -486,6 +486,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
   // whether the caller (platform vs self-hosted) passes `https://x.com`
   // or `https://x.com/`.
   const canonicalFor = (slug: string): string => normalizeBaseUrl(config.baseUrl) + '/' + slug + '/'
+  const markdownUrlFor = (slug: string): string =>
+    normalizeBaseUrl(config.baseUrl) + '/' + slug + '.md'
 
   const blogRootUrl = (): string => normalizeBaseUrl(config.baseUrl) + '/'
 
@@ -679,6 +681,12 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       themeCssHref: '../style.css',
       blogHomeHref,
       canonicalUrl,
+      feedUrl: blogRootUrl() + 'feed.xml',
+      // Only published posts have a `<slug>.md` (renderPost skips drafts).
+      markdownAlternate:
+        post.status === 'published'
+          ? `<link rel="alternate" type="text/markdown" href="${escapeHtml(markdownUrlFor(post.slug))}">`
+          : '',
       alternates: renderAlternates(alternates, rootLang),
       seoMeta: buildSeoMeta({
         post,
@@ -777,14 +785,21 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       // root changing (which a publish can cause, see listBlogLanguages).
       // The root language's `lang/` copy is a duplicate: it points its
       // canonical at `/` and carries no hreflang of its own.
-      const pages: { lang: string; dir: string; prefix: string; canonical: boolean }[] = [
-        { lang: rootLang, dir: blogDir, prefix: '', canonical: true },
+      const pages: {
+        lang: string
+        dir: string
+        prefix: string
+        canonical: boolean
+        feedUrl: string
+      }[] = [
+        { lang: rootLang, dir: blogDir, prefix: '', canonical: true, feedUrl: root + 'feed.xml' },
         ...(languages.length > 1
           ? languages.map((l) => ({
               lang: l,
               dir: join(blogDir, 'lang', languageSegment(l)),
               prefix: '../../',
               canonical: l !== rootLang,
+              feedUrl: root + 'lang/' + languageSegment(l) + '/feed.xml',
             }))
           : []),
       ]
@@ -804,6 +819,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
           themeCssHref: prefix + 'style.css',
           faviconHref: prefix + 'favicon.svg',
           canonicalUrl: homeUrl(root, lang, rootLang),
+          // `/` → the all-languages feed; `lang/<tag>/` → that language's.
+          feedUrl: page.feedUrl,
           alternates: page.canonical ? renderAlternates(homes, rootLang) : '',
           languageNav: renderLanguageNav(
             languages.map((l) => ({

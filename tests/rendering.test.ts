@@ -1028,6 +1028,46 @@ describe('createRenderer — renderPost', () => {
     )
     expect(existsSync(join(outputDir, blog.id, 'dd.md'))).toBe(false)
   })
+
+  it('advertises the .md source and the RSS feed in a published post page head', () => {
+    const { blog } = createBlog(store, { name: 'heads' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://example.com/b/heads' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    const html = readFileSync(join(outputDir, blog.id, 'aa', 'index.html'), 'utf8')
+    expect(html).toContain(
+      '<link rel="alternate" type="text/markdown" href="https://example.com/b/heads/aa.md">',
+    )
+    expect(html).toContain(
+      '<link rel="alternate" type="application/rss+xml" title="heads" href="https://example.com/b/heads/feed.xml" />',
+    )
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'feed.xml'))).toBe(true)
+  })
+
+  it('gives a draft post page no .md link (it has no .md file)', () => {
+    const { blog } = createBlog(store, { name: 'heads-draft' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 'dd', status: 'draft', publishedAt: null }),
+    )
+
+    const html = readFileSync(join(outputDir, blog.id, 'dd', 'index.html'), 'utf8')
+    expect(html).not.toContain('text/markdown')
+  })
+
+  it('advertises the RSS feed on the home page', () => {
+    const { blog } = createBlog(store, { name: 'heads-home' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    const html = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
+    expect(html).toContain(
+      '<link rel="alternate" type="application/rss+xml" title="heads-home" href="https://b.example.com/feed.xml" />',
+    )
+    expect(html).not.toContain('text/markdown')
+  })
 })
 
 describe('createRenderer — Phase 2 lifecycle teardown', () => {
