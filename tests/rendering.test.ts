@@ -102,6 +102,7 @@ describe('loadTheme', () => {
   it('post template contains expected placeholders', () => {
     const theme = loadTheme('minimal')
     expect(theme.post).toContain('{{postTitle}}')
+    expect(theme.post).toContain('{{postSeoTitle}}')
     expect(theme.post).toContain('{{{postBody}}}')
     expect(theme.post).toContain('{{themeCssHref}}')
     expect(theme.post).toContain('{{blogHomeHref}}')
@@ -735,8 +736,22 @@ describe('createRenderer — renderPost', () => {
     )
 
     const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
+    expect(html).toContain('<title>Override — bb</title>')
+    expect(html).toContain('<h1>Default</h1>')
     expect(html).toContain('<meta property="og:title" content="Override">')
     expect(html).toContain('<meta name="description" content="Custom.">')
+  })
+
+  it('falls back to the title in <title> when seoTitle is blank', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 's', title: 'Default', seoTitle: '   ' }),
+    )
+
+    const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
+    expect(html).toContain('<title>Default — bb</title>')
   })
 
   it('produces single-slash canonical URL regardless of baseUrl trailing slash', () => {
