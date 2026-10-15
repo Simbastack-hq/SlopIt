@@ -4,6 +4,7 @@ import type { TranslationPolicy } from '../posts.js'
 import type { MutationRenderer } from '../rendering/generator.js'
 import type { Blog } from '../schema/index.js'
 import type { OnSignupHook } from '../signup.js'
+import type { PreviewUrlFor } from '../preview.js'
 import { errorMiddleware } from './errors.js'
 import { authMiddleware } from './auth.js'
 import { idempotencyMiddleware } from './idempotency.js'
@@ -48,6 +49,13 @@ export interface ApiRouterConfig {
    * Platform passes a plan check; self-hosted leaves unset (allowed).
    */
   translationPolicy?: TranslationPolicy
+  /**
+   * Draft previews. When set, draft responses from create, patch and get
+   * carry `preview_url`, a private link where the human can see the draft
+   * rendered. Core serves no previews; the host signs and serves them.
+   * Self-hosted leaves unset (no `preview_url`).
+   */
+  previewUrlFor?: PreviewUrlFor
   /**
    * Optional hook fired after a blog + API key are created at signup,
    * if (and only if) the caller provided an email. Platform wires this

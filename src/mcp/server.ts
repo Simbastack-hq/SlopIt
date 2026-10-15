@@ -4,6 +4,7 @@ import type { TranslationPolicy } from '../posts.js'
 import type { MutationRenderer } from '../rendering/generator.js'
 import type { Blog } from '../schema/index.js'
 import type { OnSignupHook } from '../signup.js'
+import type { PreviewUrlFor } from '../preview.js'
 import { registerTools } from './tools.js'
 
 export interface McpServerConfig {
@@ -36,6 +37,8 @@ export interface McpServerConfig {
    * `translationOf` identically. See that field's doc.
    */
   translationPolicy?: TranslationPolicy
+  /** Mirrors ApiRouterConfig.previewUrlFor: `preview_url` on draft responses. */
+  previewUrlFor?: PreviewUrlFor
   /**
    * Mirrors ApiRouterConfig.onSignup so REST and MCP signup go through
    * the same hook. Both paths invoke signupBlog() under the hood; this

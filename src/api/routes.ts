@@ -11,6 +11,7 @@ import { parseMarkdownBody } from './markdown-body.js'
 import { signupBlog } from '../signup.js'
 import { uploadMedia, listMedia, getMedia, deleteMedia } from '../media.js'
 import type { MediaLimits } from '../media.js'
+import { previewFields } from '../preview.js'
 
 const StatusQuerySchema = z.enum(['draft', 'published']).optional()
 
@@ -153,6 +154,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     return c.json({
       post,
       ...(postUrl !== undefined ? { post_url: postUrl } : {}),
+      ...previewFields(config.previewUrlFor, c.var.blog, post),
       _links: buildLinks(c.var.blog, config),
     })
   })
@@ -171,7 +173,11 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
   // Single post
   app.get('/blogs/:id/posts/:slug', (c) => {
     const post = getPost(config.store, c.var.blog.id, c.req.param('slug'))
-    return c.json({ post, _links: buildLinks(c.var.blog, config) })
+    return c.json({
+      post,
+      ...previewFields(config.previewUrlFor, c.var.blog, post),
+      _links: buildLinks(c.var.blog, config),
+    })
   })
 
   // Patch post
@@ -192,6 +198,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     return c.json({
       post,
       ...(postUrl !== undefined ? { post_url: postUrl } : {}),
+      ...previewFields(config.previewUrlFor, c.var.blog, post),
       _links: buildLinks(c.var.blog, config),
     })
   })
