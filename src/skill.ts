@@ -239,7 +239,7 @@ Over HTTP (the streamable HTTP transport), every \`POST\` to the MCP endpoint mu
 | update_post | bearer | yes | Edit an existing post. |
 | delete_post | bearer | yes | Remove a post permanently. |
 | update_blog | bearer | yes | Edit blog metadata (\`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`). |
-| get_blog | bearer | — | Get blog metadata. |
+| get_blog | bearer | — | Get blog metadata and its public URL (\`blog_url\`). |
 | get_post | bearer | — | Get a single post by slug. |
 | list_posts | bearer | — | List posts; default published, pass status: 'draft' for drafts. |
 | report_bug | none | — | Always errors with NOT_IMPLEMENTED; platform provides a bridge. |

@@ -114,7 +114,15 @@ export const PostOutput = toolOutput({ post: PostShape.optional() })
 
 export const PostListOutput = toolOutput({ posts: z.array(PostShape).optional() })
 
-export const BlogOutput = toolOutput({ blog: BlogShape.optional() })
+export const BlogOutput = toolOutput({
+  blog: BlogShape.optional(),
+  blog_url: z
+    .string()
+    .optional()
+    .describe(
+      "The blog's public URL (its custom domain once one is verified). Posts live at {blog_url}{slug}/.",
+    ),
+})
 
 export const DeletedOutput = toolOutput({ deleted: z.literal(true).optional() })
 

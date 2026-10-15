@@ -69,10 +69,13 @@ describe('MCP read tools', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('get_blog returns { blog }', async () => {
+  it('get_blog returns { blog, blog_url }', async () => {
     const result = await callTool(client, 'get_blog', { blog_id: blogId })
     expect(result.isError).toBeFalsy()
-    expect((result.structuredContent as { blog: { id: string } }).blog.id).toBe(blogId)
+    const out = result.structuredContent as { blog: { id: string }; blog_url: string }
+    expect(out.blog.id).toBe(blogId)
+    // Same public URL REST reports as _links.view: the renderer's base.
+    expect(out.blog_url).toBe('https://b.example/')
   })
 
   it('get_post happy path', async () => {
