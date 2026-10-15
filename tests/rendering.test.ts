@@ -102,6 +102,7 @@ describe('loadTheme', () => {
   it('post template contains expected placeholders', () => {
     const theme = loadTheme('minimal')
     expect(theme.post).toContain('{{postTitle}}')
+    expect(theme.post).toContain('{{pageTitle}}')
     expect(theme.post).toContain('{{{postBody}}}')
     expect(theme.post).toContain('{{themeCssHref}}')
     expect(theme.post).toContain('{{blogHomeHref}}')
@@ -735,8 +736,23 @@ describe('createRenderer — renderPost', () => {
     )
 
     const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
+    // seoTitle is the whole search title, as written: no blog name appended.
+    expect(html).toContain('<title>Override</title>')
+    expect(html).toContain('<h1>Default</h1>')
     expect(html).toContain('<meta property="og:title" content="Override">')
     expect(html).toContain('<meta name="description" content="Custom.">')
+  })
+
+  it('falls back to the title in <title> when seoTitle is blank', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 's', title: 'Default', seoTitle: '   ' }),
+    )
+
+    const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
+    expect(html).toContain('<title>Default — bb</title>')
   })
 
   it('produces single-slash canonical URL regardless of baseUrl trailing slash', () => {
@@ -1028,6 +1044,46 @@ describe('createRenderer — renderPost', () => {
     )
     expect(existsSync(join(outputDir, blog.id, 'dd.md'))).toBe(false)
   })
+
+  it('advertises the .md source and the RSS feed in a published post page head', () => {
+    const { blog } = createBlog(store, { name: 'heads' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://example.com/b/heads' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    const html = readFileSync(join(outputDir, blog.id, 'aa', 'index.html'), 'utf8')
+    expect(html).toContain(
+      '<link rel="alternate" type="text/markdown" href="https://example.com/b/heads/aa.md">',
+    )
+    expect(html).toContain(
+      '<link rel="alternate" type="application/rss+xml" title="heads" href="https://example.com/b/heads/feed.xml" />',
+    )
+    expect(existsSync(join(outputDir, blog.id, 'aa.md'))).toBe(true)
+    expect(existsSync(join(outputDir, blog.id, 'feed.xml'))).toBe(true)
+  })
+
+  it('gives a draft post page no .md link (it has no .md file)', () => {
+    const { blog } = createBlog(store, { name: 'heads-draft' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderPost(
+      blog.id,
+      makePost({ blogId: blog.id, slug: 'dd', status: 'draft', publishedAt: null }),
+    )
+
+    const html = readFileSync(join(outputDir, blog.id, 'dd', 'index.html'), 'utf8')
+    expect(html).not.toContain('text/markdown')
+  })
+
+  it('advertises the RSS feed on the home page', () => {
+    const { blog } = createBlog(store, { name: 'heads-home' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    createPost(store, renderer, blog.id, { title: 'A', slug: 'aa', body: 'body' })
+
+    const html = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
+    expect(html).toContain(
+      '<link rel="alternate" type="application/rss+xml" title="heads-home" href="https://b.example.com/feed.xml" />',
+    )
+    expect(html).not.toContain('text/markdown')
+  })
 })
 
 describe('createRenderer — Phase 2 lifecycle teardown', () => {
@@ -1113,6 +1169,45 @@ describe('createRenderer — renderBlog', () => {
 
     const html = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
     expect(html).toContain('href="favicon.svg"')
+  })
+
+  it('writes an empty feed on a blog with no published posts, so the RSS link resolves', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    renderer.renderBlog(blog.id)
+
+    const html = readFileSync(join(outputDir, blog.id, 'index.html'), 'utf8')
+    expect(html).toContain('type="application/rss+xml"')
+    expect(html).toContain('href="https://b.example.com/feed.xml"')
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed).toContain('<rss')
+    expect(feed).not.toContain('<item>')
+  })
+
+  it("rewrites a no-post blog's feed with the current baseUrl", () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    createRenderer({ store, outputDir, baseUrl: 'https://old.example.com' }).renderBlog(blog.id)
+    createRenderer({ store, outputDir, baseUrl: 'https://new.example.com' }).renderBlog(blog.id)
+
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed).toContain('https://new.example.com/')
+    expect(feed).not.toContain('old.example.com')
+  })
+
+  it('leaves an existing feed alone on a blog with published posts', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    store.db
+      .prepare(
+        `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
+         VALUES ('p1', ?, 'pub', 'Pub', 'x', 'published', '2025-01-01T00:00:00Z')`,
+      )
+      .run(blog.id)
+    const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
+    mkdirSync(join(outputDir, blog.id), { recursive: true })
+    writeFileSync(join(outputDir, blog.id, 'feed.xml'), 'existing')
+    renderer.renderBlog(blog.id)
+
+    expect(readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')).toBe('existing')
   })
 
   it('lists published posts newest-first in the index', () => {

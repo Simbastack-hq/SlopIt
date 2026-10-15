@@ -22,6 +22,13 @@ Every published post writes `<slug>/index.html`, `<slug>.md`, plus the per-blog 
 | `deletePost` (was published) | `llms.txt`, `feed.xml`, `sitemap.xml` (regen minus this post) | `<slug>/index.html`, `<slug>.md` |
 | `deletePost` (was draft) | — | — |
 
+## `<head>` discovery links
+
+- A published post page carries `<link rel="alternate" type="text/markdown" href="<blog root><slug>.md">`, absolute like the canonical. A draft page gets none, because drafts have no `.md`.
+- Every home and post page carries RSS autodiscovery. A `lang/<tag>/` home points at `lang/<tag>/feed.xml`; `/` and every post page point at the root `feed.xml`.
+- The SKILL.md text promised the `.md` link months before the theme emitted it. Nobody noticed until a draft blog post quoted it (2026-10-14). Tests in `rendering.test.ts` and `translations.test.ts` now pin both links. When SKILL.md describes rendered output, add a rendering test for it in the same PR.
+- Existing hosted pages only get the links after a re-render sweep (platform `rerender-*` scripts).
+
 ## Ordering invariant — manifests before destructive cleanup
 
 In `updatePost` (published→draft) and `deletePost`, the renderer calls are deliberately sequenced:

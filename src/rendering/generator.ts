@@ -29,6 +29,7 @@ import {
   normalizeBaseUrl,
   resolveDescription,
   resolveLanguage,
+  resolvePageTitle,
   textDirection,
 } from './seo.js'
 import { escapeHtml, loadTheme, render, type ThemeAssets } from './templates.js'
@@ -486,6 +487,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
   // whether the caller (platform vs self-hosted) passes `https://x.com`
   // or `https://x.com/`.
   const canonicalFor = (slug: string): string => normalizeBaseUrl(config.baseUrl) + '/' + slug + '/'
+  const markdownUrlFor = (slug: string): string =>
+    normalizeBaseUrl(config.baseUrl) + '/' + slug + '.md'
 
   const blogRootUrl = (): string => normalizeBaseUrl(config.baseUrl) + '/'
 
@@ -673,12 +676,20 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       lang,
       dir,
       blogName: blogDisplayName(blog),
+      // <title> is the search result and follows seoTitle; the <h1> stays post.title.
+      pageTitle: resolvePageTitle(post, blog),
       postTitle: post.title,
       postPublishedAt: post.publishedAt ?? '',
       postPublishedAtDisplay: formatDate(post.publishedAt, lang),
       themeCssHref: '../style.css',
       blogHomeHref,
       canonicalUrl,
+      feedUrl: blogRootUrl() + 'feed.xml',
+      // Only published posts have a `<slug>.md` (renderPost skips drafts).
+      markdownAlternate:
+        post.status === 'published'
+          ? `<link rel="alternate" type="text/markdown" href="${escapeHtml(markdownUrlFor(post.slug))}">`
+          : '',
       alternates: renderAlternates(alternates, rootLang),
       seoMeta: buildSeoMeta({
         post,
@@ -777,14 +788,21 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       // root changing (which a publish can cause, see listBlogLanguages).
       // The root language's `lang/` copy is a duplicate: it points its
       // canonical at `/` and carries no hreflang of its own.
-      const pages: { lang: string; dir: string; prefix: string; canonical: boolean }[] = [
-        { lang: rootLang, dir: blogDir, prefix: '', canonical: true },
+      const pages: {
+        lang: string
+        dir: string
+        prefix: string
+        canonical: boolean
+        feedUrl: string
+      }[] = [
+        { lang: rootLang, dir: blogDir, prefix: '', canonical: true, feedUrl: root + 'feed.xml' },
         ...(languages.length > 1
           ? languages.map((l) => ({
               lang: l,
               dir: join(blogDir, 'lang', languageSegment(l)),
               prefix: '../../',
               canonical: l !== rootLang,
+              feedUrl: root + 'lang/' + languageSegment(l) + '/feed.xml',
             }))
           : []),
       ]
@@ -804,6 +822,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
           themeCssHref: prefix + 'style.css',
           faviconHref: prefix + 'favicon.svg',
           canonicalUrl: homeUrl(root, lang, rootLang),
+          // `/` → the all-languages feed; `lang/<tag>/` → that language's.
+          feedUrl: page.feedUrl,
           alternates: page.canonical ? renderAlternates(homes, rootLang) : '',
           languageNav: renderLanguageNav(
             languages.map((l) => ({
@@ -824,6 +844,13 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
         writeFileAtomic(join(page.dir, 'index.html'), applyPostprocess(html, blogId))
       }
+
+      // Every page links /feed.xml, but the manifests are otherwise written
+      // only when a post's lifecycle changes. A blog with no published posts
+      // gets them here (an empty feed, so the link never 404s), rewritten
+      // every time because nothing else would carry a new baseUrl or title
+      // into them. With posts, a missing feed is written once.
+      if (posts.length === 0 || !existsSync(join(blogDir, 'feed.xml'))) renderManifests(blogId)
     },
 
     pruneLanguageHomes(blogId) {

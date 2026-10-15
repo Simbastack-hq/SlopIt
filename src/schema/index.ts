@@ -178,7 +178,9 @@ export const PostPatchSchema = z
     seoTitle: z
       .string()
       .max(200)
-      .describe('New title for search results and link previews, up to 200 characters.')
+      .describe(
+        'New title for search results and link previews, up to 200 characters, used exactly as written.',
+      )
       .optional(),
     seoDescription: z
       .string()
