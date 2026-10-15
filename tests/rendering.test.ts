@@ -102,7 +102,7 @@ describe('loadTheme', () => {
   it('post template contains expected placeholders', () => {
     const theme = loadTheme('minimal')
     expect(theme.post).toContain('{{postTitle}}')
-    expect(theme.post).toContain('{{postSeoTitle}}')
+    expect(theme.post).toContain('{{pageTitle}}')
     expect(theme.post).toContain('{{{postBody}}}')
     expect(theme.post).toContain('{{themeCssHref}}')
     expect(theme.post).toContain('{{blogHomeHref}}')
@@ -736,7 +736,8 @@ describe('createRenderer — renderPost', () => {
     )
 
     const html = readFileSync(join(outputDir, blog.id, 's', 'index.html'), 'utf8')
-    expect(html).toContain('<title>Override — bb</title>')
+    // seoTitle is the whole search title, as written: no blog name appended.
+    expect(html).toContain('<title>Override</title>')
     expect(html).toContain('<h1>Default</h1>')
     expect(html).toContain('<meta property="og:title" content="Override">')
     expect(html).toContain('<meta name="description" content="Custom.">')

@@ -84,6 +84,16 @@ export function resolveTitle(post: Post): string {
 }
 
 /**
+ * A post page's `<title>`, the title search engines show. `seoTitle` is
+ * used exactly as written: an author who sets it is choosing the whole
+ * search title, so the blog name is not appended (it may already be in
+ * there). Without one it is `title — blog name`.
+ */
+export function resolvePageTitle(post: Post, blog: Pick<Blog, 'id' | 'name' | 'title'>): string {
+  return nonBlank(post.seoTitle) ?? `${post.title} — ${blogDisplayName(blog)}`
+}
+
+/**
  * Resolve a post's description via the documented chain:
  *   post.seoDescription → post.excerpt → extractDescription(post.body)
  * Each candidate is treated as absent when blank/whitespace-only.

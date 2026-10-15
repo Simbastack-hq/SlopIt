@@ -114,7 +114,7 @@ export const PostInputBaseSchema = z.object({
     .string()
     .max(200)
     .describe(
-      'Title for search results and link previews, up to 200 characters. Defaults to `title`.',
+      'Title for search results and link previews, up to 200 characters, used exactly as written (the blog name is not added). Defaults to `title`, which search results show as "<title> — <blog name>".',
     )
     .optional(),
   seoDescription: z
