@@ -1183,8 +1183,24 @@ describe('createRenderer — renderBlog', () => {
     expect(feed).not.toContain('<item>')
   })
 
-  it('leaves an existing feed alone', () => {
+  it("rewrites a no-post blog's feed with the current baseUrl", () => {
     const { blog } = createBlog(store, { name: 'bb' })
+    createRenderer({ store, outputDir, baseUrl: 'https://old.example.com' }).renderBlog(blog.id)
+    createRenderer({ store, outputDir, baseUrl: 'https://new.example.com' }).renderBlog(blog.id)
+
+    const feed = readFileSync(join(outputDir, blog.id, 'feed.xml'), 'utf8')
+    expect(feed).toContain('https://new.example.com/')
+    expect(feed).not.toContain('old.example.com')
+  })
+
+  it('leaves an existing feed alone on a blog with published posts', () => {
+    const { blog } = createBlog(store, { name: 'bb' })
+    store.db
+      .prepare(
+        `INSERT INTO posts (id, blog_id, slug, title, body, status, published_at)
+         VALUES ('p1', ?, 'pub', 'Pub', 'x', 'published', '2025-01-01T00:00:00Z')`,
+      )
+      .run(blog.id)
     const renderer = createRenderer({ store, outputDir, baseUrl: 'https://b.example.com' })
     mkdirSync(join(outputDir, blog.id), { recursive: true })
     writeFileSync(join(outputDir, blog.id, 'feed.xml'), 'existing')

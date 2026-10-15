@@ -845,10 +845,12 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         writeFileAtomic(join(page.dir, 'index.html'), applyPostprocess(html, blogId))
       }
 
-      // Every page links /feed.xml, but the manifests are first written on
-      // a publish. A blog that hasn't published yet gets them (an empty
-      // feed) now, so the link never 404s.
-      if (!existsSync(join(blogDir, 'feed.xml'))) renderManifests(blogId)
+      // Every page links /feed.xml, but the manifests are otherwise written
+      // only when a post's lifecycle changes. A blog with no published posts
+      // gets them here (an empty feed, so the link never 404s), rewritten
+      // every time because nothing else would carry a new baseUrl or title
+      // into them. With posts, a missing feed is written once.
+      if (posts.length === 0 || !existsSync(join(blogDir, 'feed.xml'))) renderManifests(blogId)
     },
 
     pruneLanguageHomes(blogId) {
