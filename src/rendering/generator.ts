@@ -29,7 +29,7 @@ import {
   normalizeBaseUrl,
   resolveDescription,
   resolveLanguage,
-  resolveTitle,
+  resolvePageTitle,
   textDirection,
 } from './seo.js'
 import { escapeHtml, loadTheme, render, type ThemeAssets } from './templates.js'
@@ -676,9 +676,9 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       lang,
       dir,
       blogName: blogDisplayName(blog),
+      // <title> is the search result and follows seoTitle; the <h1> stays post.title.
+      pageTitle: resolvePageTitle(post, blog),
       postTitle: post.title,
-      // <title> is a search result, so it follows seoTitle; the <h1> stays post.title.
-      postSeoTitle: resolveTitle(post),
       postPublishedAt: post.publishedAt ?? '',
       postPublishedAtDisplay: formatDate(post.publishedAt, lang),
       themeCssHref: '../style.css',
