@@ -54,6 +54,7 @@ export type { Renderer, MutationRenderer, RendererConfig } from './rendering/gen
 
 // REST router factory
 export { createApiRouter } from './api/index.js'
+export { previewFields, type PreviewUrlFor } from './preview.js'
 export type { ApiRouterConfig } from './api/index.js'
 
 // Generators (pure; platform serves, core produces)
