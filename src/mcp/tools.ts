@@ -297,7 +297,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       (args, ctx) => {
         const renderer = config.rendererFor(ctx.blog!)
         const blog = updateBlog(config.store, renderer, ctx.blog!.id, args.patch)
-        return { blog }
+        return { blog, blog_url: renderer.baseUrl }
       },
     ),
   )
@@ -307,7 +307,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     'get_blog',
     {
       ...meta('Get blog', READ),
-      description: "Get the blog's current metadata.",
+      description:
+        "Get the blog's current metadata and its public URL, `blog_url`. A post's page is {blog_url}{slug}/; use it to link posts to each other.",
       inputSchema: z.object({ blog_id: BlogId }).strict(),
       outputSchema: BlogOutput,
     },
@@ -315,7 +316,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       config,
       'get_blog',
       { auth: 'required', crossBlogGuard: true },
-      (_args, ctx) => ({ blog: ctx.blog! }),
+      (_args, ctx) => ({ blog: ctx.blog!, blog_url: config.rendererFor(ctx.blog!).baseUrl }),
     ),
   )
 
