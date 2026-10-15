@@ -844,6 +844,11 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
         writeFileAtomic(join(page.dir, 'index.html'), applyPostprocess(html, blogId))
       }
+
+      // Every page links /feed.xml, but the manifests are first written on
+      // a publish. A blog that hasn't published yet gets them (an empty
+      // feed) now, so the link never 404s.
+      if (!existsSync(join(blogDir, 'feed.xml'))) renderManifests(blogId)
     },
 
     pruneLanguageHomes(blogId) {
