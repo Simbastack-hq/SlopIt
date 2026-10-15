@@ -6,6 +6,7 @@ import { SlopItError } from '../errors.js'
 import { uploadMedia, listMedia, deleteMedia } from '../media.js'
 import type { MediaLimits } from '../media.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
+import { previewFields } from '../preview.js'
 import { BlogPatchSchema, CreateBlogInputSchema, PostPatchSchema } from '../schema/index.js'
 import { PostInputBaseSchema, slugTitleRefinement } from '../schema/post-input-base.js'
 import { signupBlog } from '../signup.js'
@@ -164,7 +165,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
         'Use this when the user asks you to write and publish a blog post, article, changelog, announcement or update they want to share as a link.',
         '`status: "draft"` saves it without publishing.',
         "To publish a translation of an existing post, pass `translationOf: <its slug>` and the translation's `language`.",
-        'Afterwards, always give the user the returned `post_url` (drafts have none).',
+        'Afterwards, always give the user the returned `post_url`. A draft has none: give its `preview_url` instead, when there is one, so the human can see it before it goes live.',
         'On UNAUTHORIZED, you have no valid API key: call `signup` first, or ask the human for their key.',
         'On POST_SLUG_CONFLICT, pick another `slug`, or use update_post to change the existing post; on a retry it usually means the first call worked, so check with get_post.',
         'Pass an `idempotency_key` to make retries safe.',
@@ -188,6 +189,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
         return {
           post,
           ...(postUrl !== undefined ? { post_url: postUrl } : {}),
+          ...previewFields(config.previewUrlFor, ctx.blog!, post),
         }
       },
     ),
@@ -214,7 +216,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
         'Use this when the user wants a published post or draft changed.',
         '`patch: { status: "draft" }` takes a live post offline and `"published"` puts a draft live.',
         "Slug itself can't change; delete and republish if you need a new URL.",
-        'Afterwards, give the user the returned `post_url` when the post is published.',
+        'Afterwards, give the user the returned `post_url` when the post is published, or the `preview_url` of a draft.',
         'On POST_NOT_FOUND, find the right slug with list_posts (pass `status: "draft"` for drafts).',
       ].join(' '),
       inputSchema: UpdatePostInputSchema,
@@ -237,6 +239,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
         return {
           post,
           ...(postUrl !== undefined ? { post_url: postUrl } : {}),
+          ...previewFields(config.previewUrlFor, ctx.blog!, post),
         }
       },
     ),
@@ -297,7 +300,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       (args, ctx) => {
         const renderer = config.rendererFor(ctx.blog!)
         const blog = updateBlog(config.store, renderer, ctx.blog!.id, args.patch)
-        return { blog }
+        return { blog, blog_url: renderer.baseUrl }
       },
     ),
   )
@@ -307,7 +310,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     'get_blog',
     {
       ...meta('Get blog', READ),
-      description: "Get the blog's current metadata.",
+      description:
+        "Get the blog's current metadata and its public URL, `blog_url`. A post's page is {blog_url}{slug}/; use it to link posts to each other.",
       inputSchema: z.object({ blog_id: BlogId }).strict(),
       outputSchema: BlogOutput,
     },
@@ -315,7 +319,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       config,
       'get_blog',
       { auth: 'required', crossBlogGuard: true },
-      (_args, ctx) => ({ blog: ctx.blog! }),
+      (_args, ctx) => ({ blog: ctx.blog!, blog_url: config.rendererFor(ctx.blog!).baseUrl }),
     ),
   )
 
@@ -324,7 +328,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     'get_post',
     {
       ...meta('Get post', READ),
-      description: 'Get a single post by its slug.',
+      description:
+        'Get a single post by its slug. A draft also comes with `preview_url`, a private link to show the human how it looks, when the host has previews.',
       inputSchema: z.object({ blog_id: BlogId, slug: PostSlug }).strict(),
       outputSchema: PostOutput,
     },
@@ -332,7 +337,10 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       config,
       'get_post',
       { auth: 'required', crossBlogGuard: true },
-      (args, ctx) => ({ post: getPost(config.store, ctx.blog!.id, args.slug) }),
+      (args, ctx) => {
+        const post = getPost(config.store, ctx.blog!.id, args.slug)
+        return { post, ...previewFields(config.previewUrlFor, ctx.blog!, post) }
+      },
     ),
   )
 

@@ -102,19 +102,35 @@ export const SignupOutput = toolOutput({
     .describe('True only when an email was given and the welcome email went out.'),
 })
 
+const PreviewUrl = z
+  .string()
+  .optional()
+  .describe(
+    'Private link to a rendered draft for the human to review: not indexed, not listed anywhere. Present only for drafts, on hosts with previews.',
+  )
+
 export const PostWriteOutput = toolOutput({
   post: PostShape.optional(),
   post_url: z
     .string()
     .optional()
     .describe('Live URL of the post. Present only when it is published.'),
+  preview_url: PreviewUrl,
 })
 
-export const PostOutput = toolOutput({ post: PostShape.optional() })
+export const PostOutput = toolOutput({ post: PostShape.optional(), preview_url: PreviewUrl })
 
 export const PostListOutput = toolOutput({ posts: z.array(PostShape).optional() })
 
-export const BlogOutput = toolOutput({ blog: BlogShape.optional() })
+export const BlogOutput = toolOutput({
+  blog: BlogShape.optional(),
+  blog_url: z
+    .string()
+    .optional()
+    .describe(
+      "The blog's public URL (its custom domain once one is verified). Posts live at {blog_url}{slug}/.",
+    ),
+})
 
 export const DeletedOutput = toolOutput({ deleted: z.literal(true).optional() })
 

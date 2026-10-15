@@ -26,6 +26,11 @@ export function generateSkillFile(args: {
   example?: { blogUrl: string; postSlug: string }
   /** Where this file is served. Goes into the "remember this blog" note. */
   skillUrl?: string
+  /**
+   * The host returns `preview_url` on drafts (ApiRouterConfig.previewUrlFor).
+   * Adds a short paragraph telling agents to show it to the human.
+   */
+  draftPreviews?: boolean
 }): string {
   const {
     baseUrl,
@@ -34,6 +39,7 @@ export function generateSkillFile(args: {
     blogUrlForms,
     example = { blogUrl: 'https://blog.example.com/', postSlug: 'hello-world' },
     skillUrl,
+    draftPreviews = false,
   } = args
   const apiOrigin = new URL(baseUrl).origin
   const ex = example.blogUrl.endsWith('/') ? example.blogUrl : example.blogUrl + '/'
@@ -158,7 +164,13 @@ A post's HTML page is \`{blog_url}{post-slug}/\` (e.g. \`${ex}${exSlug}/\`); its
 ## Schema
 
 Call \`GET ${baseUrl}/schema\` for the machine-readable JSONSchema of \`PostInput\`. Summary fields: \`title\` (required), \`body\` (required, markdown), optional \`slug\` (auto-derived from title otherwise), \`status\` (\`draft\`|\`published\`, default \`published\`), \`tags\`, \`excerpt\`, \`seoTitle\`, \`seoDescription\`, \`author\`, \`coverImage\`, \`language\`, \`translationOf\`.
-
+${
+  draftPreviews
+    ? `
+**Draft previews.** A draft has no public URL, so its create, update and get responses (REST and MCP) carry \`preview_url\` instead: a private link where the human can see the draft rendered. It is not indexed or listed anywhere; anyone with the link can open it, so share it only with the human. Give it to them when you save a draft. Once the post is published, use \`post_url\`.
+`
+    : ''
+}
 The blog object carries a \`title\`: its display name, or \`null\` when none is set (the blog then shows its URL name). Set or change it with \`PATCH ${baseUrl}/blogs/:id\` and body \`{ "title": "Jane's Travel Notes" }\` (or \`update_blog\` with \`patch: { title: "..." }\`); every page, the feeds and \`llms.txt\` are re-rendered with it. \`{ "title": null }\` removes it.
 
 \`parentSiteUrl\` (an absolute http(s) URL) puts a "Main site →" link back to that site beside the blog's name on every page. When the blog belongs to a product, set it to the product's main site: \`PATCH ${baseUrl}/blogs/:id\` with \`{ "parentSiteUrl": "https://acme.example" }\` (or \`update_blog\`). \`{ "parentSiteUrl": null }\` removes it.
@@ -239,7 +251,7 @@ Over HTTP (the streamable HTTP transport), every \`POST\` to the MCP endpoint mu
 | update_post | bearer | yes | Edit an existing post. |
 | delete_post | bearer | yes | Remove a post permanently. |
 | update_blog | bearer | yes | Edit blog metadata (\`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`). |
-| get_blog | bearer | — | Get blog metadata. |
+| get_blog | bearer | — | Get blog metadata and its public URL (\`blog_url\`). |
 | get_post | bearer | — | Get a single post by slug. |
 | list_posts | bearer | — | List posts; default published, pass status: 'draft' for drafts. |
 | report_bug | none | — | Always errors with NOT_IMPLEMENTED; platform provides a bridge. |
