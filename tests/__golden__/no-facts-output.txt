@@ -1,0 +1,787 @@
+=== code-excerpt/index.html ===
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Code excerpt — Golden</title>
+    <link rel="canonical" href="https://golden.example/code-excerpt/" />
+    <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="alternate" type="text/markdown" href="https://golden.example/code-excerpt.md">  <meta name="description" content="Write {{fact:incode}} in a body.">
+<meta property="og:title" content="Code excerpt">
+<meta property="og:description" content="Write {{fact:incode}} in a body.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://golden.example/code-excerpt/">
+<meta property="og:site_name" content="Golden">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-05-01T10:00:00.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Code excerpt">
+<meta name="twitter:description" content="Write {{fact:incode}} in a body."> <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Code excerpt","datePublished":"2026-05-01T10:00:00.000Z","mainEntityOfPage":"https://golden.example/code-excerpt/","inLanguage":"en","isPartOf":{"@type":"Blog","name":"Golden"},"description":"Write {{fact:incode}} in a body."}</script>
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="masthead-name" href="../lang/en/">Golden</a>
+      
+    </header>
+    <article>
+      <header>
+        <h1>Code excerpt</h1>
+        <time datetime="2026-05-01T10:00:00.000Z">May 1, 2026</time>
+         
+      </header>
+      <div class="post-body"> <p>Write <code>{{fact:in_code}}</code> in a body.</p>
+</div>
+       <nav class="more-from" aria-labelledby="more-from-heading"><h2 id="more-from-heading">More from this blog</h2><ul><li><a href="../hello/">Hello world</a><p>An English post.</p></li><li><a href="../explicit/">Explicit excerpt</a><p>SEO description.</p></li><li><a href="../everything/">Everything at once</a><p>Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…</p></li></ul></nav>
+    </article>
+    <footer><a href="https://slopit.io">Powered by SlopIt</a></footer>
+  </body>
+</html>
+
+=== code-excerpt.md ===
+---
+title: "Code excerpt"
+slug: "code-excerpt"
+language: "en"
+date: "2026-05-01T10:00:00.000Z"
+description: "Write {{fact:incode}} in a body."
+canonical: "https://golden.example/code-excerpt/"
+---
+
+Write `{{fact:in_code}}` in a body.
+
+=== everything/index.html ===
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Everything at once — Golden</title>
+    <link rel="canonical" href="https://golden.example/everything/" />
+    <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="alternate" type="text/markdown" href="https://golden.example/everything.md">  <meta name="description" content="Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…">
+<meta name="author" content="Ada">
+<meta property="og:title" content="Everything at once">
+<meta property="og:description" content="Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://golden.example/everything/">
+<meta property="og:site_name" content="Golden">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://img.example/cover.png">
+<meta property="og:image:alt" content="Everything at once">
+<meta property="article:published_time" content="2026-01-01T10:00:00.000Z">
+<meta property="article:modified_time" content="2026-02-01T10:00:00.000Z">
+<meta property="article:author" content="Ada">
+<meta property="article:tag" content="ai">
+<meta property="article:tag" content="notes">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Everything at once">
+<meta name="twitter:description" content="Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…">
+<meta name="twitter:image" content="https://img.example/cover.png"> <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Everything at once","datePublished":"2026-01-01T10:00:00.000Z","mainEntityOfPage":"https://golden.example/everything/","inLanguage":"en","isPartOf":{"@type":"Blog","name":"Golden"},"dateModified":"2026-02-01T10:00:00.000Z","author":{"@type":"Person","name":"Ada"},"image":"https://img.example/cover.png","description":"Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…","keywords":"ai,notes"}</script>
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="masthead-name" href="../lang/en/">Golden</a>
+      
+    </header>
+    <article>
+      <header>
+        <h1>Everything at once</h1>
+        <time datetime="2026-01-01T10:00:00.000Z">January 1, 2026</time>
+         <img class="cover" src="https://img.example/cover.png" alt="Everything at once">
+      </header>
+      <div class="post-body"> <p>Intro paragraph with <strong>bold</strong>, <em>emphasis</em>, a <a href="https://example.com" title="t">link</a> and <code>code</code>.</p>
+<h2 id="a-section">A section</h2>
+<ul>
+<li>item one</li>
+<li>item {{ fact:spaced }} two</li>
+</ul>
+<ol>
+<li>first</li>
+</ol>
+<blockquote>
+<p>quoted {{fact:Upper}} text</p>
+</blockquote>
+<div class="table-scroll" role="region" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Plan</th>
+<th>Price</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Pro</td>
+<td>$12/mo</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-js">const t = &quot;{{fact:in_fence}}&quot;
+</code></pre>
+<p>Inline <code>{{fact:in_span}}</code> stays literal, as does {fact:single}.</p>
+<p><img src="https://img.example/a.png" alt="alt text"></p>
+<iframe src="https://www.youtube-nocookie.com/embed/3mlRiF-LeMc" title="YouTube video" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+<h2 id="setext-heading">Setext heading</h2>
+</div>
+      <div class="tags"><span>#ai</span><span>#notes</span></div> <nav class="more-from" aria-labelledby="more-from-heading"><h2 id="more-from-heading">More from this blog</h2><ul><li><a href="../code-excerpt/">Code excerpt</a><p>Write {{fact:incode}} in a body.</p></li><li><a href="../hello/">Hello world</a><p>An English post.</p></li><li><a href="../explicit/">Explicit excerpt</a><p>SEO description.</p></li></ul></nav>
+    </article>
+    <footer><a href="https://slopit.io">Powered by SlopIt</a></footer>
+  </body>
+</html>
+
+=== everything.md ===
+---
+title: "Everything at once"
+slug: "everything"
+language: "en"
+date: "2026-01-01T10:00:00.000Z"
+updated: "2026-02-01T10:00:00.000Z"
+author: "Ada"
+description: "Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…"
+canonical: "https://golden.example/everything/"
+tags: ["ai", "notes"]
+---
+
+Intro paragraph with **bold**, _emphasis_, a [link](https://example.com "t") and `code`.
+
+## A section
+
+- item one
+- item {{ fact:spaced }} two
+1. first
+
+> quoted {{fact:Upper}} text
+
+| Plan | Price |
+|---|---|
+| Pro | $12/mo |
+
+```js
+const t = "{{fact:in_fence}}"
+```
+
+Inline `{{fact:in_span}}` stays literal, as does {fact:single}.
+
+![alt text](https://img.example/a.png)
+
+https://youtu.be/3mlRiF-LeMc
+
+Setext heading
+---
+
+<script>alert(1)</script>
+
+=== explicit/index.html ===
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SEO title</title>
+    <link rel="canonical" href="https://golden.example/explicit/" />
+    <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="alternate" type="text/markdown" href="https://golden.example/explicit.md">  <meta name="description" content="SEO description.">
+<meta property="og:title" content="SEO title">
+<meta property="og:description" content="SEO description.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://golden.example/explicit/">
+<meta property="og:site_name" content="Golden">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-02-01T10:00:00.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="SEO title">
+<meta name="twitter:description" content="SEO description."> <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"SEO title","datePublished":"2026-02-01T10:00:00.000Z","mainEntityOfPage":"https://golden.example/explicit/","inLanguage":"en","isPartOf":{"@type":"Blog","name":"Golden"},"description":"SEO description."}</script>
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="masthead-name" href="../lang/en/">Golden</a>
+      
+    </header>
+    <article>
+      <header>
+        <h1>Explicit excerpt</h1>
+        <time datetime="2026-02-01T10:00:00.000Z">February 1, 2026</time>
+         
+      </header>
+      <div class="post-body"> <p>Short body.</p>
+<h3 id="small-heading">Small heading</h3>
+<p>Text.</p>
+</div>
+       <nav class="more-from" aria-labelledby="more-from-heading"><h2 id="more-from-heading">More from this blog</h2><ul><li><a href="../code-excerpt/">Code excerpt</a><p>Write {{fact:incode}} in a body.</p></li><li><a href="../hello/">Hello world</a><p>An English post.</p></li><li><a href="../everything/">Everything at once</a><p>Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…</p></li></ul></nav>
+    </article>
+    <footer><a href="https://slopit.io">Powered by SlopIt</a></footer>
+  </body>
+</html>
+
+=== explicit.md ===
+---
+title: "Explicit excerpt"
+slug: "explicit"
+language: "en"
+date: "2026-02-01T10:00:00.000Z"
+description: "SEO description."
+canonical: "https://golden.example/explicit/"
+---
+
+Short body.
+
+### Small heading
+
+Text.
+
+=== feed.xml ===
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Golden</title>
+    <link>https://golden.example/</link>
+    <description>An agent-first blog hosted on SlopIt.</description>
+    <language>en</language>
+    <atom:link href="https://golden.example/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Code excerpt</title>
+      <link>https://golden.example/code-excerpt/</link>
+      <guid isPermaLink="true">https://golden.example/code-excerpt/</guid>
+      <pubDate>Fri, 01 May 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Golden</dc:creator>
+      <description>Write {{fact:incode}} in a body.</description>
+      <content:encoded><![CDATA[<p>Write <code>{{fact:in_code}}</code> in a body.</p>
+]]></content:encoded>
+    </item>
+    <item>
+      <title>Hello world</title>
+      <link>https://golden.example/hello/</link>
+      <guid isPermaLink="true">https://golden.example/hello/</guid>
+      <pubDate>Wed, 01 Apr 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Golden</dc:creator>
+      <description>An English post.</description>
+      <content:encoded><![CDATA[<p>An English post.</p>
+]]></content:encoded>
+    </item>
+    <item>
+      <title>Hallo Welt</title>
+      <link>https://golden.example/hallo/</link>
+      <guid isPermaLink="true">https://golden.example/hallo/</guid>
+      <pubDate>Sun, 01 Mar 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Golden</dc:creator>
+      <description>Ein deutscher Beitrag.</description>
+      <content:encoded><![CDATA[<p>Ein deutscher Beitrag.</p>
+]]></content:encoded>
+    </item>
+    <item>
+      <title>Explicit excerpt</title>
+      <link>https://golden.example/explicit/</link>
+      <guid isPermaLink="true">https://golden.example/explicit/</guid>
+      <pubDate>Sun, 01 Feb 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Golden</dc:creator>
+      <description>SEO description.</description>
+      <content:encoded><![CDATA[<p>Short body.</p>
+<h3>Small heading</h3>
+<p>Text.</p>
+]]></content:encoded>
+    </item>
+    <item>
+      <title>Everything at once</title>
+      <link>https://golden.example/everything/</link>
+      <guid isPermaLink="true">https://golden.example/everything/</guid>
+      <pubDate>Thu, 01 Jan 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Ada</dc:creator>
+      <description>Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…</description>
+      <content:encoded><![CDATA[<p>Intro paragraph with <strong>bold</strong>, <em>emphasis</em>, a <a href="https://example.com" title="t">link</a> and <code>code</code>.</p>
+<h2>A section</h2>
+<ul>
+<li>item one</li>
+<li>item {{ fact:spaced }} two</li>
+</ul>
+<ol>
+<li>first</li>
+</ol>
+<blockquote>
+<p>quoted {{fact:Upper}} text</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Plan</th>
+<th>Price</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Pro</td>
+<td>$12/mo</td>
+</tr>
+</tbody></table>
+<pre><code class="language-js">const t = &quot;{{fact:in_fence}}&quot;
+</code></pre>
+<p>Inline <code>{{fact:in_span}}</code> stays literal, as does {fact:single}.</p>
+<p><img src="https://img.example/a.png" alt="alt text"></p>
+<p><a href="https://youtu.be/3mlRiF-LeMc">https://youtu.be/3mlRiF-LeMc</a></p>
+<h2>Setext heading</h2>
+]]></content:encoded>
+    </item>
+  </channel>
+</rss>
+
+=== hallo/index.html ===
+<!doctype html>
+<html lang="de" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Hallo Welt — Golden</title>
+    <link rel="canonical" href="https://golden.example/hallo/" />
+    <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="alternate" type="text/markdown" href="https://golden.example/hallo.md"> <link rel="alternate" hreflang="en" href="https://golden.example/hello/">
+<link rel="alternate" hreflang="de" href="https://golden.example/hallo/">
+<link rel="alternate" hreflang="x-default" href="https://golden.example/hello/"> <meta name="description" content="Ein deutscher Beitrag.">
+<meta property="og:title" content="Hallo Welt">
+<meta property="og:description" content="Ein deutscher Beitrag.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://golden.example/hallo/">
+<meta property="og:site_name" content="Golden">
+<meta property="og:locale" content="de_DE">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="article:published_time" content="2026-03-01T10:00:00.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Hallo Welt">
+<meta name="twitter:description" content="Ein deutscher Beitrag."> <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Hallo Welt","datePublished":"2026-03-01T10:00:00.000Z","mainEntityOfPage":"https://golden.example/hallo/","inLanguage":"de","isPartOf":{"@type":"Blog","name":"Golden"},"description":"Ein deutscher Beitrag."}</script>
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="masthead-name" href="../lang/de/">Golden</a>
+      
+    </header>
+    <article>
+      <header>
+        <h1>Hallo Welt</h1>
+        <time datetime="2026-03-01T10:00:00.000Z">1. März 2026</time>
+        <nav class="translations" aria-label="Andere Sprachen"><a lang="en" hreflang="en" dir="auto" href="../hello/">English</a><span aria-current="page" lang="de" dir="auto">Deutsch</span></nav> 
+      </header>
+      <div class="post-body"> <p>Ein deutscher Beitrag.</p>
+</div>
+       
+    </article>
+    <footer><a href="https://slopit.io">Powered by SlopIt</a></footer>
+  </body>
+</html>
+
+=== hallo.md ===
+---
+title: "Hallo Welt"
+slug: "hallo"
+language: "de"
+date: "2026-03-01T10:00:00.000Z"
+description: "Ein deutscher Beitrag."
+canonical: "https://golden.example/hallo/"
+---
+
+Ein deutscher Beitrag.
+
+=== hello/index.html ===
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Hello world — Golden</title>
+    <link rel="canonical" href="https://golden.example/hello/" />
+    <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="alternate" type="text/markdown" href="https://golden.example/hello.md"> <link rel="alternate" hreflang="en" href="https://golden.example/hello/">
+<link rel="alternate" hreflang="de" href="https://golden.example/hallo/">
+<link rel="alternate" hreflang="x-default" href="https://golden.example/hello/"> <meta name="description" content="An English post.">
+<meta property="og:title" content="Hello world">
+<meta property="og:description" content="An English post.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://golden.example/hello/">
+<meta property="og:site_name" content="Golden">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="de_DE">
+<meta property="article:published_time" content="2026-04-01T10:00:00.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Hello world">
+<meta name="twitter:description" content="An English post."> <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Hello world","datePublished":"2026-04-01T10:00:00.000Z","mainEntityOfPage":"https://golden.example/hello/","inLanguage":"en","isPartOf":{"@type":"Blog","name":"Golden"},"description":"An English post."}</script>
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="masthead-name" href="../lang/en/">Golden</a>
+      
+    </header>
+    <article>
+      <header>
+        <h1>Hello world</h1>
+        <time datetime="2026-04-01T10:00:00.000Z">April 1, 2026</time>
+        <nav class="translations" aria-label="Other languages"><span aria-current="page" lang="en" dir="auto">English</span><a lang="de" hreflang="de" dir="auto" href="../hallo/">Deutsch</a></nav> 
+      </header>
+      <div class="post-body"> <p>An English post.</p>
+</div>
+       <nav class="more-from" aria-labelledby="more-from-heading"><h2 id="more-from-heading">More from this blog</h2><ul><li><a href="../code-excerpt/">Code excerpt</a><p>Write {{fact:incode}} in a body.</p></li><li><a href="../explicit/">Explicit excerpt</a><p>SEO description.</p></li><li><a href="../everything/">Everything at once</a><p>Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…</p></li></ul></nav>
+    </article>
+    <footer><a href="https://slopit.io">Powered by SlopIt</a></footer>
+  </body>
+</html>
+
+=== hello.md ===
+---
+title: "Hello world"
+slug: "hello"
+language: "en"
+date: "2026-04-01T10:00:00.000Z"
+description: "An English post."
+canonical: "https://golden.example/hello/"
+---
+
+An English post.
+
+=== index.html ===
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Golden</title>
+    <link rel="canonical" href="https://golden.example/" />
+    <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="alternate" hreflang="en" href="https://golden.example/">
+<link rel="alternate" hreflang="de" href="https://golden.example/lang/de/">
+<link rel="alternate" hreflang="x-default" href="https://golden.example/">
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <h1 class="masthead-name">Golden</h1>
+      
+    </header>
+    <nav class="translations" aria-label="Other languages"><span aria-current="page" lang="en" dir="auto">English</span><a lang="de" hreflang="de" dir="auto" href="lang/de/">Deutsch</a></nav>
+    <main><article class="post-item"><h2><a href="code-excerpt/">Code excerpt</a></h2><time datetime="2026-05-01T10:00:00.000Z">May 1, 2026</time><p>Write {{fact:incode}} in a body.</p></article><article class="post-item"><h2><a href="hello/">Hello world</a></h2><time datetime="2026-04-01T10:00:00.000Z">April 1, 2026</time><p>An English post.</p></article><article class="post-item"><h2><a href="explicit/">Explicit excerpt</a></h2><time datetime="2026-02-01T10:00:00.000Z">February 1, 2026</time><p>A hand-written summary.</p></article><article class="post-item"><h2><a href="everything/">Everything at once</a></h2><time datetime="2026-01-01T10:00:00.000Z">January 1, 2026</time><p>Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…</p></article></main>
+    <footer><a href="https://slopit.io">Powered by SlopIt</a></footer>
+  </body>
+</html>
+
+=== lang/de/feed.xml ===
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Golden</title>
+    <link>https://golden.example/lang/de/</link>
+    <description>An agent-first blog hosted on SlopIt.</description>
+    <language>de</language>
+    <atom:link href="https://golden.example/lang/de/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Hallo Welt</title>
+      <link>https://golden.example/hallo/</link>
+      <guid isPermaLink="true">https://golden.example/hallo/</guid>
+      <pubDate>Sun, 01 Mar 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Golden</dc:creator>
+      <description>Ein deutscher Beitrag.</description>
+      <content:encoded><![CDATA[<p>Ein deutscher Beitrag.</p>
+]]></content:encoded>
+    </item>
+  </channel>
+</rss>
+
+=== lang/de/index.html ===
+<!doctype html>
+<html lang="de" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Golden</title>
+    <link rel="canonical" href="https://golden.example/lang/de/" />
+    <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/lang/de/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg" />
+    <link rel="alternate" hreflang="en" href="https://golden.example/">
+<link rel="alternate" hreflang="de" href="https://golden.example/lang/de/">
+<link rel="alternate" hreflang="x-default" href="https://golden.example/">
+    <link rel="stylesheet" href="../../style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <h1 class="masthead-name">Golden</h1>
+      
+    </header>
+    <nav class="translations" aria-label="Andere Sprachen"><a lang="en" hreflang="en" dir="auto" href="../../lang/en/">English</a><span aria-current="page" lang="de" dir="auto">Deutsch</span></nav>
+    <main><article class="post-item"><h2><a href="../../hallo/">Hallo Welt</a></h2><time datetime="2026-03-01T10:00:00.000Z">1. März 2026</time><p>Ein deutscher Beitrag.</p></article></main>
+    <footer><a href="https://slopit.io">Powered by SlopIt</a></footer>
+  </body>
+</html>
+
+=== lang/en/feed.xml ===
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Golden</title>
+    <link>https://golden.example/lang/en/</link>
+    <description>An agent-first blog hosted on SlopIt.</description>
+    <language>en</language>
+    <atom:link href="https://golden.example/lang/en/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Code excerpt</title>
+      <link>https://golden.example/code-excerpt/</link>
+      <guid isPermaLink="true">https://golden.example/code-excerpt/</guid>
+      <pubDate>Fri, 01 May 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Golden</dc:creator>
+      <description>Write {{fact:incode}} in a body.</description>
+      <content:encoded><![CDATA[<p>Write <code>{{fact:in_code}}</code> in a body.</p>
+]]></content:encoded>
+    </item>
+    <item>
+      <title>Hello world</title>
+      <link>https://golden.example/hello/</link>
+      <guid isPermaLink="true">https://golden.example/hello/</guid>
+      <pubDate>Wed, 01 Apr 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Golden</dc:creator>
+      <description>An English post.</description>
+      <content:encoded><![CDATA[<p>An English post.</p>
+]]></content:encoded>
+    </item>
+    <item>
+      <title>Explicit excerpt</title>
+      <link>https://golden.example/explicit/</link>
+      <guid isPermaLink="true">https://golden.example/explicit/</guid>
+      <pubDate>Sun, 01 Feb 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Golden</dc:creator>
+      <description>SEO description.</description>
+      <content:encoded><![CDATA[<p>Short body.</p>
+<h3>Small heading</h3>
+<p>Text.</p>
+]]></content:encoded>
+    </item>
+    <item>
+      <title>Everything at once</title>
+      <link>https://golden.example/everything/</link>
+      <guid isPermaLink="true">https://golden.example/everything/</guid>
+      <pubDate>Thu, 01 Jan 2026 10:00:00 GMT</pubDate>
+      <dc:creator>Ada</dc:creator>
+      <description>Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…</description>
+      <content:encoded><![CDATA[<p>Intro paragraph with <strong>bold</strong>, <em>emphasis</em>, a <a href="https://example.com" title="t">link</a> and <code>code</code>.</p>
+<h2>A section</h2>
+<ul>
+<li>item one</li>
+<li>item {{ fact:spaced }} two</li>
+</ul>
+<ol>
+<li>first</li>
+</ol>
+<blockquote>
+<p>quoted {{fact:Upper}} text</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Plan</th>
+<th>Price</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Pro</td>
+<td>$12/mo</td>
+</tr>
+</tbody></table>
+<pre><code class="language-js">const t = &quot;{{fact:in_fence}}&quot;
+</code></pre>
+<p>Inline <code>{{fact:in_span}}</code> stays literal, as does {fact:single}.</p>
+<p><img src="https://img.example/a.png" alt="alt text"></p>
+<p><a href="https://youtu.be/3mlRiF-LeMc">https://youtu.be/3mlRiF-LeMc</a></p>
+<h2>Setext heading</h2>
+]]></content:encoded>
+    </item>
+  </channel>
+</rss>
+
+=== lang/en/index.html ===
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Golden</title>
+    <link rel="canonical" href="https://golden.example/" />
+    <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/lang/en/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg" />
+    
+    <link rel="stylesheet" href="../../style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <h1 class="masthead-name">Golden</h1>
+      
+    </header>
+    <nav class="translations" aria-label="Other languages"><span aria-current="page" lang="en" dir="auto">English</span><a lang="de" hreflang="de" dir="auto" href="../../lang/de/">Deutsch</a></nav>
+    <main><article class="post-item"><h2><a href="../../code-excerpt/">Code excerpt</a></h2><time datetime="2026-05-01T10:00:00.000Z">May 1, 2026</time><p>Write {{fact:incode}} in a body.</p></article><article class="post-item"><h2><a href="../../hello/">Hello world</a></h2><time datetime="2026-04-01T10:00:00.000Z">April 1, 2026</time><p>An English post.</p></article><article class="post-item"><h2><a href="../../explicit/">Explicit excerpt</a></h2><time datetime="2026-02-01T10:00:00.000Z">February 1, 2026</time><p>A hand-written summary.</p></article><article class="post-item"><h2><a href="../../everything/">Everything at once</a></h2><time datetime="2026-01-01T10:00:00.000Z">January 1, 2026</time><p>Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…</p></article></main>
+    <footer><a href="https://slopit.io">Powered by SlopIt</a></footer>
+  </body>
+</html>
+
+=== llms.txt ===
+# Golden
+
+> An agent-first blog. Read the markdown source by appending `.md` to any post URL.
+
+## Posts
+
+- [Code excerpt](https://golden.example/code-excerpt/): Write {{fact:incode}} in a body.
+- [Hello world](https://golden.example/hello/): An English post.
+- [Hallo Welt](https://golden.example/hallo/): Ein deutscher Beitrag.
+- [Explicit excerpt](https://golden.example/explicit/): SEO description.
+- [Everything at once](https://golden.example/everything/): Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…
+
+=== robots.txt ===
+# Written by SlopIt on every publish. Delete this line to keep your own edits.
+User-agent: *
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /
+
+User-agent: meta-webindexer
+Allow: /
+
+User-agent: meta-externalfetcher
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: Amzn-SearchBot
+Allow: /
+
+User-agent: Amzn-User
+Allow: /
+
+User-agent: MistralAI-User
+Allow: /
+
+User-agent: MistralAI-Index
+Allow: /
+
+User-agent: MistralAI-Training
+Allow: /
+
+User-agent: ExaSearchBot
+Allow: /
+
+User-agent: DuckAssistBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+Sitemap: https://golden.example/sitemap.xml
+
+=== sitemap.xml ===
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://golden.example/</loc>
+    <lastmod>2026-05-01T10:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://golden.example/lang/de/</loc>
+    <lastmod>2026-03-01T10:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://golden.example/code-excerpt/</loc>
+    <lastmod>2026-05-01T10:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://golden.example/hello/</loc>
+    <lastmod>2026-04-01T10:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://golden.example/hallo/</loc>
+    <lastmod>2026-03-01T10:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://golden.example/explicit/</loc>
+    <lastmod>2026-02-01T10:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://golden.example/everything/</loc>
+    <lastmod>2026-02-01T10:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+</urlset>
+
+=== PREVIEW ===
+=== draft/index.html ===
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Still a draft — Golden</title>
+    <link rel="canonical" href="https://golden.example/draft/" />
+    <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+      <meta name="description" content="Not live.">
+<meta property="og:title" content="Still a draft">
+<meta property="og:description" content="Not live.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://golden.example/draft/">
+<meta property="og:site_name" content="Golden">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Still a draft">
+<meta name="twitter:description" content="Not live."> <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Still a draft","datePublished":"2026-06-01T10:00:00.000Z","mainEntityOfPage":"https://golden.example/draft/","inLanguage":"en","isPartOf":{"@type":"Blog","name":"Golden"},"description":"Not live."}</script>
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="masthead-name" href="../lang/en/">Golden</a>
+      
+    </header>
+    <article>
+      <header>
+        <h1>Still a draft</h1>
+        <time datetime=""></time>
+         
+      </header>
+      <div class="post-body"> <p>Not live.</p>
+</div>
+       <nav class="more-from" aria-labelledby="more-from-heading"><h2 id="more-from-heading">More from this blog</h2><ul><li><a href="../code-excerpt/">Code excerpt</a><p>Write {{fact:incode}} in a body.</p></li><li><a href="../hello/">Hello world</a><p>An English post.</p></li><li><a href="../explicit/">Explicit excerpt</a><p>SEO description.</p></li></ul></nav>
+    </article>
+    <footer><a href="https://slopit.io">Powered by SlopIt</a></footer>
+  </body>
+</html>
