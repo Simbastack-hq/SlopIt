@@ -207,6 +207,99 @@ article iframe {
   border-radius: 8px;
 }
 
+/* Tables. renderMarkdown puts each one in a .table-scroll box: a wide
+   table scrolls inside the column instead of widening the page, and the
+   first column (a comparison's row labels) stays put while the rest
+   slides under it. A soft shadow on the trailing edge says there is more
+   to the side and fades once you reach the end (background-attachment:
+   local covers it). Hairline rows, a tinted header, top-aligned cells. */
+article .table-scroll {
+  margin: 28px 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  scrollbar-width: thin;
+  background:
+    linear-gradient(to left, var(--background) 40%, transparent) right center / 48px 100% no-repeat
+      local,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.1), transparent) right center / 16px
+      100% no-repeat scroll,
+    var(--background);
+}
+article .table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+article table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+article th,
+article td {
+  padding: 12px 16px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: break-word;
+}
+/* Five columns or more (a comparison grid): tighter type and padding so
+   it fits the 720px column on a laptop instead of scrolling. */
+article table:has(tr > :nth-child(5)) {
+  font-size: 14px;
+}
+article table:has(tr > :nth-child(5)) :is(th, td) {
+  padding: 10px 12px;
+}
+article :is(th, td):not([align]) {
+  text-align: start;
+}
+article tbody tr:last-child > * {
+  border-bottom: 0;
+}
+article thead th {
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 700;
+  vertical-align: bottom;
+}
+article :is(th, td):first-child {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(--background);
+  border-inline-end: 1px solid var(--border);
+  font-weight: 500;
+}
+article thead th:first-child {
+  background: var(--surface);
+  font-weight: 700;
+}
+article td code {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+@media (hover: hover) {
+  article tbody tr:hover > * {
+    background: color-mix(in srgb, var(--surface) 55%, var(--background));
+  }
+}
+@media (max-width: 640px) {
+  /* Narrow screens: give columns a readable width and let the box
+     scroll, rather than squeezing every cell to a word per line. */
+  article th,
+  article td {
+    min-width: 10rem;
+    padding: 10px 12px;
+  }
+  article :is(th, td):first-child {
+    min-width: 6.5rem;
+  }
+}
+
 /* Contents rail — a long post's sections (renderToc), hung in the margin
    beside the column on screens wide enough to have one. Below that it
    is hidden: on a phone or tablet it could only push the post down. The
