@@ -63,6 +63,18 @@ describe('POST /blogs/:id/posts', () => {
     expect(body.post.tags).toEqual(['a', 'b'])
   })
 
+  it('text/markdown body without ?title= → 400 BAD_REQUEST naming the parameter', async () => {
+    const res = await app.request(`/blogs/${blogId}/posts`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'text/markdown' },
+      body: '# No title\n\nBody.',
+    })
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: { code: string; message: string } }
+    expect(body.error.code).toBe('BAD_REQUEST')
+    expect(body.error.message).toContain('?title=')
+  })
+
   it('409 POST_SLUG_CONFLICT on duplicate slug', async () => {
     await app.request(`/blogs/${blogId}/posts`, {
       method: 'POST',

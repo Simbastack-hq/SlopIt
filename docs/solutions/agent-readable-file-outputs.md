@@ -46,6 +46,7 @@ Reversed ordering (destructive first, manifests after) would leave the DB compen
 
 - A blog with no published post has neither file. A missing robots.txt (any 4xx) means "crawl everything" to crawlers, so that is safe.
 - Crawlers only read robots.txt at a host root. A blog served under a path (`https://host/b/<id>/`) still gets the file, but the host's own robots.txt governs it.
+- A crawler joins `AI_CRAWLERS` only when its operator's page names the robots.txt token. Fetchers the operator says ignore robots.txt (Perplexity-User, Google's user-triggered fetchers) stay out: a rule for them promises nothing. Editing the list changes existing blogs' files only after a manifest sweep (platform: `rerender-manifests`).
 - Blogs rendered before this file existed get it on their next manifest render. Consumers that host many blogs need a re-render sweep after upgrading core (platform: the `rerender-*` scripts).
 
 ## Atomicity
