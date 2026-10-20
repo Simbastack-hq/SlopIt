@@ -581,6 +581,38 @@ describe('renderMarkdown — YouTube embeds (the one allowlisted embed)', () => 
   })
 })
 
+describe('renderMarkdown — tables scroll inside the column', () => {
+  const TABLE = '| | A | B |\n|---|---|---|\n| Free | Yes | No |\n'
+  const OPEN = '<div class="table-scroll" role="region" aria-label="Table" tabindex="0"><table>'
+
+  it('wraps every table in a focusable, labelled scroll region', () => {
+    const out = renderMarkdown(`${TABLE}\ntext\n\n${TABLE}`)
+    expect(out.split(OPEN)).toHaveLength(3)
+    expect(out.split('</table></div>')).toHaveLength(3)
+  })
+
+  it('leaves feed tables bare (readers style them)', () => {
+    const out = renderMarkdown(TABLE, { embeds: false })
+    expect(out).toContain('<table>')
+    expect(out).not.toContain('table-scroll')
+  })
+
+  it('keeps a "<table>" written in code as text', () => {
+    const out = renderMarkdown('`<table>` and\n\n```\n<table></table>\n```')
+    expect(out).not.toContain('table-scroll')
+    expect(out).toContain('&lt;table&gt;')
+  })
+
+  it('ships theme CSS that scrolls the box and pins the first column', () => {
+    const css = readFileSync(
+      join(import.meta.dirname, '..', 'src', 'themes', 'minimal', 'style.css'),
+      'utf8',
+    )
+    expect(css).toMatch(/article \.table-scroll \{[^}]*overflow-x: auto/)
+    expect(css).toMatch(/article :is\(th, td\):first-child \{[^}]*position: sticky/)
+  })
+})
+
 describe('createRenderer — renderPost', () => {
   let dir: string
   let store: Store

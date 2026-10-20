@@ -191,7 +191,26 @@ const headingIds: MarkedExtension = {
   },
 }
 
-const pageMarked = new Marked(safeHtml, youtubeEmbeds, headingIds)
+// Tables: every table on a post page sits in a scroll box, so a wide one
+// (a five-column comparison) scrolls sideways inside the column instead of
+// widening the whole page on a phone. The box is a labelled, focusable
+// region so keyboard users can scroll it too (WCAG 2.1.1). Like headingIds
+// it runs on the finished HTML, where the only <table> tags are marked's.
+// Feeds keep the bare table: readers bring their own styles.
+const tableScroll: MarkedExtension = {
+  hooks: {
+    postprocess(html: string): string {
+      return html
+        .replace(
+          /<table>/g,
+          '<div class="table-scroll" role="region" aria-label="Table" tabindex="0"><table>',
+        )
+        .replace(/<\/table>/g, '</table></div>')
+    },
+  },
+}
+
+const pageMarked = new Marked(safeHtml, youtubeEmbeds, headingIds, tableScroll)
 const feedMarked = new Marked(safeHtml)
 
 // Markdown → HTML. Synchronous because blog posts are short and we render
