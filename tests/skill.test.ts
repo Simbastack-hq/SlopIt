@@ -96,6 +96,19 @@ describe('generateSkillFile', () => {
     expect(intro).not.toMatch(/POST \/signup/)
   })
 
+  it('says a text/markdown post body requires the ?title= query parameter', () => {
+    // The API refuses a markdown body without ?title= (BAD_REQUEST); see
+    // tests/api/posts-create.test.ts. The endpoint table and the Schema
+    // section both have to say so, or agents learn it from a 400.
+    const row = text
+      .split('\n')
+      .find((l) => l.startsWith('| POST https://api.example/blogs/:id/posts'))
+    expect(row).toContain('text/markdown')
+    expect(row).toContain('?title=')
+    expect(text).toContain('Content-Type: text/markdown')
+    expect(text).toMatch(/\?title=<string>/)
+  })
+
   it('refers to GET <baseUrl>/schema for the machine-readable JSONSchema', () => {
     expect(text).toContain('GET https://api.example/schema')
   })

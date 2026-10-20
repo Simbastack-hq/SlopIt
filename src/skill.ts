@@ -126,7 +126,7 @@ All routes are absolute URLs against the API base **\`${baseUrl}\`**. Copy them 
 | POST ${baseUrl}/bridge/report_bug | Submit a bug report (501 in core; platform overrides). No auth. |
 | GET ${baseUrl}/blogs/:id | Get blog info. Auth required. |
 | PATCH ${baseUrl}/blogs/:id | Patch blog metadata: \`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`. |
-| POST ${baseUrl}/blogs/:id/posts | Create a post. JSON or \`text/markdown\` body. |
+| POST ${baseUrl}/blogs/:id/posts | Create a post. JSON body, or a \`text/markdown\` body with a required \`?title=\` query parameter (see Schema). |
 | GET ${baseUrl}/blogs/:id/posts | List posts (query: ?status=draft|published). |
 | GET ${baseUrl}/blogs/:id/posts/:slug | Get a single post. |
 | PATCH ${baseUrl}/blogs/:id/posts/:slug | Patch fields. Slug is immutable. |
@@ -171,6 +171,12 @@ ${
 `
     : ''
 }
+**Markdown body.** \`POST ${baseUrl}/blogs/:id/posts\` also accepts \`Content-Type: text/markdown\`: the request body is the post's markdown, and the \`title\` query parameter is **required** (\`?title=<string>\`, URL-encoded). Without it the call fails with BAD_REQUEST. Optional query parameters: \`status\`, \`slug\`, \`tags\` (comma-separated). Every other \`PostInput\` field needs a JSON body.
+
+    curl -X POST '${baseUrl}/blogs/{blog_id}/posts?title=Hello%20world' \\
+      -H 'Authorization: Bearer <api_key>' -H 'Content-Type: text/markdown' \\
+      --data-binary @post.md
+
 The blog object carries a \`title\`: its display name, or \`null\` when none is set (the blog then shows its URL name). Set or change it with \`PATCH ${baseUrl}/blogs/:id\` and body \`{ "title": "Jane's Travel Notes" }\` (or \`update_blog\` with \`patch: { title: "..." }\`); every page, the feeds and \`llms.txt\` are re-rendered with it. \`{ "title": null }\` removes it.
 
 \`parentSiteUrl\` (an absolute http(s) URL) puts a "Main site →" link back to that site beside the blog's name on every page. When the blog belongs to a product, set it to the product's main site: \`PATCH ${baseUrl}/blogs/:id\` with \`{ "parentSiteUrl": "https://acme.example" }\` (or \`update_blog\`). \`{ "parentSiteUrl": null }\` removes it.
@@ -203,7 +209,7 @@ The two posts form a translation group — one post per language. Every publishe
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| BAD_REQUEST | 400 | Malformed JSON body. Parse your payload before sending. |
+| BAD_REQUEST | 400 | Malformed JSON body, or a \`text/markdown\` body sent without \`?title=\`. Parse your payload before sending. |
 | ZOD_VALIDATION | 400 | Body parsed but failed schema validation. \`details.issues\` holds the Zod issue list. |
 | BLOG_NAME_RESERVED | 400 | Blog name rejected by host policy (reserved subdomain, length, or content rules). \`details.name\` echoes the input. Retry with a different name. |
 ${emailRequiredError}| UNAUTHORIZED | 401 | Missing or invalid api key. |
