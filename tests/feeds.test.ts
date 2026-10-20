@@ -178,6 +178,18 @@ describe('buildRobotsTxt', () => {
       'PerplexityBot',
       'Google-Extended',
       'Applebot-Extended',
+      'meta-externalagent',
+      'meta-webindexer',
+      'meta-externalfetcher',
+      'Amazonbot',
+      'Amzn-SearchBot',
+      'Amzn-User',
+      'MistralAI-User',
+      'MistralAI-Index',
+      'MistralAI-Training',
+      'ExaSearchBot',
+      'DuckAssistBot',
+      'CCBot',
     ]) {
       expect(out).toContain(`\nUser-agent: ${ua}\nAllow: /\n`)
     }

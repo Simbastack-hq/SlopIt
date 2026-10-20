@@ -105,10 +105,16 @@ export function buildSitemap(input: SitemapInput): string {
 // -----------------------------------------------------------------------------
 
 // `User-agent: *` already allows these; naming them makes the welcome
-// explicit. Tokens as each vendor documents them (checked 2026-10-10):
+// explicit. Tokens as each operator documents them (checked 2026-10-21):
 // developers.openai.com/api/docs/bots, Anthropic's "Does Anthropic crawl
 // data from the web" help article, docs.perplexity.ai/guides/bots, Google's
-// common-crawlers page (Google-Extended), support.apple.com/en-us/119829.
+// common-crawlers page (Google-Extended), support.apple.com/en-us/119829,
+// developers.facebook.com/docs/sharing/webmasters/web-crawlers,
+// developer.amazon.com/amazonbot, docs.mistral.ai/robots, crawler.exa.ai,
+// duckduckgo.com/duckduckgo-help-pages/results/duckassistbot, commoncrawl.org/ccbot.
+// Not listed on purpose: fetchers whose operator says they ignore
+// robots.txt because a person asked for the page (Perplexity-User and
+// Google's user-triggered fetchers), so a rule here would promise nothing.
 const AI_CRAWLERS = [
   'GPTBot',
   'OAI-SearchBot',
@@ -119,6 +125,18 @@ const AI_CRAWLERS = [
   'PerplexityBot',
   'Google-Extended',
   'Applebot-Extended',
+  'meta-externalagent',
+  'meta-webindexer',
+  'meta-externalfetcher',
+  'Amazonbot',
+  'Amzn-SearchBot',
+  'Amzn-User',
+  'MistralAI-User',
+  'MistralAI-Index',
+  'MistralAI-Training',
+  'ExaSearchBot',
+  'DuckAssistBot',
+  'CCBot',
 ]
 
 // First line of every robots.txt the renderer writes. The renderer only
