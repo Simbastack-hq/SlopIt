@@ -91,6 +91,7 @@ ${signupIntro}
 
 - \`name\` — DNS-safe blog name (lowercase, 2–63 chars). Omit for an unnamed blog.
 - \`title\` — the blog's display name, e.g. the project or person's name: 1–80 characters, one line. It is the blog's heading and its name in browser tabs, feeds and link previews. Set it whenever you know the project or person the blog is for: without one the blog shows its URL name, or a random id for an unnamed blog.
+- \`parentSiteUrl\` — the main website this blog belongs to, e.g. \`https://acme.example\`. Every page links back to it, so readers and search engines see the blog and the site as one thing. If the blog is for a product, project or business, ask the human for its site (or use the one in the repo or prompt) and set it at signup. Change or clear it later with \`PATCH /blogs/:id\`.
 ${emailBullet}
 - \`theme\` — currently only \`"minimal"\`.
 

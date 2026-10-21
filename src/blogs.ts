@@ -59,13 +59,14 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
   const email = parsed.email ?? null
   const language = parsed.language
   const title = parsed.title ?? null
+  const parentSiteUrl = parsed.parentSiteUrl ?? null
 
   const insert = store.db.prepare(
-    'INSERT INTO blogs (id, name, title, theme, email, language) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO blogs (id, name, title, theme, email, language, parent_site_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
   )
 
   try {
-    insert.run(id, name, title, theme, email, language)
+    insert.run(id, name, title, theme, email, language, parentSiteUrl)
   } catch (e) {
     if (isBlogNameConflict(e)) {
       throw new SlopItError('BLOG_NAME_CONFLICT', `Blog name "${name}" is already taken`)
@@ -73,9 +74,9 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
     throw e
   }
 
-  // Newly-created blog never has analytics or a parent-site URL
-  // configured — both columns default to NULL. Skip those round-trip
-  // SELECTs and build the Blog shape directly from the in-memory inputs.
+  // A newly-created blog never has analytics configured (NULL), and its
+  // parent-site URL is whatever signup passed. Build the Blog shape from
+  // the in-memory inputs instead of selecting those columns back.
   const row = store.db
     .prepare('SELECT id, name, title, theme, created_at, language FROM blogs WHERE id = ?')
     .get(id) as {
@@ -93,7 +94,7 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
     title: row.title,
     theme: row.theme,
     createdAt: isoTimestamp(row.created_at),
-    parentSiteUrl: null,
+    parentSiteUrl,
     language: row.language,
   }
 
