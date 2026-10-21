@@ -1,0 +1,44 @@
+name: Open-source Pro
+description: Free Pro for an open-source project's SlopIt blog. The "Powered by SlopIt" footer stays.
+title: 'Open-source Pro: '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Free Pro for the blog of an open-source project: a public repo under an OSI-approved license, with a release or commits in the last 90 days. The blog is the project's (changelog, devlog or news). We grant it by hand, usually within a few days.
+  - type: input
+    id: repo
+    attributes:
+      label: Repo URL
+      placeholder: https://github.com/owner/project
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: License
+      placeholder: MIT
+    validations:
+      required: true
+  - type: input
+    id: blog
+    attributes:
+      label: Blog URL
+      placeholder: https://yourproject.slopit.io
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Where the repo links to the blog
+      description: The README line or the page on the project's site.
+      placeholder: README, "Changelog" link under Docs
+    validations:
+      required: true
+  - type: checkboxes
+    id: footer
+    attributes:
+      label: Footer
+      options:
+        - label: I agree to keep the "Powered by SlopIt" line at the bottom of every page.
+          required: true
