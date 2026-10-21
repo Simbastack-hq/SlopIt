@@ -28,24 +28,24 @@ export function escapeHtml(s: string): string {
  *   {{{var}}}  → raw value (trust the helper that produced it to have escaped)
  *   {{var}}    → HTML-escaped value
  *
- * Throws if any referenced variable is missing from `vars`. Triple braces
- * are matched FIRST so "{{{a}}}{{b}}" parses as {{{a}}} followed by {{b}}
- * rather than {{ {a}} }{b}}.
+ * One pass over the template: inserted values are never read again as
+ * template syntax, so a post whose text holds `{{x}}` or `{{{x}}}` comes
+ * out as written. (Two passes used to expand, or throw on, braces inside
+ * a post body or title.) Throws if a referenced variable is missing from
+ * `vars`. Triple braces are tried first at each position, so
+ * "{{{a}}}{{b}}" parses as {{{a}}} followed by {{b}}.
  */
 export function render(template: string, vars: Record<string, string>): string {
-  let out = template.replace(/\{\{\{\s*(\w+)\s*\}\}\}/g, (_m, name: string) => {
-    if (!(name in vars)) {
-      throw new Error(`Missing template variable: ${name}`)
-    }
-    return vars[name]
-  })
-  out = out.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, name: string) => {
-    if (!(name in vars)) {
-      throw new Error(`Missing template variable: ${name}`)
-    }
-    return escapeHtml(vars[name])
-  })
-  return out
+  return template.replace(
+    /\{\{\{\s*(\w+)\s*\}\}\}|\{\{\s*(\w+)\s*\}\}/g,
+    (_m, raw: string | undefined, escaped: string | undefined) => {
+      const name = (raw ?? escaped)!
+      if (!(name in vars)) {
+        throw new Error(`Missing template variable: ${name}`)
+      }
+      return raw !== undefined ? vars[name] : escapeHtml(vars[name])
+    },
+  )
 }
 
 /**
