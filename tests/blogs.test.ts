@@ -136,6 +136,17 @@ describe('createBlog', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  it('stores parentSiteUrl given at signup, and reads it back', () => {
+    const { blog } = createBlog(store, { name: 'acme-blog', parentSiteUrl: 'https://acme.example' })
+    expect(blog.parentSiteUrl).toBe('https://acme.example')
+    expect(getBlog(store, blog.id).parentSiteUrl).toBe('https://acme.example')
+  })
+
+  it('defaults parentSiteUrl to null and rejects a non-http URL', () => {
+    expect(createBlog(store, {}).blog.parentSiteUrl).toBeNull()
+    expect(() => createBlog(store, { parentSiteUrl: 'javascript:alert(1)' })).toThrow()
+  })
+
   it('creates an unnamed blog; id matches the 32-char alphabet, 8 chars long', () => {
     const { blog } = createBlog(store, {})
     expect(blog.id).toMatch(/^[abcdefghijkmnpqrstuvwxyz23456789]{8}$/)
