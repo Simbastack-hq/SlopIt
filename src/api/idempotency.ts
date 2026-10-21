@@ -9,14 +9,14 @@ import {
 } from '../idempotency-store.js'
 import { respondError } from './errors.js'
 
-const APPLIES_TO = new Set<string>(['POST', 'PATCH', 'DELETE'])
+const APPLIES_TO = new Set<string>(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export interface IdempotencyMiddlewareConfig {
   store: Store
 }
 
 /**
- * Idempotency-Key middleware. Applies to POST/PATCH/DELETE requests
+ * Idempotency-Key middleware. Applies to POST/PUT/PATCH/DELETE requests
  * carrying an Idempotency-Key header from an AUTHENTICATED caller.
  * Delegates scope lookup/record to src/idempotency-store.ts (shared
  * with MCP). Weakened guarantee per spec decision #20.

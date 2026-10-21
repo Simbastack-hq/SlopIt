@@ -26,6 +26,20 @@ const CODE_TO_STATUS: Record<SlopItErrorCode, number> = {
   MEDIA_TYPE_UNSUPPORTED: 400,
   MEDIA_TOO_LARGE: 413,
   MEDIA_QUOTA_EXCEEDED: 413,
+  FACT_NOT_FOUND: 404,
+  FACT_NAME_INVALID: 400,
+  FACT_VALUE_INVALID: 400,
+  FACT_CONFIRMED_AT_INVALID: 400,
+  FACT_CONFLICT: 409,
+  FACT_IN_USE: 409,
+  FACT_LIMIT: 413,
+  FACT_FANOUT: 413,
+  FACT_IN_HEADING: 400,
+  FACT_IN_URL: 400,
+  FACT_NOT_ALLOWED_HERE: 400,
+  // The write is saved; re-rendering the blog's pages failed and is retried
+  // by the next facts call or post write (see facts.ts).
+  FACT_RENDER_PENDING: 500,
 }
 
 /**

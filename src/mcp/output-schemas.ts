@@ -138,5 +138,61 @@ export const MediaOutput = toolOutput({ media: MediaShape.optional() })
 
 export const MediaListOutput = toolOutput({ media: z.array(MediaShape).optional() })
 
+const FactShape = z.looseObject({
+  name: z.string().describe('Post bodies show it as {{fact:name}}.'),
+  value: z.string(),
+  note: z.string().nullable(),
+  source_url: z.string().nullable(),
+  confirmed_at: z
+    .string()
+    .describe(
+      "ISO 8601. When the publisher last checked the value; a post shows the oldest of its facts' dates.",
+    ),
+  updated_at: z
+    .string()
+    .describe(
+      'ISO 8601. When the value last changed; it is the modified time of posts that use it.',
+    ),
+  used_by: z
+    .array(z.looseObject({ slug: z.string(), status: z.enum(['draft', 'published']) }))
+    .describe('Every post whose body uses the fact, drafts included.'),
+})
+
+export const FactListOutput = toolOutput({
+  facts: z.array(FactShape).optional(),
+  render_pending: z
+    .boolean()
+    .optional()
+    .describe(
+      'true while some pages still show older values: a re-render failed and the next facts call retries it.',
+    ),
+})
+
+export const SetFactOutput = toolOutput({
+  fact: FactShape.optional().describe('The fact as it is now (or would be, on a dry run).'),
+  changed: z
+    .boolean()
+    .optional()
+    .describe(
+      'true when the value is new or different; false when only confirmed_at or the note moved.',
+    ),
+  dry_run: z.boolean().optional().describe('true: nothing was written.'),
+  affected_posts: z
+    .array(
+      z.looseObject({
+        slug: z.string(),
+        title: z.string(),
+        status: z.enum(['draft', 'published']),
+        url: z.string().optional().describe('Live URL; published posts only.'),
+        lines: z
+          .array(z.looseObject({ line: z.number(), before: z.string(), after: z.string() }))
+          .describe('Each source line that uses the fact, before and after the change.'),
+      }),
+    )
+    .optional()
+    .describe('Every post that uses the fact. Drafts are listed but not rendered.'),
+  rerendered: z.number().optional().describe('Published posts re-rendered by this call.'),
+})
+
 // report_bug always fails in core; the error envelope is its only output.
 export const ReportBugOutput = toolOutput({})

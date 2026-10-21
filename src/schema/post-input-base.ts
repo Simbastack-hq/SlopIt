@@ -91,7 +91,7 @@ export const PostInputBaseSchema = z.object({
     .trim()
     .min(1)
     .describe(
-      'Post content as markdown. Raw HTML is stripped. A YouTube URL alone on its own line becomes an embedded player.',
+      "Post content as markdown. Raw HTML is stripped. A YouTube URL alone on its own line becomes an embedded player. {{fact:name}} shows the current value of the blog's live fact `name` (see set_fact).",
     ),
   excerpt: z
     .string()

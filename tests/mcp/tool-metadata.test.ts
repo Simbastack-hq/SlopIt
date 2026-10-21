@@ -34,6 +34,10 @@ const HINTS: Record<string, [boolean, boolean, boolean, boolean]> = {
   upload_media: [false, false, false, true],
   list_media: [true, false, true, false],
   delete_media: [false, true, true, true],
+  // Changes what every post that uses the fact says, live: like update_post.
+  set_fact: [false, true, true, true],
+  list_facts: [true, false, true, false],
+  delete_fact: [false, true, true, true],
 }
 
 interface JsonSchema {
@@ -343,6 +347,57 @@ describe('MCP tool metadata', () => {
       const id = (up.media as { id: string }).id
       expect(await ok('delete_media', { blog_id: blogId, media_id: id })).toEqual({ deleted: true })
       await fails('delete_media', { blog_id: blogId, media_id: id }, 'MEDIA_NOT_FOUND')
+    })
+
+    it('set_fact (apply, dry run, idempotent replay, errors)', async () => {
+      const set = await ok('set_fact', { blog_id: blogId, name: 'pro_price', value: '$12/mo' })
+      expect(set).toMatchObject({ changed: true, dry_run: false, rerendered: 0 })
+      await ok('create_post', {
+        blog_id: blogId,
+        title: 'Pricing',
+        body: 'Pro: {{fact:pro_price}}',
+      })
+      const dry = await ok('set_fact', {
+        blog_id: blogId,
+        name: 'pro_price',
+        value: '$15/mo',
+        dry_run: true,
+      })
+      expect(dry.affected_posts).toEqual([
+        {
+          slug: 'pricing',
+          title: 'Pricing',
+          status: 'published',
+          url: 'https://b.example/pricing/',
+          lines: [{ line: 1, before: 'Pro: $12/mo', after: 'Pro: $15/mo' }],
+        },
+      ])
+      const args = { name: 'pro_price', value: '$15/mo', idempotency_key: 'f1' }
+      const first = await ok('set_fact', args)
+      expect(first).toMatchObject({ changed: true, rerendered: 1 })
+      expect(await ok('set_fact', args)).toEqual(first)
+      await fails('set_fact', { name: 'pro_price', value: 'a*b' }, 'FACT_VALUE_INVALID')
+      await fails('set_fact', { name: 'x', value: '1', expected_value: '0' }, 'FACT_CONFLICT')
+      await fails('set_fact', { blog_id: otherBlogId, name: 'x', value: '1' }, 'BLOG_NOT_FOUND')
+    })
+
+    it('list_facts', async () => {
+      await ok('set_fact', { name: 'a', value: '1' })
+      const sc = await ok('list_facts', {})
+      expect(sc).toEqual({
+        facts: [expect.objectContaining({ name: 'a', value: '1', used_by: [] })],
+        render_pending: false,
+      })
+      await fails('list_facts', { blog_id: otherBlogId }, 'BLOG_NOT_FOUND')
+    })
+
+    it('delete_fact', async () => {
+      await ok('set_fact', { name: 'a', value: '1' })
+      await ok('create_post', { title: 'Uses', status: 'draft', body: '{{fact:a}}' })
+      await fails('delete_fact', { name: 'a' }, 'FACT_IN_USE')
+      await ok('update_post', { slug: 'uses', patch: { body: 'plain' } })
+      expect(await ok('delete_fact', { name: 'a' })).toEqual({ deleted: true })
+      await fails('delete_fact', { name: 'a' }, 'FACT_NOT_FOUND')
     })
 
     it('UNAUTHORIZED errors still validate', async () => {

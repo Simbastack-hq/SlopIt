@@ -1,7 +1,9 @@
 import { getBlogInternal } from './blogs.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
+import { blogFactNames, drainFactRender } from './facts.js'
 import { generateShortId, generateSlug } from './ids.js'
+import { scanFacts, validatePostFacts } from './rendering/facts.js'
 import type { MutationRenderer } from './rendering/generator.js'
 import { PostInputSchema, type Blog, type Post, type PostInput } from './schema/index.js'
 import { PostPatchSchema, type PostPatchInput } from './schema/index.js'
@@ -30,9 +32,35 @@ export function isPostSlugConflict(err: unknown): boolean {
  * cases (inline HTML, code fences with content) produce noisy excerpts,
  * which is acceptable; callers who care supply an explicit excerpt field.
  *
+ * Live facts: the body's fact tokens (outside code) come through intact
+ * (the stripping would eat the underscores in their names) and are never
+ * cut in half; rendering substitutes them like the body's. A body without
+ * tokens takes exactly the path it always did.
+ *
  * @internal — exported for unit testing; not re-exported from src/index.ts.
  */
 export function autoExcerpt(body: string): string {
+  const tokens = scanFacts(body)
+  if (tokens.length === 0) return stripExcerpt(body)
+  // Park each token as a private-use placeholder, strip, put them back.
+  let masked = ''
+  let pos = 0
+  tokens.forEach((t, i) => {
+    masked += body.slice(pos, t.start) + `\uE000${i}\uE001`
+    pos = t.end
+  })
+  masked += body.slice(pos)
+  const restored = stripExcerpt(masked, Infinity).replace(/\uE000(\d+)\uE001/g, (_m, i: string) => {
+    const t = tokens[Number(i)]
+    return body.slice(t.start, t.end)
+  })
+  if (restored.length <= 160) return restored
+  let cut = 160
+  for (const t of scanFacts(restored)) if (t.start < cut && t.end > cut) cut = t.start
+  return restored.slice(0, cut).trimEnd() + '…'
+}
+
+function stripExcerpt(body: string, max = 160): string {
   const stripped = body
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
@@ -43,8 +71,8 @@ export function autoExcerpt(body: string): string {
     .replace(/\s+/g, ' ')
     .trim()
 
-  if (stripped.length <= 160) return stripped
-  return stripped.slice(0, 160).trimEnd() + '…'
+  if (stripped.length <= max) return stripped
+  return stripped.slice(0, max).trimEnd() + '…'
 }
 
 /**
@@ -395,6 +423,25 @@ export function createPost(
   // Step 2: blog exists (throws BLOG_NOT_FOUND with details.blogId)
   const blog = getBlogInternal(store, blogId)
 
+  // Live facts: finish a pending fact render first, then check where this
+  // write's fact tokens sit (and, for a published post, that they exist).
+  drainFactRender(store, renderer, blogId)
+  validatePostFacts(
+    parsed.body,
+    {
+      title: parsed.title,
+      slug: parsed.slug,
+      excerpt: parsed.excerpt,
+      tags: parsed.tags,
+      seoTitle: parsed.seoTitle,
+      seoDescription: parsed.seoDescription,
+      author: parsed.author,
+      coverImage: parsed.coverImage,
+    },
+    parsed.status === 'published',
+    blogFactNames(store, blogId),
+  )
+
   // Step 3: resolve slug (superRefine already rejected empty auto-slug)
   const slug = parsed.slug ?? generateSlug(parsed.title)
   if (RESERVED_SLUGS.has(slug)) {
@@ -553,6 +600,9 @@ export function updatePost(
   // Ensure blog exists (throws BLOG_NOT_FOUND)
   const blog = getBlogInternal(store, blogId)
 
+  // Live facts: finish a pending fact render before anything else.
+  drainFactRender(store, renderer, blogId)
+
   // Load prior row — throws POST_NOT_FOUND if missing
   const prior = getPost(store, blogId, slug)
 
@@ -589,11 +639,26 @@ export function updatePost(
         ? (parsed.language ?? null)
         : (prior.language ?? null)
 
+  // Live facts: an excerpt derived from the old body follows a body edit
+  // when either body uses facts, so it never keeps a figure the body now
+  // takes from a fact, or a token the body no longer has. Bodies without
+  // facts keep the old behaviour (the excerpt stays as it was).
+  const excerptFollowsBody =
+    parsed.body !== undefined &&
+    !('excerpt' in parsed) &&
+    prior.excerpt === autoExcerpt(prior.body) &&
+    (scanFacts(prior.body).length > 0 || scanFacts(parsed.body).length > 0)
+
   // Merge patched fields into prior row
   const merged = {
     title: parsed.title ?? prior.title,
     body: parsed.body ?? prior.body,
-    excerpt: 'excerpt' in parsed ? parsed.excerpt : prior.excerpt,
+    excerpt:
+      'excerpt' in parsed
+        ? parsed.excerpt
+        : excerptFollowsBody
+          ? autoExcerpt(parsed.body!)
+          : prior.excerpt,
     tags: parsed.tags ?? prior.tags,
     status: parsed.status ?? prior.status,
     seoTitle: 'seoTitle' in parsed ? parsed.seoTitle : prior.seoTitle,
@@ -601,6 +666,23 @@ export function updatePost(
     author: 'author' in parsed ? parsed.author : prior.author,
     coverImage: 'coverImage' in parsed ? parsed.coverImage : prior.coverImage,
   }
+
+  // Live facts: tokens only in the body, never in a heading or an address,
+  // and every fact must exist once the post is (or stays) published.
+  validatePostFacts(
+    merged.body,
+    {
+      title: parsed.title,
+      excerpt: parsed.excerpt,
+      tags: parsed.tags,
+      seoTitle: parsed.seoTitle,
+      seoDescription: parsed.seoDescription,
+      author: parsed.author,
+      coverImage: parsed.coverImage,
+    },
+    merged.status === 'published',
+    blogFactNames(store, blogId),
+  )
 
   // Determine published_at by transition (decision #21 preserves on pub→pub)
   const oldStatus = prior.status
@@ -753,6 +835,7 @@ export function deletePost(
   slug: string,
 ): { deleted: true } {
   getBlogInternal(store, blogId) // throws BLOG_NOT_FOUND
+  drainFactRender(store, renderer, blogId) // live facts: a pending render goes first
   const prior = getPost(store, blogId, slug) // throws POST_NOT_FOUND
 
   // DB transaction: DELETE the row

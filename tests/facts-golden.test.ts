@@ -104,41 +104,65 @@ describe('posts without fact tokens render byte-identical to before live facts',
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('pages, homes, .md twins, feeds, sitemap, llms.txt and a draft preview', async () => {
-    const { blog } = createBlog(store, { name: 'golden', title: 'Golden' })
-    const scratch = createRenderer({ store, outputDir: join(dir, 'scratch'), baseUrl: 'x' })
-    for (const p of POSTS) createPost(store, scratch, blog.id, p)
+  // Facts named like every near-miss token above exist in the second run:
+  // still nothing may change, since no post uses one outside code.
+  it.each([
+    ['a blog without facts', false],
+    ['a blog whose facts no post uses', true],
+  ])(
+    '%s: pages, homes, .md twins, feeds, sitemap, llms.txt, a draft preview',
+    async (_, withFacts) => {
+      const { blog } = createBlog(store, { name: 'golden', title: 'Golden' })
+      if (withFacts) {
+        const insert = store.db.prepare(
+          "INSERT INTO facts VALUES (?, ?, 'VALUE', NULL, NULL, '2030-01-01T00:00:00.000Z', '2030-01-01T00:00:00.000Z', '2030-01-01T00:00:00.000Z')",
+        )
+        for (const name of [
+          'spaced',
+          'upper',
+          'in_fence',
+          'in_span',
+          'single',
+          'in_code',
+          'incode',
+        ]) {
+          insert.run(blog.id, name)
+        }
+      }
+      const scratch = createRenderer({ store, outputDir: join(dir, 'scratch'), baseUrl: 'x' })
+      for (const p of POSTS) createPost(store, scratch, blog.id, p)
 
-    // Pin every timestamp (SQLite's own clock fills created_at/updated_at).
-    const stamp = (n: number) => `2026-0${n}-01T10:00:00.000Z`
-    POSTS.forEach((p, i) => {
-      store.db
-        .prepare(
-          `UPDATE posts SET created_at = ?, updated_at = ?,
+      // Pin every timestamp (SQLite's own clock fills created_at/updated_at).
+      const stamp = (n: number) => `2026-0${n}-01T10:00:00.000Z`
+      POSTS.forEach((p, i) => {
+        store.db
+          .prepare(
+            `UPDATE posts SET created_at = ?, updated_at = ?,
                   published_at = CASE status WHEN 'published' THEN ? ELSE NULL END
             WHERE blog_id = ? AND slug = ?`,
-        )
-        .run(stamp(i + 1), i === 0 ? stamp(i + 2) : stamp(i + 1), stamp(i + 1), blog.id, p.slug)
-    })
-    store.db.prepare('UPDATE blogs SET created_at = ? WHERE id = ?').run(stamp(1), blog.id)
+          )
+          .run(stamp(i + 1), i === 0 ? stamp(i + 2) : stamp(i + 1), stamp(i + 1), blog.id, p.slug)
+      })
+      store.db.prepare('UPDATE blogs SET created_at = ? WHERE id = ?').run(stamp(1), blog.id)
 
-    const out = join(dir, 'out')
-    const renderer = createRenderer({ store, outputDir: out, baseUrl: 'https://golden.example/' })
-    renderer.renderBlog(blog.id)
-    renderer.renderBlogPosts(blog.id)
-    renderer.renderManifests(blog.id)
-    for (const p of POSTS.filter((x) => x.status !== 'draft')) {
-      renderer.renderPostMarkdown(blog.id, getPost(store, blog.id, p.slug))
-    }
-    // A draft rendered the way a host's preview does it.
-    const preview = join(dir, 'preview')
-    createRenderer({ store, outputDir: preview, baseUrl: 'https://golden.example/' }).renderPost(
-      blog.id,
-      getPost(store, blog.id, 'draft'),
-    )
+      const out = join(dir, 'out')
+      const renderer = createRenderer({ store, outputDir: out, baseUrl: 'https://golden.example/' })
+      renderer.renderBlog(blog.id)
+      renderer.renderBlogPosts(blog.id)
+      renderer.renderManifests(blog.id)
+      for (const p of POSTS.filter((x) => x.status !== 'draft')) {
+        renderer.renderPostMarkdown(blog.id, getPost(store, blog.id, p.slug))
+      }
+      // A draft rendered the way a host's preview does it.
+      const preview = join(dir, 'preview')
+      createRenderer({ store, outputDir: preview, baseUrl: 'https://golden.example/' }).renderPost(
+        blog.id,
+        getPost(store, blog.id, 'draft'),
+      )
 
-    const tree =
-      readTree(join(out, blog.id)) + '\n=== PREVIEW ===\n' + readTree(join(preview, blog.id))
-    await expect(tree).toMatchFileSnapshot('./__golden__/no-facts-output.txt')
-  })
+      const tree =
+        readTree(join(out, blog.id)) + '\n=== PREVIEW ===\n' + readTree(join(preview, blog.id))
+      await expect(tree).toMatchFileSnapshot('./__golden__/no-facts-output.txt')
+    },
+  )
 })
