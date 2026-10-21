@@ -37,6 +37,7 @@ The test: *"Could someone run this as a personal single-tenant blog on their lap
 | MCP server + tools | ✅ (as factory) | |
 | API-key auth (generate, hash, verify) | ✅ | |
 | RSS, sitemap, SEO meta | ✅ | |
+| Live facts (`{{fact:name}}` in post bodies, push-only) | ✅ | |
 | Minimal single-blog dashboard | ✅ | |
 | Docker Compose for self-hosting | ✅ (`examples/`) | |
 | `llms.txt` + `slopit.SKILL.md` schemas | ✅ (generators) | ✅ (hosted instances) |

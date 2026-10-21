@@ -135,6 +135,10 @@ All routes are absolute URLs against the API base **\`${baseUrl}\`**. Copy them 
 | GET ${baseUrl}/blogs/:id/media | List uploaded images for the blog. |
 | GET ${baseUrl}/blogs/:id/media/:mid | Get a single media record. |
 | DELETE ${baseUrl}/blogs/:id/media/:mid | Permanently delete an image. |
+| GET ${baseUrl}/blogs/:id/facts | List the blog's live facts, each with the posts that use it (see Live facts). |
+| GET ${baseUrl}/blogs/:id/facts/:name | Get one live fact. |
+| PUT ${baseUrl}/blogs/:id/facts/:name | Create or change a live fact; \`dry_run: true\` previews. |
+| DELETE ${baseUrl}/blogs/:id/facts/:name | Delete a live fact no post uses. |
 
 ## Agent-readable endpoints
 
@@ -154,8 +158,8 @@ In the table below, replace \`{blog_url}\` with the blog's real \`blog_url\` (it
 | URL template | Format | Purpose |
 |---|---|---|
 | {blog_url}llms.txt | Markdown | Manifest of every published post (newest first), one description line each. Start here if you're indexing a blog. |
-| {blog_url}{post-slug}.md | Markdown (YAML frontmatter + raw body) | Source markdown for any published post. The frontmatter has \`title\`, \`slug\`, \`language\`, \`date\`, \`updated\` (when changed), \`author\`, \`description\`, \`canonical\`, \`tags\`. The body below the closing \`---\` is exactly what the author submitted. |
-| {blog_url}feed.xml | RSS 2.0 + content:encoded | The 20 most recent published posts in every language (channel language = the blog's root language), full HTML in \`<content:encoded>\`. Stable feed for syndication. |
+| {blog_url}{post-slug}.md | Markdown (YAML frontmatter + raw body) | Source markdown for any published post. The frontmatter has \`title\`, \`slug\`, \`language\`, \`date\`, \`updated\` (when changed), \`author\`, \`description\`, \`canonical\`, \`tags\`. The body below the closing \`---\` is what the author submitted, with each \`{{fact:name}}\` replaced by the live fact's current value and, on a post that uses facts, a last line saying when they were confirmed (see Live facts). |
+| {blog_url}feed.xml | RSS 2.0 + content:encoded | The 20 most recent published posts in every language (channel language = the blog's root language), full HTML in \`<content:encoded>\`. An item whose post shows live facts also carries \`<atom:updated>\` once a value changes after publishing. Stable feed for syndication. |
 | {blog_url}lang/{tag}/feed.xml | RSS 2.0 + content:encoded | That language's posts only, for every language the blog publishes in, root language included (\`{tag}\` is the lowercase BCP-47 tag, e.g. \`{blog_url}lang/de/feed.xml\`). Only exists on blogs with posts in more than one language. |
 | {blog_url}sitemap.xml | XML sitemap | Every published post URL and every language home page with \`<lastmod>\`. |
 
@@ -226,12 +230,24 @@ ${emailRequiredError}| UNAUTHORIZED | 401 | Missing or invalid api key. |
 | MEDIA_TYPE_UNSUPPORTED | 400 | content_type not in the allowed list (JPEG/PNG/GIF/WebP). \`details.content_type\` echoes input. |
 | MEDIA_TOO_LARGE | 413 | File exceeds the per-file cap. \`details.max_bytes\` returned. |
 | MEDIA_QUOTA_EXCEEDED | 413 | Blog's total media quota exhausted. \`details.{used_bytes, quota_bytes}\` returned. |
+| FACT_NOT_FOUND | 404 | No live fact by that name. On a post write: the post is (or is being) published and uses facts that don't exist, listed in \`details.names\`. Create them first, or keep the post a draft. |
+| FACT_NAME_INVALID | 400 | A fact name is a lowercase letter, then up to 39 lowercase letters, digits or underscores. |
+| FACT_VALUE_INVALID | 400 | The value is empty, over 120 characters, more than one line, or holds a character a value can't (\`details.character\`). |
+| FACT_CONFIRMED_AT_INVALID | 400 | \`confirmed_at\` is not an ISO 8601 date or date-time with a time zone, is in the future, or is before 2000. |
+| FACT_CONFLICT | 409 | \`expected_value\` did not match. Nothing changed; \`details.current_value\` is the value now. |
+| FACT_IN_USE | 409 | Posts still use the fact; \`details.posts\` lists them, drafts included. Edit them first. |
+| FACT_LIMIT | 413 | The blog already has 100 facts. Delete one no post uses. |
+| FACT_FANOUT | 413 | More than 200 published posts use facts, so a change would re-render too many pages. Nothing changed. |
+| FACT_IN_HEADING | 400 | A \`{{fact:name}}\` in a heading. \`details.{name, line}\` say where. Move the figure into the text. |
+| FACT_IN_URL | 400 | A \`{{fact:name}}\` in a link or image address, a reference definition or \`<…>\`. \`details.{name, line}\` say where. |
+| FACT_NOT_ALLOWED_HERE | 400 | A \`{{fact:name}}\` outside the body (title, excerpt, tags, …). \`details.field\` names the field. |
+| FACT_RENDER_PENDING | 500 | The fact change is saved, but re-rendering the pages failed. Retry the call; any facts call or post write finishes it. |
 
 Responses are wrapped: \`{ "error": { "code": "...", "message": "...", "details": { ... } } }\`.
 
 ## Idempotency
 
-Send \`Idempotency-Key: <unique-key>\` on an **authenticated** mutation (POST /blogs/:id/posts, PATCH, DELETE) to make retries safe. The key is scoped by \`(method, path, api_key)\` — reuse the same key only for the same logical request.
+Send \`Idempotency-Key: <unique-key>\` on an **authenticated** mutation (POST /blogs/:id/posts, PUT, PATCH, DELETE) to make retries safe. The key is scoped by \`(method, path, api_key)\` — reuse the same key only for the same logical request.
 
 **POST /signup is NOT replayed.** Signup has no pre-auth caller identity, so two callers accidentally sharing an Idempotency-Key would both receive the first caller's \`api_key\`. To prevent that leak the server skips storage and replay whenever no api key is present. Retrying /signup re-executes end-to-end:
 - POST /signup with a \`name\` → first call succeeds (200); retry hits 409 BLOG_NAME_CONFLICT. Treat the 200 response as the source of truth and persist the \`api_key\` before retrying.
@@ -240,6 +256,7 @@ Send \`Idempotency-Key: <unique-key>\` on an **authenticated** mutation (POST /b
 **Authenticated mutations — best-effort, not crash-safe.** The server records the response *after* the handler commits. If the server crashes or the response is dropped in that window, a retry with the same key may re-execute the handler instead of replaying the original response. Observable outcomes are bounded:
 - POST /blogs/:id/posts → 409 POST_SLUG_CONFLICT on retry.
 - PATCH → idempotent if the patch is deterministic (true in practice).
+- PUT /blogs/:id/facts/:name → same value again; without an explicit \`confirmed_at\` it is re-confirmed as of the retry. A \`dry_run: true\` call is never stored for replay: it writes nothing at all.
 - DELETE → 404 POST_NOT_FOUND on retry.
 
 **Same payload, bytewise.** The request hash covers method, path, content-type, query string, and raw body. Reordering JSON fields counts as a different payload and returns 422. If you retry, resend exactly what you sent before.
@@ -264,6 +281,9 @@ Over HTTP (the streamable HTTP transport), every \`POST\` to the MCP endpoint mu
 | upload_media | bearer | yes | Upload an image; returns a public URL. |
 | list_media | bearer | — | List uploaded images. |
 | delete_media | bearer | yes | Permanently delete an uploaded image. |
+| set_fact | bearer | yes | Create or change a live fact; \`dry_run: true\` previews. |
+| list_facts | bearer | — | List live facts with the posts that use each. |
+| delete_fact | bearer | yes | Delete a live fact no post uses. |
 
 **Caveats specific to MCP:**
 
@@ -334,5 +354,27 @@ More text after the video.
 ## Sections and the contents list
 
 Use \`##\` headings for a post's sections. Every heading from \`##\` down gets a link anchor made from its text (\`## Why it works\` → \`{blog_url}{post-slug}/#why-it-works\`), so you can link a reader straight to a section. A post with at least 3 \`##\` sections and about 1,000 words or more also gets a contents list of those sections beside it on wide screens. Nothing to set; shorter posts don't get one, and phones never show it.
+
+## Live facts
+
+A live fact is a short current claim the blog keeps under a name: a price, a version, a limit, a count. A post body shows it inline as \`{{fact:name}}\`. Change the fact and every post that uses it is re-rendered with the new value: its page, its \`.md\`, the feeds, the sitemap and its JSON-LD \`dateModified\`. A post that uses facts ends with one line saying the publisher keeps those figures current, with the oldest confirmation date among them.
+
+- Use facts only for things that should stay current (prices, versions, limits, counts). Write history ("we launched at $9") as plain text, or it will change when the fact does.
+- Put units and qualifiers inside the value when they can change together (\`$12/mo\`, \`v2.4.1\`): the words around a fact never update.
+- \`dry_run: true\` writes nothing and returns every affected post and line. Without it, the change goes live on every post that uses the fact immediately.
+- Set \`confirmed_at\` only to when you actually checked the value. It defaults to now, and re-sending a value doesn't mean it was checked.
+- Facts can't go in headings, link or image addresses, titles, excerpts or any field but the body. A fact used by any post (drafts included) can't be deleted until those posts stop using it.
+
+A name is a lowercase letter, then up to 39 lowercase letters, digits or underscores. A value is plain text: 1–120 characters, one line, none of these characters: \`[\` \`]\` \`<\` \`>\` \`*\` \`_\` \`~\` \`\` \` \`\` \`|\` \`\\\` \`{\` \`}\`, and not only \`-\`, \`:\` and \`=\`. A blog keeps up to 100 facts. A value always shows as written: one that looks like a link, an email, an entity or markdown is never turned into one (in the \`.md\` file it is backslash-escaped where needed, e.g. \`https\\://\`). Inside inline code and code blocks \`{{fact:name}}\` stays literal, and so does \`\\{{fact:name}}\`, so you can show the syntax. A post that uses facts and has no \`excerpt\` of its own gets its summary from the body, with current values, every time it renders (its responses then have no \`excerpt\`). A draft may use a fact that doesn't exist yet (its preview shows the token as written); publishing it fails with FACT_NOT_FOUND until the fact exists.
+
+End to end:
+
+1. Set it: \`PUT ${baseUrl}/blogs/{blog_id}/facts/pro_price\` with \`{ "value": "$12/mo", "source_url": "https://example.com/pricing" }\` (MCP: \`set_fact\` with \`name: "pro_price"\`).
+2. Use it in a post body: \`Pro costs {{fact:pro_price}}, billed monthly.\` The page reads "Pro costs $12/mo, billed monthly." and ends with "Some figures on this page are kept current by the publisher. Least recently confirmed: October 21, 2026."
+3. Preview a change: the same \`PUT\` with \`{ "value": "$15/mo", "dry_run": true }\` writes nothing and returns \`affected_posts\`, each with \`lines: [{ line, before, after }]\`.
+4. Apply it: the same \`PUT\` without \`dry_run\`, plus \`"expected_value": "$12/mo"\` so it applies only if the value is still the one you previewed (otherwise FACT_CONFLICT with \`details.current_value\`). Every post that uses \`pro_price\` now says $15/mo on its page, \`.md\`, feeds and sitemap, and its \`dateModified\` moves to now.
+5. A month later you check again and it is still $15/mo: \`PUT\` \`{ "value": "$15/mo", "confirmed_at": "2026-11-21" }\`. Only the date in the last line moves; \`dateModified\` stays.
+
+The \`PUT\` response is \`{ fact, changed, dry_run, affected_posts, rerendered }\`. \`note\` (up to 200 characters) and \`source_url\` (https) are stored and returned but never shown on pages: omit one to keep it, send \`null\` to clear it. \`GET ${baseUrl}/blogs/{blog_id}/facts\` (MCP \`list_facts\`) returns \`{ facts, render_pending }\`, each fact with \`used_by\`, the posts that use it; \`GET …/facts/{name}\` returns \`{ fact, render_pending }\`. \`render_pending: true\` (or a FACT_RENDER_PENDING error) means a change is saved but some pages still show the old value; the next facts call or post write finishes them.
 `
 }

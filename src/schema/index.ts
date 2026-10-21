@@ -160,7 +160,9 @@ export const PostPatchSchema = z
       .string()
       .trim()
       .min(1)
-      .describe('New markdown body. Replaces the whole body.')
+      .describe(
+        "New markdown body. Replaces the whole body. {{fact:name}} shows the current value of the blog's live fact `name`.",
+      )
       .optional(),
     excerpt: z
       .string()

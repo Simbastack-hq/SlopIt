@@ -407,6 +407,18 @@ article td code {
   margin-inline-end: 4px;
 }
 
+/* Live facts — one line under a post whose figures the publisher keeps
+   current. A footnote, not a banner: small, muted, a hairline above.
+   The class outranks `article p`, so the body's 18px never applies. */
+.facts-note {
+  margin: 40px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 /* "More from this blog" — three newest sibling posts at the end of a post.
    Scoped overrides: the block sits inside <article>, so the article's
    h2 / p / ul / li typography would otherwise apply. */

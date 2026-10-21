@@ -12,10 +12,11 @@ import { signupBlog } from '../signup.js'
 import { uploadMedia, listMedia, getMedia, deleteMedia } from '../media.js'
 import type { MediaLimits } from '../media.js'
 import { previewFields } from '../preview.js'
+import { deleteFact, getFact, listFacts, setFact, type SetFactInput } from '../facts.js'
 
 const StatusQuerySchema = z.enum(['draft', 'published']).optional()
 
-type Vars = { blog: Blog; apiKeyHash: string }
+type Vars = { blog: Blog; apiKeyHash: string; skipIdempotencyRecord?: boolean }
 
 /**
  * Read a JSON body that is allowed to be empty. An empty body returns
@@ -262,6 +263,37 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
   app.delete('/blogs/:id/media/:mid', (c) => {
     const renderer = config.rendererFor(c.var.blog)
     const result = deleteMedia(config.store, renderer, c.var.blog.id, c.req.param('mid'))
+    return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
+  })
+
+  // Live facts: the blog's named current claims, used in post bodies as
+  // {{fact:name}} (docs/specs/2026-10-21-live-facts.md).
+  app.get('/blogs/:id/facts', (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    const result = listFacts(config.store, renderer, c.var.blog.id)
+    return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
+  })
+
+  app.get('/blogs/:id/facts/:name', (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    const result = getFact(config.store, renderer, c.var.blog.id, c.req.param('name'))
+    return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
+  })
+
+  app.put('/blogs/:id/facts/:name', async (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    // setFact re-parses with SetFactInputSchema.strict(); this layer only
+    // guarantees the JSON parsed.
+    const raw: SetFactInput = await c.req.json()
+    const result = setFact(config.store, renderer, c.var.blog.id, c.req.param('name'), raw)
+    // A dry run writes nothing at all, not even a replay record.
+    if (result.dry_run) c.set('skipIdempotencyRecord', true)
+    return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
+  })
+
+  app.delete('/blogs/:id/facts/:name', (c) => {
+    const renderer = config.rendererFor(c.var.blog)
+    const result = deleteFact(config.store, renderer, c.var.blog.id, c.req.param('name'))
     return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
   })
 }

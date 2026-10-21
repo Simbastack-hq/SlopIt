@@ -15,6 +15,7 @@ import { createApiRouter } from '../../src/api/index.js'
 import { createMcpServer } from '../../src/mcp/server.js'
 import { createRenderer } from '../../src/rendering/generator.js'
 import { createStore } from '../../src/db/store.js'
+import { drainPendingFactRenders } from '../../src/facts.js'
 
 function main(): void {
   const baseUrl = process.env.SLOPIT_BASE_URL ?? 'http://localhost:8080'
@@ -24,6 +25,9 @@ function main(): void {
     outputDir: process.env.SLOPIT_OUT ?? './out',
     baseUrl,
   })
+
+  // Finish any live-fact re-render a crash or failed write left pending.
+  drainPendingFactRenders(store, () => renderer)
 
   const apiConfig = {
     store,

@@ -11,6 +11,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createMcpServer } from '../../src/mcp/server.js'
 import { createRenderer } from '../../src/rendering/generator.js'
 import { createStore } from '../../src/db/store.js'
+import { drainPendingFactRenders } from '../../src/facts.js'
 
 async function main(): Promise<void> {
   const store = createStore({ dbPath: process.env.SLOPIT_DB ?? './slopit.db' })
@@ -19,6 +20,9 @@ async function main(): Promise<void> {
     outputDir: process.env.SLOPIT_OUT ?? './out',
     baseUrl: process.env.SLOPIT_BASE_URL ?? 'http://localhost:8080',
   })
+
+  // Finish any live-fact re-render a crash or failed write left pending.
+  drainPendingFactRenders(store, () => renderer)
 
   const server = createMcpServer({
     store,

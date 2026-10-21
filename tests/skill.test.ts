@@ -34,6 +34,32 @@ describe('generateSkillFile', () => {
     }
   })
 
+  it('has a Live facts section with the rules agents need and a worked example', () => {
+    const start = text.indexOf('## Live facts')
+    expect(start).toBeGreaterThan(text.indexOf('## MCP tools'))
+    const section = text.slice(start)
+    // The five rules the spec requires, said plainly (spec §7).
+    expect(section).toContain('{{fact:name}}')
+    expect(section).toContain('Write history ("we launched at $9") as plain text')
+    expect(section).toContain('Put units and qualifiers inside the value')
+    expect(section).toContain('`dry_run: true` writes nothing')
+    expect(section).toContain('goes live on every post that uses the fact immediately')
+    expect(section).toContain('Set `confirmed_at` only to when you actually checked the value')
+    expect(section).toContain("Facts can't go in headings")
+    expect(section).toContain("can't be deleted until those posts stop using it")
+    // End to end: set → use → preview → apply → re-confirm.
+    expect(section).toContain('PUT https://api.example/blogs/{blog_id}/facts/pro_price')
+    expect(section).toContain('Pro costs {{fact:pro_price}}')
+    expect(section).toContain('"expected_value": "$12/mo"')
+    expect(section).toContain('`dateModified` stays')
+    for (const tool of ['set_fact', 'list_facts', 'delete_fact']) {
+      expect(text).toMatch(new RegExp(`^\\| ${tool} \\| bearer \\|`, 'm'))
+    }
+    for (const code of ['FACT_IN_HEADING', 'FACT_IN_URL', 'FACT_IN_USE', 'FACT_RENDER_PENDING']) {
+      expect(text).toMatch(new RegExp(`^\\| ${code} \\|`, 'm'))
+    }
+  })
+
   it('documents Authorization: Bearer', () => {
     expect(text).toMatch(/Authorization:\s+Bearer/)
   })

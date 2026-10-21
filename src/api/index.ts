@@ -66,7 +66,7 @@ export interface ApiRouterConfig {
   onSignup?: OnSignupHook
 }
 
-type Vars = { blog: Blog; apiKeyHash: string }
+type Vars = { blog: Blog; apiKeyHash: string; skipIdempotencyRecord?: boolean }
 
 /**
  * Factory for the core REST router. Consumers mount this under their

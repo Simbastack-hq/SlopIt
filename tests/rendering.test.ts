@@ -68,6 +68,12 @@ describe('render', () => {
     expect(out).toBe('<p>&lt;script&gt;</p><div><b>ok</b></div>')
   })
 
+  it('expands only the template, in one pass: inserted values are never re-read', () => {
+    expect(
+      render('<p>{{{a}}}</p><p>{{b}}</p>', { a: '{{b}} {{{missing}}}', b: '{{a}} {{nope}}' }),
+    ).toBe('<p>{{b}} {{{missing}}}</p><p>{{a}} {{nope}}</p>')
+  })
+
   it('throws when an escaped var is missing', () => {
     expect(() => render('<p>{{missing}}</p>', {})).toThrow(/missing template variable: missing/i)
   })

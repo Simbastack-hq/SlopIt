@@ -16,6 +16,18 @@ export type SlopItErrorCode =
   | 'MEDIA_TYPE_UNSUPPORTED'
   | 'MEDIA_TOO_LARGE'
   | 'MEDIA_QUOTA_EXCEEDED'
+  | 'FACT_NOT_FOUND'
+  | 'FACT_NAME_INVALID'
+  | 'FACT_VALUE_INVALID'
+  | 'FACT_CONFIRMED_AT_INVALID'
+  | 'FACT_CONFLICT'
+  | 'FACT_IN_USE'
+  | 'FACT_LIMIT'
+  | 'FACT_FANOUT'
+  | 'FACT_IN_HEADING'
+  | 'FACT_IN_URL'
+  | 'FACT_NOT_ALLOWED_HERE'
+  | 'FACT_RENDER_PENDING'
 
 export class SlopItError extends Error {
   readonly code: SlopItErrorCode

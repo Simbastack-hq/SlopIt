@@ -9,21 +9,21 @@ import {
 } from '../idempotency-store.js'
 import { respondError } from './errors.js'
 
-const APPLIES_TO = new Set<string>(['POST', 'PATCH', 'DELETE'])
+const APPLIES_TO = new Set<string>(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export interface IdempotencyMiddlewareConfig {
   store: Store
 }
 
 /**
- * Idempotency-Key middleware. Applies to POST/PATCH/DELETE requests
+ * Idempotency-Key middleware. Applies to POST/PUT/PATCH/DELETE requests
  * carrying an Idempotency-Key header from an AUTHENTICATED caller.
  * Delegates scope lookup/record to src/idempotency-store.ts (shared
  * with MCP). Weakened guarantee per spec decision #20.
  */
 export function idempotencyMiddleware(
   config: IdempotencyMiddlewareConfig,
-): MiddlewareHandler<{ Variables: { apiKeyHash: string } }> {
+): MiddlewareHandler<{ Variables: { apiKeyHash: string; skipIdempotencyRecord?: boolean } }> {
   return async (c, next) => {
     if (!APPLIES_TO.has(c.req.method)) return next()
     const key = c.req.header('Idempotency-Key')
@@ -83,6 +83,8 @@ export function idempotencyMiddleware(
     await next()
     const status = c.res.status
     if (status < 200 || status >= 300) return
+    // A handler that wrote nothing (a fact dry run) asks not to be stored.
+    if (c.var.skipIdempotencyRecord === true) return
 
     const body = await c.res.clone().text()
     recordIdempotencyResponse(config.store, scope, body, status)
