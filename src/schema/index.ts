@@ -269,6 +269,11 @@ export const CreateBlogInputSchema = z.object({
       "The blog owner's email address. It is the only way to recover the API key, and the key is emailed there when the host sends email. Some hosts require it. Pass it whenever the human gives one.",
     )
     .optional(),
+  parentSiteUrl: httpUrl
+    .describe(
+      'The main website this blog belongs to (http/https), e.g. "https://acme.example". Every page links back to it ("Main site →"), which tells readers and search engines the blog and the site are one thing. Set it whenever the blog is for a product, project or business with its own site. Change or clear it later with update_blog.',
+    )
+    .optional(),
   theme: z
     .enum(['minimal'])
     .describe('Blog theme. Only "minimal" exists today.')
