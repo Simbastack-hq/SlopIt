@@ -1,4 +1,5 @@
 import { getBlogInternal } from './blogs.js'
+import { isoTimestamp } from './time.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId, generateSlug } from './ids.js'
@@ -110,9 +111,9 @@ function rowToPost(row: PostRow): Post {
     coverImage: row.cover_image ?? undefined,
     language: row.language ?? undefined,
     translationGroup: row.translation_group ?? undefined,
-    publishedAt: row.published_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    publishedAt: isoTimestamp(row.published_at),
+    createdAt: isoTimestamp(row.created_at),
+    updatedAt: isoTimestamp(row.updated_at),
   }
 }
 
