@@ -108,8 +108,12 @@ function analyze(md: string): Analysis[] {
     if ((opened[i] && seen === '>') || rightAfterOpen) context.set(i, 'FACT_IN_URL')
   }
 
+  // Lowercase letters and digits only, and absent from the source in any
+  // case: marked lowercases reference labels, so `[ZFACTZ0Q]: /x` must not
+  // read as a sentinel.
+  const folded = md.toLowerCase()
   let nonce = 'zfactz'
-  while (md.includes(nonce)) nonce += 'z'
+  while (folded.includes(nonce)) nonce += 'z'
   let sentinelized = ''
   let pos = 0
   occurrences.forEach((o, i) => {
@@ -180,7 +184,8 @@ function withPlaceholders(
   occurrences: readonly FactOccurrence[],
   valueOf: (o: FactOccurrence) => string | undefined,
 ): Placeheld {
-  const nonce = randomBytes(6).toString('hex')
+  let nonce = randomBytes(6).toString('hex')
+  while (md.includes(nonce)) nonce = randomBytes(6).toString('hex')
   const pieces: string[] = []
   let text = ''
   let pos = 0
@@ -195,7 +200,11 @@ function withPlaceholders(
   const re = new RegExp(`\uE000${nonce}(\\d+)\uE001`, 'g')
   return {
     text,
-    fill: (s, encode) => s.replace(re, (_m, i: string) => encode(pieces[Number(i)])),
+    fill: (s, encode) =>
+      s.replace(re, (m, i: string) => {
+        const v = pieces[Number(i)]
+        return v === undefined ? m : encode(v)
+      }),
   }
 }
 
@@ -264,18 +273,16 @@ function escapeMinimal(value: string): string {
 }
 
 const ASCII_PUNCTUATION = /[!-/:-@[-`{-~]/g
-// The author's characters next to a value that strict mode escapes: ASCII
-// punctuation, but not the backslash or the emphasis and code delimiters
-// (`*`, `_`, `~`, `` ` ``) the author placed on purpose.
-const ADJACENT = /^[!"#$%&'()+,\-./:;<=>?@[\]^{|}]$/
 
 /**
  * `md` with each occurrence that has a value replaced by it, as markdown
- * that reads as the literal value. A run of tokens without values (an
- * unknown fact in a draft) is left exactly as written. `strict` escapes
- * every ASCII punctuation character of each value and the author's
- * punctuation right next to it: the fallback for when minimal escaping
- * lets a value join the author's text into syntax (see serializeTwin).
+ * that reads as the literal value. Only the values are escaped: author
+ * text stays as written, apart from the backslash the line-start rules
+ * may put before it. A run of tokens without values (an unknown fact in
+ * a draft) is left exactly as written. `strict` escapes every ASCII
+ * punctuation character of each value: the fallback for when minimal
+ * escaping lets a value join the author's text into syntax (see
+ * serializeTwin).
  */
 function toMarkdown(
   md: string,
@@ -284,8 +291,6 @@ function toMarkdown(
   strict: boolean,
 ): string {
   const escapeValue = strict ? (v: string) => v.replace(ASCII_PUNCTUATION, '\\$&') : escapeMinimal
-  const adjacent = (c: string | undefined) =>
-    c === undefined ? '' : strict && ADJACENT.test(c) ? '\\' + c : c
   let out = ''
   let pos = 0
   let i = 0
@@ -301,21 +306,17 @@ function toMarkdown(
       i = j + 1
       continue
     }
+    const before = md.slice(pos, first.start)
+    // An entity the author started (`&`, `&#`, `&am`) must not be finished
+    // by a value: every entity ends in `;`, so the run's `;` are escaped.
+    const entity = /&#?[A-Za-z0-9]{0,31}$/.exec(before)
+    const inEntity = entity !== null && before[entity.index - 1] !== '\\'
     let text = ''
     values.forEach((v, k) => {
       const o = occurrences[i + k]
       text += v === undefined ? md.slice(o.start, o.end) : escapeValue(v)
     })
-
-    let before = md.slice(pos, first.start)
-    // An entity the author started (`&#`, `&amp`) must not end in a value.
-    const entity = /&#?[A-Za-z0-9]{0,31}$/.exec(before)
-    if (entity && before[entity.index - 1] !== '\\') {
-      before = before.slice(0, entity.index) + '\\' + before.slice(entity.index)
-    }
-    if (before.length > 0 && before[before.length - 2] !== '\\') {
-      before = before.slice(0, -1) + adjacent(before[before.length - 1])
-    }
+    if (inEntity) text = text.replace(/(?<!\\);/g, '\\;')
 
     // The author's text after the run, up to the next token or the line
     // end: `{{fact:n}}. Item` with n = 5 must not become an ordered list.
@@ -323,7 +324,7 @@ function toMarkdown(
     let segmentEnd = last.end
     while (segmentEnd < limit && md.charCodeAt(segmentEnd) !== 10) segmentEnd++
     const tail = md.slice(last.end, segmentEnd)
-    const piece = text + adjacent(tail[0]) + tail.slice(1)
+    const piece = text + tail
 
     // Only a line's first run can start a block: a later one has an
     // earlier token in front of it. Checking once per line keeps this linear.
@@ -353,7 +354,11 @@ function structure(md: string): string {
  * The twin's body: values serialised with minimal escaping, checked
  * against the structure of the same body with inert placeholders
  * (`placeheld`). If a value joined the author's text into syntax (an
- * autolink, a reference link, a table…), strict escaping is used instead.
+ * autolink, a table…), every value is escaped strictly instead. That is
+ * kept even when the structure still differs: some joins live wholly in
+ * the author's text around an alphanumeric value (`[{{fact:a}}]` matching
+ * a reference definition, `www{{fact:a}}` with `a` = "www"… `.x.com`),
+ * and author text is never rewritten. The page is unaffected either way.
  */
 function serializeTwin(
   md: string,

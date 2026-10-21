@@ -233,11 +233,31 @@ describe('the .md twin: values as literal-equivalent markdown', () => {
     expect(t('5', '{{fact:n}}. Next')).toBe('5\\. Next')
   })
 
+  it('the strict fallback escapes values only: unrelated author syntax survives', () => {
+    // Codex round 2: the second paragraph trips the fallback; the link in
+    // the first must stay a link.
+    const md = '[{{fact:a}}](/target)\n\nVisit www{{fact:b}} today.'
+    const v = { a: '42', b: '.example.com' }
+    const twin = factsToMarkdown(md, values(v))
+    expect(twin).toBe('[42](/target)\n\nVisit www\\.example\\.com today.')
+    expect(renderMarkdown(twin)).toBe(pageHtml(md, v))
+    expect(renderMarkdown(twin)).toContain('<a href="/target">42</a>')
+    expect(renderMarkdown(twin)).not.toContain('www.example.com"')
+  })
+
+  it('author text is never rewritten, even when only it could break a join', () => {
+    // `[42]` resolving to a definition is made by the author's brackets around
+    // an alphanumeric value: the twin keeps the brackets, so it links where
+    // the page (placeholders) does not. Accepted; the page is what readers see.
+    const md = 'See [{{fact:n}}] here\n\n[42]: https://example.com'
+    expect(factsToMarkdown(md, values({ n: '42' }))).toBe(md.replace('{{fact:n}}', '42'))
+    expect(pageHtml(md, { n: '42' })).toBe('<p>See [42] here</p>\n')
+  })
+
   it("falls back to strict escaping when a value joins the author's text into syntax", () => {
     for (const [ctx, v] of [
       ['Go to https:{{fact:n}} now', '//evil.example'],
       ['Visit www{{fact:n}} today', '.example.com'],
-      ['See [{{fact:n}}] here\n\n[42]: https://example.com', '42'],
       ['Mail me{{fact:n}} soon', '@example.com'],
       ['Price &{{fact:n}} ok', 'amp;'],
       ['x &#{{fact:n}} y', '49;'],
@@ -299,6 +319,12 @@ describe('validatePostFacts — where a token may sit', () => {
     const err = thrown(() => check(md))
     expect(err.code).toBe('FACT_IN_URL')
     expect(err.details).toMatchObject({ line })
+  })
+
+  it('a definition label that only looks like a sentinel is not a fact context', () => {
+    // marked lowercases reference labels; the sentinel must not collide in any case.
+    expect(() => check('Price {{fact:a}}.\n\n[ZFACTZ0Q]: /unused')).not.toThrow()
+    expect(() => check('Price {{fact:a}}.\n\n[ZfAcTz0q]: /unused')).not.toThrow()
   })
 
   it('reports the first offending token in document order', () => {
