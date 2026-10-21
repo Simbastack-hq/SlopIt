@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { updateBlog } from '../blogs.js'
 import { SlopItError } from '../errors.js'
+import { deleteFact, listFacts, setFact, SetFactInputSchema } from '../facts.js'
 import { uploadMedia, listMedia, deleteMedia } from '../media.js'
 import type { MediaLimits } from '../media.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
@@ -13,12 +14,14 @@ import { signupBlog } from '../signup.js'
 import {
   BlogOutput,
   DeletedOutput,
+  FactListOutput,
   MediaListOutput,
   MediaOutput,
   PostListOutput,
   PostOutput,
   PostWriteOutput,
   ReportBugOutput,
+  SetFactOutput,
   SignupOutput,
 } from './output-schemas.js'
 import type { McpServerConfig } from './server.js'
@@ -526,6 +529,94 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
         const renderer = config.rendererFor(ctx.blog!)
         return deleteMedia(config.store, renderer, ctx.blog!.id, args.media_id)
       },
+    ),
+  )
+
+  // 12–14. Live facts: named current claims post bodies show inline as
+  // {{fact:name}}. The descriptions carry the rules an agent needs to use
+  // them without reading anything else (spec §7).
+  const FactName = z
+    .string()
+    .describe(
+      'Fact name: a lowercase letter, then up to 39 lowercase letters, digits or underscores, e.g. "pro_price". Post bodies use it as {{fact:pro_price}}.',
+    )
+
+  const SetFactToolInput = z
+    .object({ blog_id: BlogId, name: FactName })
+    .extend(SetFactInputSchema.shape)
+    .extend({ idempotency_key: IdempotencyKey })
+    .strict()
+
+  server.registerTool(
+    'set_fact',
+    {
+      ...meta('Set live fact', UPDATE),
+      description: [
+        'Create or change a live fact: a short current claim (a price, version, limit or count) that post bodies show inline as {{fact:name}}. Every post that uses it is re-rendered with the new value.',
+        'Use facts only for things that should stay current. Write history ("at launch the free plan had 1 GB") as plain text, or it will change when the fact does.',
+        'Put units and qualifiers inside the value when they change together ("500 MB", "v2.4.1"): the words around a fact never update.',
+        '`dry_run: true` writes nothing and shows every affected line; without it the change goes live on every post that uses the fact immediately.',
+        'Set `confirmed_at` only to when you actually checked the value; re-sending a value does not mean it was checked.',
+        "Facts can't go in headings, links, titles or excerpts. A fact used by any post can't be deleted until those posts stop using it.",
+      ].join(' '),
+      inputSchema: SetFactToolInput,
+      outputSchema: SetFactOutput,
+    },
+    wrapTool<z.infer<typeof SetFactToolInput>>(
+      config,
+      'set_fact',
+      {
+        auth: 'required',
+        idempotent: true,
+        crossBlogGuard: true,
+        // A dry run writes nothing at all, not even a replay record.
+        recordIf: (args) => args.dry_run !== true,
+      },
+      (args, ctx) => {
+        const { blog_id: _blogId, idempotency_key: _idem, name, ...input } = args
+        void _blogId
+        void _idem
+        return setFact(config.store, config.rendererFor(ctx.blog!), ctx.blog!.id, name, input)
+      },
+    ),
+  )
+
+  server.registerTool(
+    'list_facts',
+    {
+      ...meta('List live facts', READ),
+      description:
+        "List the blog's live facts: each value, when it was confirmed and changed, and the posts that use it. Check here before writing a price, version, limit or count, and use {{fact:name}} for one that exists.",
+      inputSchema: z.object({ blog_id: BlogId }).strict(),
+      outputSchema: FactListOutput,
+    },
+    wrapTool<{ blog_id?: string }>(
+      config,
+      'list_facts',
+      { auth: 'required', crossBlogGuard: true },
+      (_args, ctx) => listFacts(config.store, config.rendererFor(ctx.blog!), ctx.blog!.id),
+    ),
+  )
+
+  const DeleteFactInputSchema = z
+    .object({ blog_id: BlogId, name: FactName, idempotency_key: IdempotencyKey })
+    .strict()
+
+  server.registerTool(
+    'delete_fact',
+    {
+      ...meta('Delete live fact', DELETE),
+      description:
+        "Delete a live fact. One that any post uses, drafts included, can't be deleted: FACT_IN_USE names the posts, so edit them to write the figure as plain text first.",
+      inputSchema: DeleteFactInputSchema,
+      outputSchema: DeletedOutput,
+    },
+    wrapTool<z.infer<typeof DeleteFactInputSchema>>(
+      config,
+      'delete_fact',
+      { auth: 'required', idempotent: true, crossBlogGuard: true },
+      (args, ctx) =>
+        deleteFact(config.store, config.rendererFor(ctx.blog!), ctx.blog!.id, args.name),
     ),
   )
 }

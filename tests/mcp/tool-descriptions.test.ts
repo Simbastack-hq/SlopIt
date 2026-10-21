@@ -11,7 +11,8 @@ import { createMcpServer } from '../../src/mcp/server.js'
 const BANNED = ['endpoint', 'mcp', 'middleware', 'primitive', 'bridge']
 // The tools an agent meets first also say when to use them, what to tell
 // the human afterwards, and how to recover from failures.
-const COACHED = new Set(['signup', 'create_post', 'update_post'])
+// set_fact too: misusing it rewrites live pages, so it carries its rules.
+const COACHED = new Set(['signup', 'create_post', 'update_post', 'set_fact'])
 const maxLength = (name: string) => (COACHED.has(name) ? 900 : 240)
 const EXPECTED_TOOLS = [
   'signup',
@@ -26,6 +27,9 @@ const EXPECTED_TOOLS = [
   'upload_media',
   'list_media',
   'delete_media',
+  'set_fact',
+  'list_facts',
+  'delete_fact',
 ]
 
 describe('MCP tool descriptions', () => {
@@ -42,7 +46,7 @@ describe('MCP tool descriptions', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('all 12 tools are registered, each with a short description and no banned vocab', async () => {
+  it('all 15 tools are registered, each with a short description and no banned vocab', async () => {
     const renderer = createRenderer({
       store,
       outputDir: join(dir, 'out'),

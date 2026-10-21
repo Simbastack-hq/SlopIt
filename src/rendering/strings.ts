@@ -22,6 +22,12 @@ export interface ThemeStrings {
   otherLanguages: string
   /** `aria-label` of the contents rail beside a long post. */
   contents: string
+  /**
+   * The line under a post that shows live facts. `{date}` is replaced
+   * with the oldest confirmation date among them, formatted for the page.
+   * Starts with a word, so it stays a plain paragraph in the `.md` twin.
+   */
+  factsNote: string
 }
 
 const STRINGS: Record<string, ThemeStrings> = {
@@ -30,69 +36,94 @@ const STRINGS: Record<string, ThemeStrings> = {
     mainSite: 'Main site',
     otherLanguages: 'Other languages',
     contents: 'Contents',
+    factsNote:
+      'Some figures on this page are kept current by the publisher. Least recently confirmed: {date}.',
   },
   es: {
     moreFrom: 'Más de este blog',
     mainSite: 'Sitio principal',
     otherLanguages: 'Otros idiomas',
     contents: 'Contenido',
+    factsNote:
+      'El editor mantiene al día algunas cifras de esta página. Confirmación más antigua: {date}.',
   },
   de: {
     moreFrom: 'Mehr aus diesem Blog',
     mainSite: 'Hauptseite',
     otherLanguages: 'Andere Sprachen',
     contents: 'Inhalt',
+    factsNote:
+      'Einige Angaben auf dieser Seite hält der Herausgeber aktuell. Älteste Bestätigung: {date}.',
   },
   fr: {
     moreFrom: 'Plus d’articles de ce blog',
     mainSite: 'Site principal',
     otherLanguages: 'Autres langues',
     contents: 'Sommaire',
+    factsNote:
+      'L’éditeur tient à jour certains chiffres de cette page. Confirmation la plus ancienne\xa0: {date}.',
   },
   pt: {
     moreFrom: 'Mais deste blog',
     mainSite: 'Site principal',
     otherLanguages: 'Outros idiomas',
     contents: 'Conteúdo',
+    factsNote:
+      'O editor mantém atualizados alguns números desta página. Confirmação mais antiga: {date}.',
   },
   it: {
     moreFrom: 'Altri articoli da questo blog',
     mainSite: 'Sito principale',
     otherLanguages: 'Altre lingue',
     contents: 'Indice',
+    factsNote:
+      'L’editore tiene aggiornati alcuni dati di questa pagina. Conferma meno recente: {date}.',
   },
   ru: {
     moreFrom: 'Ещё в этом блоге',
     mainSite: 'Основной сайт',
     otherLanguages: 'Другие языки',
     contents: 'Содержание',
+    factsNote:
+      'Некоторые цифры на этой странице издатель поддерживает в актуальном состоянии. Самое давнее подтверждение: {date}.',
   },
   ja: {
     moreFrom: 'このブログの他の記事',
     mainSite: 'メインサイト',
     otherLanguages: '他の言語',
     contents: '目次',
+    factsNote: 'このページの一部の数値は発行者が最新の状態に保っています。最も古い確認日：{date}',
   },
-  zh: { moreFrom: '更多文章', mainSite: '主站', otherLanguages: '其他语言', contents: '目录' },
+  zh: {
+    moreFrom: '更多文章',
+    mainSite: '主站',
+    otherLanguages: '其他语言',
+    contents: '目录',
+    factsNote: '本页部分数据由发布者保持更新。最早确认日期：{date}',
+  },
   ar: {
     moreFrom: 'المزيد من هذه المدونة',
     mainSite: 'الموقع الرئيسي',
     otherLanguages: 'لغات أخرى',
     contents: 'المحتويات',
+    factsNote: 'يحرص الناشر على تحديث بعض الأرقام في هذه الصفحة. أقدم تأكيد: {date}.',
   },
   hi: {
     moreFrom: 'इस ब्लॉग के और लेख',
     mainSite: 'मुख्य साइट',
     otherLanguages: 'अन्य भाषाएँ',
     contents: 'विषय-सूची',
+    factsNote: 'इस पेज के कुछ आँकड़े प्रकाशक अद्यतन रखते हैं। सबसे पुरानी पुष्टि: {date}।',
   },
   sw: {
     moreFrom: 'Zaidi kutoka blogu hii',
     mainSite: 'Tovuti kuu',
     otherLanguages: 'Lugha nyingine',
     contents: 'Yaliyomo',
+    factsNote:
+      'Mchapishaji husasisha baadhi ya takwimu kwenye ukurasa huu. Uthibitisho wa zamani zaidi: {date}.',
   },
-  // Traditional-script Chinese differs from `zh` (Simplified) in two of
+  // Traditional-script Chinese differs from `zh` (Simplified) in some of
   // the labels; keyed by language-script so `zh-Hant`, `zh-TW` and
   // `zh-HK` (which all maximise to Hant) get it.
   'zh-Hant': {
@@ -100,6 +131,7 @@ const STRINGS: Record<string, ThemeStrings> = {
     mainSite: '主站',
     otherLanguages: '其他語言',
     contents: '目錄',
+    factsNote: '本頁部分數據由發布者保持更新。最早確認日期：{date}',
   },
 }
 

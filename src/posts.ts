@@ -2,7 +2,10 @@ import { getBlogInternal } from './blogs.js'
 import { isoTimestamp } from './time.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
+import { blogFactNames, drainFactRender } from './facts.js'
 import { generateShortId, generateSlug } from './ids.js'
+import { autoExcerpt } from './rendering/excerpt.js'
+import { scanFacts, validatePostFacts } from './rendering/facts.js'
 import type { MutationRenderer } from './rendering/generator.js'
 import { PostInputSchema, type Blog, type Post, type PostInput } from './schema/index.js'
 import { PostPatchSchema, type PostPatchInput } from './schema/index.js'
@@ -23,30 +26,8 @@ export function isPostSlugConflict(err: unknown): boolean {
   )
 }
 
-/**
- * Build an auto-excerpt from markdown body: strip common syntax, collapse
- * whitespace, truncate to 160 chars with a trailing ellipsis on overflow.
- *
- * Not a real markdown parser — good enough for v1 for typical posts. Edge
- * cases (inline HTML, code fences with content) produce noisy excerpts,
- * which is acceptable; callers who care supply an explicit excerpt field.
- *
- * @internal — exported for unit testing; not re-exported from src/index.ts.
- */
-export function autoExcerpt(body: string): string {
-  const stripped = body
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/^[ \t]*#+ /gm, '')
-    .replace(/^[ \t]*> /gm, '')
-    .replace(/^[ \t]*[-*+] /gm, '')
-    .replace(/[*_`]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (stripped.length <= 160) return stripped
-  return stripped.slice(0, 160).trimEnd() + '…'
-}
+// Re-exported for the tests that have always imported it from here.
+export { autoExcerpt }
 
 /**
  * Consumer policy consulted when a write links a post into a translation
@@ -396,6 +377,25 @@ export function createPost(
   // Step 2: blog exists (throws BLOG_NOT_FOUND with details.blogId)
   const blog = getBlogInternal(store, blogId)
 
+  // Live facts: finish a pending fact render first, then check where this
+  // write's fact tokens sit (and, for a published post, that they exist).
+  drainFactRender(store, renderer, blogId)
+  validatePostFacts(
+    parsed.body,
+    {
+      title: parsed.title,
+      slug: parsed.slug,
+      excerpt: parsed.excerpt,
+      tags: parsed.tags,
+      seoTitle: parsed.seoTitle,
+      seoDescription: parsed.seoDescription,
+      author: parsed.author,
+      coverImage: parsed.coverImage,
+    },
+    parsed.status === 'published',
+    blogFactNames(store, blogId),
+  )
+
   // Step 3: resolve slug (superRefine already rejected empty auto-slug)
   const slug = parsed.slug ?? generateSlug(parsed.title)
   if (RESERVED_SLUGS.has(slug)) {
@@ -414,7 +414,11 @@ export function createPost(
   const language =
     link.group !== null ? (parsed.language ?? blog.language) : (parsed.language ?? null)
   const id = generateShortId()
-  const excerpt = parsed.excerpt ?? autoExcerpt(parsed.body)
+  // A body that uses live facts and has no excerpt of its own stores none:
+  // rendering derives it from the body each time, with current values and
+  // only the live tokens substituted (rendering/facts.ts materializePost).
+  const excerpt =
+    parsed.excerpt ?? (scanFacts(parsed.body).length > 0 ? null : autoExcerpt(parsed.body))
   const now = new Date().toISOString()
   const publishedAt = parsed.status === 'published' ? now : null
   const tagsJson = JSON.stringify(parsed.tags)
@@ -554,6 +558,9 @@ export function updatePost(
   // Ensure blog exists (throws BLOG_NOT_FOUND)
   const blog = getBlogInternal(store, blogId)
 
+  // Live facts: finish a pending fact render before anything else.
+  drainFactRender(store, renderer, blogId)
+
   // Load prior row — throws POST_NOT_FOUND if missing
   const prior = getPost(store, blogId, slug)
 
@@ -590,11 +597,25 @@ export function updatePost(
         ? (parsed.language ?? null)
         : (prior.language ?? null)
 
+  // Live facts: a body that uses facts and has no excerpt of its own
+  // stores none (rendering derives it). A body edit moves an excerpt that
+  // was derived from the old body along with it: to none when the new body
+  // uses facts, back to a stored auto-excerpt when it stops. An excerpt
+  // the author wrote, and every post without facts, behave as before.
+  let excerpt = 'excerpt' in parsed ? parsed.excerpt : prior.excerpt
+  if (parsed.body !== undefined && !('excerpt' in parsed)) {
+    const priorDerived = prior.excerpt === undefined && scanFacts(prior.body).length > 0
+    const priorAuto = priorDerived || prior.excerpt === autoExcerpt(prior.body)
+    const usesFacts = scanFacts(parsed.body).length > 0
+    if (usesFacts && priorAuto) excerpt = undefined
+    else if (!usesFacts && priorDerived) excerpt = autoExcerpt(parsed.body)
+  }
+
   // Merge patched fields into prior row
   const merged = {
     title: parsed.title ?? prior.title,
     body: parsed.body ?? prior.body,
-    excerpt: 'excerpt' in parsed ? parsed.excerpt : prior.excerpt,
+    excerpt,
     tags: parsed.tags ?? prior.tags,
     status: parsed.status ?? prior.status,
     seoTitle: 'seoTitle' in parsed ? parsed.seoTitle : prior.seoTitle,
@@ -602,6 +623,23 @@ export function updatePost(
     author: 'author' in parsed ? parsed.author : prior.author,
     coverImage: 'coverImage' in parsed ? parsed.coverImage : prior.coverImage,
   }
+
+  // Live facts: tokens only in the body, never in a heading or an address,
+  // and every fact must exist once the post is (or stays) published.
+  validatePostFacts(
+    merged.body,
+    {
+      title: parsed.title,
+      excerpt: parsed.excerpt,
+      tags: parsed.tags,
+      seoTitle: parsed.seoTitle,
+      seoDescription: parsed.seoDescription,
+      author: parsed.author,
+      coverImage: parsed.coverImage,
+    },
+    merged.status === 'published',
+    blogFactNames(store, blogId),
+  )
 
   // Determine published_at by transition (decision #21 preserves on pub→pub)
   const oldStatus = prior.status
@@ -754,6 +792,7 @@ export function deletePost(
   slug: string,
 ): { deleted: true } {
   getBlogInternal(store, blogId) // throws BLOG_NOT_FOUND
+  drainFactRender(store, renderer, blogId) // live facts: a pending render goes first
   const prior = getPost(store, blogId, slug) // throws POST_NOT_FOUND
 
   // DB transaction: DELETE the row

@@ -11,6 +11,7 @@ import {
 import { join } from 'node:path'
 import { getBlogInternal } from '../blogs.js'
 import type { Store } from '../db/store.js'
+import { loadBlogFacts } from '../facts.js'
 import { listBlogLanguages, listPublishedPostsForBlog } from '../posts.js'
 import type { Blog, Post } from '../schema/index.js'
 import {
@@ -20,8 +21,8 @@ import {
   buildSitemap,
   ROBOTS_TXT_HEADER,
 } from './feeds.js'
+import { instant, materializePost, type FactRecord, type MaterializedPost } from './facts.js'
 import { buildFrontmatter } from './frontmatter.js'
-import { renderMarkdown } from './markdown.js'
 import {
   blogDisplayName,
   buildJsonLd,
@@ -119,9 +120,11 @@ export interface MutationRenderer extends Renderer {
    */
   mediaDir(blogId: string): string
   /**
-   * Write the per-post `<slug>.md` source file (YAML frontmatter + raw
-   * body) alongside the existing `<slug>/index.html`. Atomic via
-   * `writeFileAtomic`. Called from `renderPost` for published posts.
+   * Write the per-post `<slug>.md` source file (YAML frontmatter + the
+   * body, live facts substituted) alongside the existing
+   * `<slug>/index.html`. Atomic via `writeFileAtomic`. Called from
+   * `renderPost` for published posts. Pass the stored post: the renderer
+   * substitutes facts itself.
    */
   renderPostMarkdown(blogId: string, post: Post): void
   /**
@@ -492,11 +495,28 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
   const blogRootUrl = (): string => normalizeBaseUrl(config.baseUrl) + '/'
 
+  // Live facts: every place below that reads a post reads it materialised
+  // (fact tokens replaced with current values, `updatedAt` the effective
+  // modified time), with the blog's facts loaded once per public call.
+  // Posts without tokens come back untouched. The stored post never changes.
+  type Facts = ReadonlyMap<string, FactRecord>
+  const materializeAll = (posts: Post[], facts: Facts): MaterializedPost[] =>
+    posts.map((p) => materializePost(p, facts))
+
+  // The one honest line under a post that shows facts, in its language.
+  const factsNoteText = (note: { oldestConfirmedAt: string }, lang: string): string =>
+    stringsFor(lang).factsNote.replace('{date}', formatDate(note.oldestConfirmedAt, lang))
+
   // Emit the `<slug>.md` source file for a published post: YAML frontmatter
-  // (8 fixed keys, blanks omitted) + the author's raw markdown body.
+  // (8 fixed keys, blanks omitted) + the author's markdown body, with fact
+  // values in place and the facts note as a last paragraph.
   function renderPostMarkdown(blogId: string, post: Post): void {
     const blog = getBlogInternal(config.store, blogId)
-    const blogDir = blogOutputDir(blogId)
+    writePostMarkdown(blog, materializePost(post, loadBlogFacts(config.store, blogId)))
+  }
+
+  function writePostMarkdown(blog: Blog, { post, factsNote }: MaterializedPost): void {
+    const blogDir = blogOutputDir(blog.id)
     mkdirSync(blogDir, { recursive: true })
     const canonical = canonicalFor(post.slug)
     const sameDay = post.publishedAt && post.updatedAt === post.publishedAt ? null : post.updatedAt
@@ -511,7 +531,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       canonical,
       tags: post.tags,
     })
-    const content = `${frontmatter}\n\n${post.body}\n`
+    const note = factsNote ? `\n\n${factsNoteText(factsNote, resolveLanguage(post, blog))}` : ''
+    const content = `${frontmatter}\n\n${post.body}${note}\n`
     writeFileAtomic(join(blogDir, `${post.slug}.md`), content)
   }
 
@@ -524,17 +545,26 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
   // published-posts list, so one method is cheaper than several.
   function renderManifests(blogId: string): void {
     const blog = getBlogInternal(config.store, blogId)
+    writeManifests(blog, loadBlogFacts(config.store, blogId))
+  }
+
+  function writeManifests(blog: Blog, facts: Facts): void {
+    const blogId = blog.id
     const blogDir = blogOutputDir(blogId)
     mkdirSync(blogDir, { recursive: true })
 
     // Newest-first by publishedAt — same order users see on the home page.
-    const all = listPublishedPostsForBlog(config.store, blogId)
-      .slice()
-      .sort((a, b) => {
-        const ap = a.publishedAt ?? a.createdAt
-        const bp = b.publishedAt ?? b.createdAt
-        return bp.localeCompare(ap)
-      })
+    const materialized = materializeAll(
+      listPublishedPostsForBlog(config.store, blogId)
+        .slice()
+        .sort((a, b) => {
+          const ap = a.publishedAt ?? a.createdAt
+          const bp = b.publishedAt ?? b.createdAt
+          return bp.localeCompare(ap)
+        }),
+      facts,
+    )
+    const all = materialized.map((m) => m.post)
 
     const root = blogRootUrl()
     const languages = listBlogLanguages(config.store, blogId)
@@ -556,13 +586,23 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     })
     writeFileAtomic(join(blogDir, 'llms.txt'), llmsTxt)
 
-    const rssItem = (p: Post) => ({
+    const rssItem = ({ post: p, bodyHtml, factsNote }: MaterializedPost) => ({
       title: p.title,
       canonicalUrl: canonicalFor(p.slug),
       description: resolveDescription(p),
       publishedAt: p.publishedAt ?? p.createdAt,
+      // A post showing facts can change without its author touching it,
+      // so its item says when (`<atom:updated>`); same-value confirmations
+      // never move it. Other posts' items stay as they always were.
+      ...(factsNote && instant(p.updatedAt) > instant(p.publishedAt ?? p.createdAt)
+        ? { updatedAt: new Date(instant(p.updatedAt)).toISOString() }
+        : {}),
       author: p.author,
-      bodyHtml: renderMarkdown(p.body, { embeds: false }),
+      bodyHtml:
+        bodyHtml({ embeds: false }) +
+        (factsNote
+          ? `<p>${escapeHtml(factsNoteText(factsNote, resolveLanguage(p, blog)))}</p>\n`
+          : ''),
     })
 
     // `/feed.xml` — the 20 newest posts in every language, as it has
@@ -574,7 +614,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         blog: { ...blog, language: rootLang },
         blogRoot: root,
         feedUrl: root + 'feed.xml',
-        posts: all.slice(0, 20).map(rssItem),
+        posts: materialized.slice(0, 20).map(rssItem),
       }),
     )
 
@@ -591,8 +631,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
           blog: { ...blog, language: lang },
           blogRoot: home,
           feedUrl: home + 'feed.xml',
-          posts: all
-            .filter((p) => resolveLanguage(p, blog) === lang)
+          posts: materialized
+            .filter((m) => resolveLanguage(m.post, blog) === lang)
             .slice(0, 20)
             .map(rssItem),
         })
@@ -631,7 +671,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
   function writePostHtml(
     blog: Blog,
     blogDir: string,
-    post: Post,
+    { post, bodyHtml, factsNote }: MaterializedPost,
     published: Post[],
     languages: string[],
   ): void {
@@ -670,7 +710,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     // (the root language has one too), never to `/`, which a consumer may
     // negotiate — a reader who chose a language keeps it while navigating.
     const blogHomeHref = languages.length === 1 ? '..' : `../lang/${languageSegment(lang)}/`
-    const postBody = renderMarkdown(post.body)
+    const postBody = bodyHtml()
 
     const html = render(theme.post, {
       lang,
@@ -709,6 +749,9 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         strings.otherLanguages,
       ),
       postBody,
+      factsNote: factsNote
+        ? `<p class="facts-note">${escapeHtml(factsNoteText(factsNote, lang))}</p>`
+        : '',
       toc: renderToc(postBody, lang, strings.contents),
       tagList: renderTagList(post.tags),
       moreFrom: renderMoreFrom(post, sameLanguage, strings.moreFrom),
@@ -729,11 +772,13 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       // ensureThemeAssets BEFORE HTML write — see spec's Render sequencing section
       ensureThemeAssets(theme, blogDir)
 
+      const facts = loadBlogFacts(config.store, blogId)
+      const self = materializePost(post, facts)
       writePostHtml(
         blog,
         blogDir,
-        post,
-        listPublishedPostsForBlog(config.store, blogId),
+        self,
+        materializeAll(listPublishedPostsForBlog(config.store, blogId), facts).map((m) => m.post),
         listBlogLanguages(config.store, blogId),
       )
 
@@ -741,8 +786,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       // whenever a published post is rendered. Drafts skip both (no
       // canonical URL, would break feed.xml).
       if (post.status === 'published') {
-        renderPostMarkdown(blogId, post)
-        renderManifests(blogId)
+        writePostMarkdown(blog, self)
+        writeManifests(blog, facts)
       }
     },
 
@@ -752,10 +797,14 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
       ensureThemeAssets(theme, blogDir)
 
-      const published = listPublishedPostsForBlog(config.store, blogId)
+      const published = materializeAll(
+        listPublishedPostsForBlog(config.store, blogId),
+        loadBlogFacts(config.store, blogId),
+      )
+      const posts = published.map((m) => m.post)
       const languages = listBlogLanguages(config.store, blogId)
-      for (const post of published) {
-        writePostHtml(blog, blogDir, post, published, languages)
+      for (const m of published) {
+        writePostHtml(blog, blogDir, m, posts, languages)
       }
     },
 
@@ -765,7 +814,10 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
 
       ensureThemeAssets(theme, blogDir)
 
-      const posts = listPublishedPostsForBlog(config.store, blogId)
+      const facts = loadBlogFacts(config.store, blogId)
+      const posts = materializeAll(listPublishedPostsForBlog(config.store, blogId), facts).map(
+        (m) => m.post,
+      )
       const languages = listBlogLanguages(config.store, blogId)
       const rootLang = languages[0]
       const root = blogRootUrl()
@@ -850,7 +902,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       // gets them here (an empty feed, so the link never 404s), rewritten
       // every time because nothing else would carry a new baseUrl or title
       // into them. With posts, a missing feed is written once.
-      if (posts.length === 0 || !existsSync(join(blogDir, 'feed.xml'))) renderManifests(blogId)
+      if (posts.length === 0 || !existsSync(join(blogDir, 'feed.xml'))) writeManifests(blog, facts)
     },
 
     pruneLanguageHomes(blogId) {

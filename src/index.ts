@@ -37,6 +37,18 @@ export {
 } from './posts.js'
 export type { TranslationPolicy } from './posts.js'
 
+// Live-fact primitives. drainPendingFactRenders is for hosts to call at
+// boot: it finishes fact re-renders a crash or failure left pending.
+export { setFact, listFacts, getFact, deleteFact, drainPendingFactRenders } from './facts.js'
+export type {
+  AffectedPost,
+  Fact,
+  FactUse,
+  FactWithUses,
+  SetFactInput,
+  SetFactResult,
+} from './facts.js'
+
 // Media primitives
 export { uploadMedia, listMedia, getMedia, deleteMedia } from './media.js'
 export type { MediaRow, MediaWithUrl, MediaLimits, UploadInput } from './media.js'

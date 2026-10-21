@@ -1,4 +1,4 @@
-import { Marked, type MarkedExtension, type Tokens } from 'marked'
+import { Marked, type MarkedExtension, type Token, type Tokens } from 'marked'
 
 // v1 XSS defense: strip all raw HTML tokens (block and inline) via a
 // renderer override PLUS a preprocess pass that removes the payload of
@@ -228,8 +228,7 @@ export function renderMarkdown(md: string, { embeds = true }: { embeds?: boolean
 export function bodyMedia(md: string): { videos: string[]; images: string[] } {
   const videos: string[] = []
   const images: string[] = []
-  // `void`: the callback is sync, so walkTokens' promise array is empty.
-  void pageMarked.walkTokens(pageMarked.lexer(stripDangerousBlocks(md)), (token) => {
+  walkBodyTokens(md, (token) => {
     // Casts: `Token` includes marked's catch-all Generic, so `type` alone doesn't narrow.
     if (token.type === 'paragraph') {
       const video = youtubeVideo((token as Tokens.Paragraph).text.trim())
@@ -239,4 +238,11 @@ export function bodyMedia(md: string): { videos: string[]; images: string[] } {
     }
   })
   return { videos, images }
+}
+
+// Every token of a body as the page's parser sees it (script, style and
+// iframe blocks removed first, exactly like a render), in document order.
+export function walkBodyTokens(md: string, visit: (token: Token) => void): void {
+  // `void`: the callback is sync, so walkTokens' promise array is empty.
+  void pageMarked.walkTokens(pageMarked.lexer(stripDangerousBlocks(md)), visit)
 }
