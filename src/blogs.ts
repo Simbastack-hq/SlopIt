@@ -1,4 +1,5 @@
 import { generateApiKey, hashApiKey } from './auth/api-key.js'
+import { isoTimestamp } from './time.js'
 import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { generateShortId } from './ids.js'
@@ -91,7 +92,7 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
     name: row.name,
     title: row.title,
     theme: row.theme,
-    createdAt: row.created_at,
+    createdAt: isoTimestamp(row.created_at),
     parentSiteUrl: null,
     language: row.language,
   }
@@ -129,7 +130,7 @@ export function getBlogsByEmail(store: Store, email: string): Blog[] {
     name: row.name,
     title: row.title,
     theme: row.theme,
-    createdAt: row.created_at,
+    createdAt: isoTimestamp(row.created_at),
     parentSiteUrl: row.parent_site_url,
     language: row.language,
   }))
@@ -198,7 +199,7 @@ export function getBlogByName(store: Store, name: string): Blog | null {
     name: row.name,
     title: row.title,
     theme: row.theme,
-    createdAt: row.created_at,
+    createdAt: isoTimestamp(row.created_at),
     analytics: parseAnalytics(row.analytics_json),
     parentSiteUrl: row.parent_site_url,
     language: row.language,
@@ -379,7 +380,7 @@ export function getBlogInternal(store: Store, blogId: string): Blog {
     name: row.name,
     title: row.title,
     theme: row.theme,
-    createdAt: row.created_at,
+    createdAt: isoTimestamp(row.created_at),
     analytics: parseAnalytics(row.analytics_json),
     parentSiteUrl: row.parent_site_url,
     language: row.language,
