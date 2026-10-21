@@ -82,6 +82,12 @@ export function renderToc(bodyHtml: string, lang: string, label: string): string
     ([, id, inner]) => ({ id, text: inner.replace(/<[^>]*>/g, '').trim() }),
   )
   if (sections.length < MIN_SECTIONS || countWords(bodyHtml, lang) < MIN_WORDS) return ''
-  const items = sections.map((s) => `<li><a href="#${s.id}">${s.text}</a></li>`).join('')
+  // The text sits in its own span so the theme can clamp it without the
+  // link's padding letting a third line peek through (line-clamp clips at
+  // the padding box). The link keeps its padding: full click target, and
+  // the rail marker still measures the whole link.
+  const items = sections
+    .map((s) => `<li><a href="#${s.id}"><span>${s.text}</span></a></li>`)
+    .join('')
   return `<nav class="toc" aria-label="${escapeHtml(label)}"><ol>${items}</ol></nav>${SCRIPT}`
 }

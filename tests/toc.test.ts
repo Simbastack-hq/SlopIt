@@ -78,8 +78,8 @@ describe('renderToc', () => {
   it('lists every h2 as a link to its id, labelled for screen readers', () => {
     const toc = renderToc(renderMarkdown(longBody(3)), 'en', 'Contents')
     expect(toc).toContain('<nav class="toc" aria-label="Contents"><ol>')
-    expect(toc).toContain('<li><a href="#part-1">Part 1</a></li>')
-    expect(toc).toContain('<li><a href="#part-3">Part 3</a></li>')
+    expect(toc).toContain('<li><a href="#part-1"><span>Part 1</span></a></li>')
+    expect(toc).toContain('<li><a href="#part-3"><span>Part 3</span></a></li>')
     expect(toc).toContain('<script type="module">')
   })
 
@@ -98,7 +98,7 @@ describe('renderToc', () => {
 
   it('shows heading text without its inline markup, still escaped', () => {
     const body = renderMarkdown(longBody(3) + '\n\n## Use `<b>` & [links](https://x.example)')
-    expect(renderToc(body, 'en', 'Contents')).toContain('>Use &lt;b&gt; &amp; links</a>')
+    expect(renderToc(body, 'en', 'Contents')).toContain('>Use &lt;b&gt; &amp; links</span></a>')
   })
 
   it('escapes the label', () => {
