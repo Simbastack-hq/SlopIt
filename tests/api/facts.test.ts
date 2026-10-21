@@ -94,6 +94,7 @@ describe('REST /blogs/:id/facts', () => {
     ])
     const one = await call('GET', `/blogs/${blogId}/facts/pro_price`)
     expect(one.json.fact?.value).toBe('$12/mo')
+    expect(one.json.render_pending).toBe(false)
 
     const changed = await call('PUT', `/blogs/${blogId}/facts/pro_price`, { value: '$15/mo' })
     expect(changed.json).toMatchObject({ changed: true, rerendered: 1 })
@@ -151,6 +152,24 @@ describe('REST /blogs/:id/facts', () => {
     expect(store.db.prepare('SELECT COUNT(*) AS n FROM facts').get()).toEqual({ n: 0 })
     const res = await app.request(`/blogs/${blogId}/facts`)
     expect(res.status).toBe(401)
+  })
+
+  it('a dry run with an Idempotency-Key stores no replay record', async () => {
+    const keys = () =>
+      (store.db.prepare('SELECT COUNT(*) AS n FROM idempotency_keys').get() as { n: number }).n
+    const headers = { 'Idempotency-Key': 'dry-1' }
+    const dry = await call(
+      'PUT',
+      `/blogs/${blogId}/facts/a`,
+      { value: '1', dry_run: true },
+      headers,
+    )
+    expect(dry.status).toBe(200)
+    expect(dry.json).toMatchObject({ dry_run: true })
+    expect(keys()).toBe(0)
+    expect(store.db.prepare('SELECT COUNT(*) AS n FROM facts').get()).toEqual({ n: 0 })
+    await call('PUT', `/blogs/${blogId}/facts/a`, { value: '1' }, { 'Idempotency-Key': 'real-1' })
+    expect(keys()).toBe(1)
   })
 
   it('Idempotency-Key on PUT replays the stored response (no re-stamped confirmation)', async () => {

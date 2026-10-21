@@ -21,9 +21,8 @@ import {
   buildSitemap,
   ROBOTS_TXT_HEADER,
 } from './feeds.js'
-import { materializePost, type FactRecord, type MaterializedPost } from './facts.js'
+import { instant, materializePost, type FactRecord, type MaterializedPost } from './facts.js'
 import { buildFrontmatter } from './frontmatter.js'
-import { renderMarkdown } from './markdown.js'
 import {
   blogDisplayName,
   buildJsonLd,
@@ -587,14 +586,20 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     })
     writeFileAtomic(join(blogDir, 'llms.txt'), llmsTxt)
 
-    const rssItem = ({ post: p, factsNote }: MaterializedPost) => ({
+    const rssItem = ({ post: p, bodyHtml, factsNote }: MaterializedPost) => ({
       title: p.title,
       canonicalUrl: canonicalFor(p.slug),
       description: resolveDescription(p),
       publishedAt: p.publishedAt ?? p.createdAt,
+      // A post showing facts can change without its author touching it,
+      // so its item says when (`<atom:updated>`); same-value confirmations
+      // never move it. Other posts' items stay as they always were.
+      ...(factsNote && instant(p.updatedAt) > instant(p.publishedAt ?? p.createdAt)
+        ? { updatedAt: new Date(instant(p.updatedAt)).toISOString() }
+        : {}),
       author: p.author,
       bodyHtml:
-        renderMarkdown(p.body, { embeds: false }) +
+        bodyHtml({ embeds: false }) +
         (factsNote
           ? `<p>${escapeHtml(factsNoteText(factsNote, resolveLanguage(p, blog)))}</p>\n`
           : ''),
@@ -666,7 +671,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
   function writePostHtml(
     blog: Blog,
     blogDir: string,
-    { post, factsNote }: MaterializedPost,
+    { post, bodyHtml, factsNote }: MaterializedPost,
     published: Post[],
     languages: string[],
   ): void {
@@ -705,7 +710,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     // (the root language has one too), never to `/`, which a consumer may
     // negotiate — a reader who chose a language keeps it while navigating.
     const blogHomeHref = languages.length === 1 ? '..' : `../lang/${languageSegment(lang)}/`
-    const postBody = renderMarkdown(post.body)
+    const postBody = bodyHtml()
 
     const html = render(theme.post, {
       lang,

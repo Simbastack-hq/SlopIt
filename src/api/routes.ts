@@ -16,7 +16,7 @@ import { deleteFact, getFact, listFacts, setFact, type SetFactInput } from '../f
 
 const StatusQuerySchema = z.enum(['draft', 'published']).optional()
 
-type Vars = { blog: Blog; apiKeyHash: string }
+type Vars = { blog: Blog; apiKeyHash: string; skipIdempotencyRecord?: boolean }
 
 /**
  * Read a JSON body that is allowed to be empty. An empty body returns
@@ -276,8 +276,8 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
 
   app.get('/blogs/:id/facts/:name', (c) => {
     const renderer = config.rendererFor(c.var.blog)
-    const fact = getFact(config.store, renderer, c.var.blog.id, c.req.param('name'))
-    return c.json({ fact, _links: buildLinks(c.var.blog, config) })
+    const result = getFact(config.store, renderer, c.var.blog.id, c.req.param('name'))
+    return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
   })
 
   app.put('/blogs/:id/facts/:name', async (c) => {
@@ -286,6 +286,8 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     // guarantees the JSON parsed.
     const raw: SetFactInput = await c.req.json()
     const result = setFact(config.store, renderer, c.var.blog.id, c.req.param('name'), raw)
+    // A dry run writes nothing at all, not even a replay record.
+    if (result.dry_run) c.set('skipIdempotencyRecord', true)
     return c.json({ ...result, _links: buildLinks(c.var.blog, config) })
   })
 

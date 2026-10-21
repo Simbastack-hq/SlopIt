@@ -565,7 +565,13 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     wrapTool<z.infer<typeof SetFactToolInput>>(
       config,
       'set_fact',
-      { auth: 'required', idempotent: true, crossBlogGuard: true },
+      {
+        auth: 'required',
+        idempotent: true,
+        crossBlogGuard: true,
+        // A dry run writes nothing at all, not even a replay record.
+        recordIf: (args) => args.dry_run !== true,
+      },
       (args, ctx) => {
         const { blog_id: _blogId, idempotency_key: _idem, name, ...input } = args
         void _blogId

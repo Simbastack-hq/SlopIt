@@ -24,6 +24,11 @@ export interface WrapToolOpts {
   auth: 'required' | 'public'
   idempotent?: boolean
   crossBlogGuard?: boolean
+  /**
+   * With `idempotent`: return false for a call whose result must not be
+   * stored for replay because it wrote nothing (a dry run). Default: store.
+   */
+  recordIf?: (args: Record<string, unknown>) => boolean
 }
 
 export interface ToolCtx {
@@ -160,7 +165,7 @@ export function wrapTool<A extends Record<string, unknown> = Record<string, unkn
       const result = await business(args, ctx)
 
       // Step 5: Record on success
-      if (idemScope !== undefined) {
+      if (idemScope !== undefined && (opts.recordIf?.(args) ?? true)) {
         recordIdempotencyResponse(config.store, idemScope, JSON.stringify(result), 200)
       }
 

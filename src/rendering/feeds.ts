@@ -159,6 +159,8 @@ export interface RssPost {
   canonicalUrl: string
   description: string
   publishedAt: string
+  /** ISO 8601. When set, the item carries `<atom:updated>` (publication date and guid unchanged). */
+  updatedAt?: string
   author?: string
   bodyHtml: string
 }
@@ -197,6 +199,9 @@ function rssItem(p: RssPost, channelTitle: string): string {
     `      <link>${escapeXml(p.canonicalUrl)}</link>`,
     `      <guid isPermaLink="true">${escapeXml(p.canonicalUrl)}</guid>`,
     `      <pubDate>${rfc822(p.publishedAt)}</pubDate>`,
+    ...(p.updatedAt !== undefined
+      ? [`      <atom:updated>${escapeXml(p.updatedAt)}</atom:updated>`]
+      : []),
     `      <dc:creator>${creator}</dc:creator>`,
   ]
   if (p.description) {

@@ -159,7 +159,7 @@ In the table below, replace \`{blog_url}\` with the blog's real \`blog_url\` (it
 |---|---|---|
 | {blog_url}llms.txt | Markdown | Manifest of every published post (newest first), one description line each. Start here if you're indexing a blog. |
 | {blog_url}{post-slug}.md | Markdown (YAML frontmatter + raw body) | Source markdown for any published post. The frontmatter has \`title\`, \`slug\`, \`language\`, \`date\`, \`updated\` (when changed), \`author\`, \`description\`, \`canonical\`, \`tags\`. The body below the closing \`---\` is what the author submitted, with each \`{{fact:name}}\` replaced by the live fact's current value and, on a post that uses facts, a last line saying when they were confirmed (see Live facts). |
-| {blog_url}feed.xml | RSS 2.0 + content:encoded | The 20 most recent published posts in every language (channel language = the blog's root language), full HTML in \`<content:encoded>\`. Stable feed for syndication. |
+| {blog_url}feed.xml | RSS 2.0 + content:encoded | The 20 most recent published posts in every language (channel language = the blog's root language), full HTML in \`<content:encoded>\`. An item whose post shows live facts also carries \`<atom:updated>\` once a value changes after publishing. Stable feed for syndication. |
 | {blog_url}lang/{tag}/feed.xml | RSS 2.0 + content:encoded | That language's posts only, for every language the blog publishes in, root language included (\`{tag}\` is the lowercase BCP-47 tag, e.g. \`{blog_url}lang/de/feed.xml\`). Only exists on blogs with posts in more than one language. |
 | {blog_url}sitemap.xml | XML sitemap | Every published post URL and every language home page with \`<lastmod>\`. |
 
@@ -256,7 +256,7 @@ Send \`Idempotency-Key: <unique-key>\` on an **authenticated** mutation (POST /b
 **Authenticated mutations — best-effort, not crash-safe.** The server records the response *after* the handler commits. If the server crashes or the response is dropped in that window, a retry with the same key may re-execute the handler instead of replaying the original response. Observable outcomes are bounded:
 - POST /blogs/:id/posts → 409 POST_SLUG_CONFLICT on retry.
 - PATCH → idempotent if the patch is deterministic (true in practice).
-- PUT /blogs/:id/facts/:name → same value again; without an explicit \`confirmed_at\` it is re-confirmed as of the retry.
+- PUT /blogs/:id/facts/:name → same value again; without an explicit \`confirmed_at\` it is re-confirmed as of the retry. A \`dry_run: true\` call is never stored for replay: it writes nothing at all.
 - DELETE → 404 POST_NOT_FOUND on retry.
 
 **Same payload, bytewise.** The request hash covers method, path, content-type, query string, and raw body. Reordering JSON fields counts as a different payload and returns 422. If you retry, resend exactly what you sent before.
@@ -365,7 +365,7 @@ A live fact is a short current claim the blog keeps under a name: a price, a ver
 - Set \`confirmed_at\` only to when you actually checked the value. It defaults to now, and re-sending a value doesn't mean it was checked.
 - Facts can't go in headings, link or image addresses, titles, excerpts or any field but the body. A fact used by any post (drafts included) can't be deleted until those posts stop using it.
 
-A name is a lowercase letter, then up to 39 lowercase letters, digits or underscores. A value is plain text: 1–120 characters, one line, and none of these characters: \`[\` \`]\` \`<\` \`>\` \`*\` \`_\` \`~\` \`\` \` \`\` \`|\` \`\\\` \`{\` \`}\`. A blog keeps up to 100 facts. Inside inline code and fenced code blocks \`{{fact:name}}\` stays literal, so you can show the syntax. A draft may use a fact that doesn't exist yet (its preview shows the token as written); publishing it fails with FACT_NOT_FOUND until the fact exists.
+A name is a lowercase letter, then up to 39 lowercase letters, digits or underscores. A value is plain text: 1–120 characters, one line, none of these characters: \`[\` \`]\` \`<\` \`>\` \`*\` \`_\` \`~\` \`\` \` \`\` \`|\` \`\\\` \`{\` \`}\`, and not only \`-\`, \`:\` and \`=\`. A blog keeps up to 100 facts. A value always shows as written: one that looks like a link, an email, an entity or markdown is never turned into one (in the \`.md\` file it is backslash-escaped where needed, e.g. \`https\\://\`). Inside inline code and code blocks \`{{fact:name}}\` stays literal, and so does \`\\{{fact:name}}\`, so you can show the syntax. A post that uses facts and has no \`excerpt\` of its own gets its summary from the body, with current values, every time it renders (its responses then have no \`excerpt\`). A draft may use a fact that doesn't exist yet (its preview shows the token as written); publishing it fails with FACT_NOT_FOUND until the fact exists.
 
 End to end:
 
@@ -375,6 +375,6 @@ End to end:
 4. Apply it: the same \`PUT\` without \`dry_run\`, plus \`"expected_value": "$12/mo"\` so it applies only if the value is still the one you previewed (otherwise FACT_CONFLICT with \`details.current_value\`). Every post that uses \`pro_price\` now says $15/mo on its page, \`.md\`, feeds and sitemap, and its \`dateModified\` moves to now.
 5. A month later you check again and it is still $15/mo: \`PUT\` \`{ "value": "$15/mo", "confirmed_at": "2026-11-21" }\`. Only the date in the last line moves; \`dateModified\` stays.
 
-The \`PUT\` response is \`{ fact, changed, dry_run, affected_posts, rerendered }\`. \`note\` (up to 200 characters) and \`source_url\` (https) are stored and returned but never shown on pages: omit one to keep it, send \`null\` to clear it. \`GET ${baseUrl}/blogs/{blog_id}/facts\` (MCP \`list_facts\`) returns \`{ facts, render_pending }\`, each fact with \`used_by\`, the posts that use it. \`render_pending: true\` (or a FACT_RENDER_PENDING error) means a change is saved but some pages still show the old value; the next facts call or post write finishes them.
+The \`PUT\` response is \`{ fact, changed, dry_run, affected_posts, rerendered }\`. \`note\` (up to 200 characters) and \`source_url\` (https) are stored and returned but never shown on pages: omit one to keep it, send \`null\` to clear it. \`GET ${baseUrl}/blogs/{blog_id}/facts\` (MCP \`list_facts\`) returns \`{ facts, render_pending }\`, each fact with \`used_by\`, the posts that use it; \`GET …/facts/{name}\` returns \`{ fact, render_pending }\`. \`render_pending: true\` (or a FACT_RENDER_PENDING error) means a change is saved but some pages still show the old value; the next facts call or post write finishes them.
 `
 }

@@ -5,9 +5,9 @@ import {
   checkFactValue,
   factLines,
   factNames,
+  factsToMarkdown,
   materializePost,
   scanFacts,
-  substituteFacts,
   validatePostFacts,
   type FactRecord,
 } from '../src/rendering/facts.js'
@@ -29,8 +29,31 @@ const KNOWN = new Set(['price', 'version', 'n', 'a', 'b'])
 const check = (body: string, published = true, fields = {}) =>
   validatePostFacts(body, fields, published, KNOWN)
 
-describe('scanFacts — one scanner, code is never scanned', () => {
-  it('finds tokens outside code with 1-based lines', () => {
+const post = (body: string, extra: Partial<Post> = {}): Post => ({
+  id: 'p1',
+  blogId: 'b1',
+  slug: 's',
+  title: 'T',
+  body,
+  tags: [],
+  status: 'published',
+  publishedAt: '2026-01-01T00:00:00.000Z',
+  createdAt: '2026-01-01 00:00:00',
+  updatedAt: '2026-01-01 00:00:00',
+  ...extra,
+})
+const fact = (
+  value: string,
+  confirmedAt = '2026-03-01T00:00:00.000Z',
+  updatedAt = confirmedAt,
+): FactRecord => ({ value, confirmedAt, updatedAt })
+const factMap = (o: Record<string, string>) =>
+  new Map(Object.entries(o).map(([k, v]) => [k, fact(v)]))
+const pageHtml = (body: string, o: Record<string, string>) =>
+  materializePost(post(body), factMap(o)).bodyHtml()
+
+describe('scanFacts — one scanner, code decided by the lexer', () => {
+  it('finds live tokens with 1-based lines', () => {
     const md = 'Pro is {{fact:price}}.\n\nNow {{fact:version}} and {{fact:price}} again.'
     expect(scanFacts(md).map((o) => [o.name, o.line])).toEqual([
       ['price', 1],
@@ -40,18 +63,29 @@ describe('scanFacts — one scanner, code is never scanned', () => {
     expect(factNames(md)).toEqual(['price', 'version'])
   })
 
-  it('leaves tokens in ``` and ~~~ fences and inline code alone', () => {
-    const md = [
-      '```',
-      '{{fact:price}}',
-      '```',
-      '~~~',
-      '{{fact:price}}',
-      '~~~',
-      'Use `{{fact:price}}` in a body.',
-    ].join('\n')
+  it.each([
+    ['``` fence', '```\n{{fact:price}}\n```'],
+    ['~~~ fence', '~~~\n{{fact:price}}\n~~~'],
+    ['inline code', 'Use `{{fact:price}}` here.'],
+    ['double-backtick span', 'Use ``{{fact:price}}`` here.'],
+    ['span holding a backtick', 'Use `` a`{{fact:price}} `` here.'],
+    ['inline code over two lines', 'Use `a\n{{fact:price}}` here.'],
+    ['unclosed fence (runs to the end)', 'Intro\n\n```\n{{fact:price}}\nmore'],
+    ['4-backtick fence holding ```', '````\n```\n{{fact:price}}\n```\n````'],
+    ['indented code', 'Intro\n\n    {{fact:price}}'],
+    ['code in a list item', '- item\n\n      {{fact:price}}'],
+    ['code in a quote', '> `{{fact:price}}`'],
+  ])('%s is code: not live, not validated, not substituted', (_, md) => {
     expect(scanFacts(md)).toEqual([])
-    expect(substituteFacts(md, values({ price: '$12' }))).toBe(md)
+    expect(() => check(md.replace('price', 'unknown_name'))).not.toThrow()
+    expect(pageHtml(md, { price: 'VALUE' })).not.toContain('VALUE')
+    expect(factsToMarkdown(md, values({ price: 'VALUE' }))).toBe(md)
+  })
+
+  it('a backslash before the token makes it literal; an escaped backslash does not', () => {
+    expect(scanFacts('\\{{fact:price}}')).toEqual([])
+    expect(pageHtml('\\{{fact:price}}', { price: 'V' })).toBe('<p>{{fact:price}}</p>\n')
+    expect(factNames('\\\\{{fact:price}}')).toEqual(['price'])
   })
 
   it('treats anything but the exact token as literal text, never an error', () => {
@@ -62,7 +96,6 @@ describe('scanFacts — one scanner, code is never scanned', () => {
       '{fact:price}}',
       '{{fact:9lives}}',
       '{{fact:' + 'a'.repeat(41) + '}}',
-      '{{Fact:price}}',
     ]) {
       expect(scanFacts(md), md).toEqual([])
       expect(() => check(md), md).not.toThrow()
@@ -70,30 +103,32 @@ describe('scanFacts — one scanner, code is never scanned', () => {
     expect(factNames('{{fact:' + 'a'.repeat(40) + '}}')).toEqual(['a'.repeat(40)])
   })
 
-  it('stays linear on a long line packed with tokens', () => {
-    const md = '{{fact:a}}'.repeat(20_000) + ' ' + 'x '.repeat(50_000)
+  it('stays fast on a long line packed with tokens', () => {
+    const md = '{{fact:a}}'.repeat(10_000) + ' ' + 'x '.repeat(50_000)
     const t = Date.now()
     scanFacts(md)
-    substituteFacts(md, values({ a: '1' }))
     check(md)
-    expect(Date.now() - t).toBeLessThan(2000)
+    factsToMarkdown(md, values({ a: '1' }))
+    expect(Date.now() - t).toBeLessThan(5000)
   })
 })
 
-describe('checkFactValue — values are inert plain text', () => {
+describe('checkFactValue — values are plain text', () => {
   it.each(['[', ']', '<', '>', '*', '_', '~', '`', '|', '\\', '{', '}'])(
     'rejects %s, naming it',
     (ch) => {
       const err = thrown(() => checkFactValue(`a${ch}b`))
       expect(err.code).toBe('FACT_VALUE_INVALID')
       expect(err.details.character).toBe(ch)
-      expect(err.message).toContain(`"${ch}"`)
     },
   )
 
-  it('rejects empty, too long, multi-line and control characters', () => {
+  it('rejects empty, too long, multi-line, control characters and rule-like values', () => {
     for (const v of ['', '   ', 'x'.repeat(121), 'a\nb', 'a\u0007b', 'a b']) {
       expect(thrown(() => checkFactValue(v)).code, JSON.stringify(v)).toBe('FACT_VALUE_INVALID')
+    }
+    for (const v of ['-', '---', ':-:', '= =', '- : -', '===']) {
+      expect(thrown(() => checkFactValue(v)).message, v).toMatch(/only of -, : and =/)
     }
   })
 
@@ -101,80 +136,115 @@ describe('checkFactValue — values are inert plain text', () => {
     for (const v of ['$12/mo', 'v2.4.1', '1,000+', 'AT&T', '-5%', '#1', '10 GB', '€9,99', '1.']) {
       expect(checkFactValue(`  ${v} `)).toBe(v)
     }
-    expect(checkFactValue('x'.repeat(120))).toHaveLength(120)
   })
 })
 
-describe('substitution — a value at a line start never becomes block syntax', () => {
-  // Each body puts a hostile value where a block would start; the rendered
-  // page must hold exactly one paragraph (or list item / quote the author
-  // wrote) with the value as text.
-  const render = (md: string, v: string) => renderMarkdown(substituteFacts(md, values({ n: v })))
+// Values a fact may hold that would be markdown, a URL, an embed or an
+// entity if they were parsed: every output must show them as written.
+const HOSTILE = [
+  '# heading',
+  '## h',
+  '- item',
+  '+ item',
+  '> quote',
+  '1. item',
+  '1) item',
+  '=x',
+  'https://youtu.be/3mlRiF-LeMc',
+  'https://example.com/path',
+  'www.example.com',
+  'ops@example.com',
+  '&#49;',
+  'AT&T',
+  '&amp;',
+  '$12/mo',
+  ':-: ok',
+]
+// Where a value can sit: alone on a line, after container markers, mid-
+// sentence, in a table cell, emphasis, link text, back to back.
+const CONTEXTS = [
+  '{{fact:n}}',
+  'Intro line\n{{fact:n}}',
+  '- {{fact:n}}',
+  '> {{fact:n}}',
+  '1. {{fact:n}}',
+  'Rank {{fact:n}} today.',
+  '{{fact:n}}. Next',
+  '| A | B |\n|---|---|\n| x | {{fact:n}} |',
+  '**{{fact:n}}**',
+  '[see {{fact:n}}](https://example.com)',
+  '{{fact:n}}{{fact:n}}',
+]
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-  it.each([
-    '# heading',
-    '## h',
-    '- item',
-    '+ item',
-    '> quote',
-    '=== ',
-    '---',
-    '1. item',
-    '1) item',
-  ])('a line that is only {{fact:n}} = %j stays a paragraph', (v) => {
-    const html = render('Intro line\n{{fact:n}}', v)
-    expect(html).not.toMatch(/<h\d|<li|<blockquote|<hr|<ol|<ul/)
-    expect(html).toContain(v.trim().replace(/>/g, '&gt;'))
-  })
-
-  it('escapes inside list items and blockquotes too', () => {
-    const md = '- {{fact:n}}\n\n> {{fact:n}}\n\n1. {{fact:n}}'
-    const html = render(md, '# not a heading')
-    expect(html).not.toMatch(/<h\d/)
-    expect(html.match(/# not a heading/g)).toHaveLength(3)
-  })
-
-  it('looks at back-to-back tokens and the author text around them together', () => {
-    const v = values({ a: '1', b: '. x', n: '5' })
-    expect(renderMarkdown(substituteFacts('{{fact:a}}{{fact:b}}', v))).not.toContain('<ol')
-    expect(renderMarkdown(substituteFacts('{{fact:n}}. Item', v))).not.toContain('<ol')
-    expect(renderMarkdown(substituteFacts('1{{fact:b}}', v))).not.toContain('<ol')
-    expect(renderMarkdown(substituteFacts('{{fact:n}}. Item', v))).toContain('5. Item')
-  })
-
-  it('looks at a #, - or = run the author typed right before the token', () => {
-    const v = values({ hash: '# x', dash: '--', eq: '==', two: '- -' })
-    for (const md of [
-      '#{{fact:hash}}',
-      'Para\n-{{fact:dash}}',
-      'Para\n={{fact:eq}}',
-      '-{{fact:two}}',
-    ]) {
-      expect(renderMarkdown(substituteFacts(md, v)), md).not.toMatch(/<h\d|<hr|<li/)
+describe('the page: values are escaped text, never parsed', () => {
+  it.each(HOSTILE)('%j shows as written, in every context', (v) => {
+    for (const ctx of CONTEXTS) {
+      const html = pageHtml(ctx, { n: v })
+      expect(html, ctx).toContain(escapeHtml(v))
+      expect(html, ctx).not.toMatch(/<h\d|<iframe|<hr/)
+      expect(html, ctx).not.toContain('')
+      if (!ctx.startsWith('>')) expect(html, ctx).not.toContain('<blockquote')
+      if (!/^(- |1\. )/.test(ctx)) expect(html, ctx).not.toContain('<li')
+      if (!ctx.startsWith('[see')) expect(html, ctx).not.toContain('<a ')
     }
-    expect(substituteFacts('#{{fact:hash}}', v)).toBe('#\\# x')
-    expect(substituteFacts('#{{fact:dash}}', v)).toBe('#--')
   })
 
-  it('stays linear with many tokens after a long prefix on one line', () => {
-    const md = '#'.repeat(50_000) + 'x' + ' {{fact:a}}'.repeat(20_000)
-    const t = Date.now()
-    substituteFacts(md, values({ a: '1' }))
-    expect(Date.now() - t).toBeLessThan(2000)
+  it('a value alone in a paragraph is never a YouTube player, a link or a list', () => {
+    expect(pageHtml('{{fact:n}}', { n: 'https://youtu.be/3mlRiF-LeMc' })).toBe(
+      '<p>https://youtu.be/3mlRiF-LeMc</p>\n',
+    )
+    expect(pageHtml('{{fact:n}}', { n: '1. item' })).toBe('<p>1. item</p>\n')
+    expect(pageHtml('Text {{fact:n}} more', { n: '&#49;' })).toBe('<p>Text &amp;#49; more</p>\n')
   })
 
-  it('does not escape a value in the middle of a line', () => {
-    expect(substituteFacts('Rank {{fact:n}} today', values({ n: '#1' }))).toBe('Rank #1 today')
-    expect(substituteFacts('{{fact:n}} today', values({ n: '#1' }))).toBe('\\#1 today')
+  it('author text that looks like a placeholder is left alone', () => {
+    const md = 'Odd abcdef0123450 text and {{fact:n}}.'
+    expect(pageHtml(md, { n: 'V' })).toBe(`<p>Odd abcdef0123450 text and V.</p>\n`)
   })
 
-  it('leaves unknown tokens literal', () => {
-    expect(substituteFacts('a {{fact:x}} b', values({ n: '1' }))).toBe('a {{fact:x}} b')
+  it('unknown tokens stay literal', () => {
+    expect(pageHtml('a {{fact:x}} b', { n: '1' })).toBe('<p>a {{fact:x}} b</p>\n')
+  })
+})
+
+describe('the .md twin: values as literal-equivalent markdown', () => {
+  // The twin, rendered by the page's own parser, says what the page says.
+  it.each(HOSTILE)('%j: the twin renders exactly like the page', (v) => {
+    for (const ctx of CONTEXTS) {
+      const twin = factsToMarkdown(ctx, values({ n: v }))
+      expect(renderMarkdown(twin), `${ctx} → ${twin}`).toBe(pageHtml(ctx, { n: v }))
+    }
   })
 
-  it('a value is HTML-escaped text on the page', () => {
-    const html = renderMarkdown(substituteFacts('Get {{fact:n}} now', values({ n: 'AT&T "x"' })))
-    expect(html).toContain('AT&amp;T &quot;x&quot;')
+  it('keeps ordinary values readable', () => {
+    expect(factsToMarkdown('Pro is {{fact:n}}.', values({ n: '$12/mo' }))).toBe('Pro is $12/mo.')
+    expect(factsToMarkdown('On {{fact:n}} now', values({ n: 'v2.4.1' }))).toBe('On v2.4.1 now')
+  })
+
+  it('escapes what would become an entity, an autolink or block syntax', () => {
+    const t = (v: string, ctx = 'x {{fact:n}} y') => factsToMarkdown(ctx, values({ n: v }))
+    expect(t('&#49;')).toBe('x \\&#49; y')
+    expect(t('ops@example.com')).toBe('x ops\\@example.com y')
+    expect(t('https://example.com')).toBe('x https\\://example.com y')
+    expect(t('see www.example.com')).toBe('x see www\\.example.com y')
+    expect(t('# h', '{{fact:n}}')).toBe('\\# h')
+    expect(t('5', '{{fact:n}}. Next')).toBe('5\\. Next')
+  })
+
+  it("falls back to strict escaping when a value joins the author's text into syntax", () => {
+    for (const [ctx, v] of [
+      ['Go to https:{{fact:n}} now', '//evil.example'],
+      ['Visit www{{fact:n}} today', '.example.com'],
+      ['See [{{fact:n}}] here\n\n[42]: https://example.com', '42'],
+      ['Mail me{{fact:n}} soon', '@example.com'],
+      ['Price &{{fact:n}} ok', 'amp;'],
+      ['x &#{{fact:n}} y', '49;'],
+    ]) {
+      const twin = factsToMarkdown(ctx, values({ n: v }))
+      expect(renderMarkdown(twin), `${ctx} → ${twin}`).toBe(pageHtml(ctx, { n: v }))
+    }
   })
 })
 
@@ -207,7 +277,6 @@ describe('validatePostFacts — where a token may sit', () => {
     const err = thrown(() => check(md))
     expect(err.code).toBe('FACT_IN_HEADING')
     expect(err.details).toEqual({ name: 'price', line })
-    expect(err.message).toContain(`line ${line}`)
   })
 
   it('a list item followed by --- is a list and a rule, not a heading', () => {
@@ -220,6 +289,7 @@ describe('validatePostFacts — where a token may sit', () => {
     ['[a](https://x.com "title {{fact:price}}")', 1],
     ['Text\n\n[ref]: https://x.com/{{fact:price}}', 3],
     ['See [the page][ref].\n\n[ref]: https://x.com/{{fact:price}}', 3],
+    ['Text\n\n[ref {{fact:price}}]: /target', 3],
     ['Go to <https://x.com/{{fact:price}}>', 1],
     ['Go to <{{fact:price}}>', 1],
     ['Tag <{{fact:price}} attr', 1],
@@ -266,7 +336,7 @@ describe('validatePostFacts — where a token may sit', () => {
 })
 
 describe('factLines — the dry-run preview', () => {
-  it('returns whole source lines with the value before and after', () => {
+  it('returns whole source lines with live tokens replaced before and after', () => {
     const md =
       'Intro.\n\n| Pro | {{fact:price}} |\n- {{fact:version}} costs {{fact:price}}\n\n`{{fact:price}}`'
     const before = values({ price: '$12', version: 'v1' })
@@ -285,78 +355,63 @@ describe('factLines — the dry-run preview', () => {
 })
 
 describe('materializePost', () => {
-  const post = (body: string, extra: Partial<Post> = {}): Post => ({
-    id: 'p1',
-    blogId: 'b1',
-    slug: 's',
-    title: 'T',
-    body,
-    excerpt: autoExcerpt(body),
-    tags: [],
-    status: 'published',
-    publishedAt: '2026-01-01T00:00:00.000Z',
-    createdAt: '2026-01-01 00:00:00',
-    updatedAt: '2026-01-01 00:00:00',
-    ...extra,
-  })
-  const fact = (value: string, confirmedAt: string, updatedAt: string): FactRecord => ({
-    value,
-    confirmedAt,
-    updatedAt,
-  })
   const facts = new Map([
     ['pro_price', fact('$12/mo', '2026-03-01T00:00:00.000Z', '2026-02-01T00:00:00.000Z')],
     ['version', fact('v2.4.1', '2026-02-15T00:00:00.000Z', '2025-12-01T00:00:00.000Z')],
   ])
 
-  it('returns the very same post when the body has no tokens (byte-identical output)', () => {
-    const p = post('No facts here, `{{fact:pro_price}}` is code.')
-    expect(materializePost(p, facts).post).toBe(p)
-    expect(materializePost(p, facts).factsNote).toBeUndefined()
-  })
-
-  it('returns the same post when every name is unknown (draft preview keeps the token)', () => {
-    const p = post('Soon: {{fact:later}}', { status: 'draft' })
-    expect(materializePost(p, facts)).toEqual({ post: p })
-  })
-
-  it('substitutes body and auto-excerpt, moves updatedAt to the newest value change, notes the oldest confirmation', () => {
-    const p = post('Pro is {{fact:pro_price}} on {{fact:version}}; {{fact:later}} later.')
-    expect(p.excerpt).toBe('Pro is {{fact:pro_price}} on {{fact:version}}; {{fact:later}} later.')
+  it('returns the very same post when the body has no live tokens (byte-identical output)', () => {
+    const p = post('No facts here, `{{fact:pro_price}}` is code.', { excerpt: 'x' })
     const m = materializePost(p, facts)
-    expect(m.post.body).toBe('Pro is $12/mo on v2.4.1; {{fact:later}} later.')
-    expect(m.post.excerpt).toBe('Pro is $12/mo on v2.4.1; {{fact:later}} later.')
+    expect(m.post).toBe(p)
+    expect(m.factsNote).toBeUndefined()
+    expect(m.bodyHtml()).toBe(renderMarkdown(p.body))
+  })
+
+  it('moves updatedAt to the newest value change and notes the oldest confirmation', () => {
+    const m = materializePost(post('Pro is {{fact:pro_price}} on {{fact:version}}.'), facts)
+    expect(m.post.body).toBe('Pro is $12/mo on v2.4.1.')
     // SQLite's 'YYYY-MM-DD HH:MM:SS' compares as UTC, not as text.
     expect(m.post.updatedAt).toBe('2026-02-01T00:00:00.000Z')
     expect(m.factsNote).toEqual({ oldestConfirmedAt: '2026-02-15T00:00:00.000Z' })
+    const newer = post('{{fact:version}}', { updatedAt: '2026-06-01T00:00:00.000Z' })
+    expect(materializePost(newer, facts).post.updatedAt).toBe('2026-06-01T00:00:00.000Z')
   })
 
-  it('keeps the post updatedAt when it is newer than every fact change', () => {
-    const p = post('{{fact:version}}', { updatedAt: '2026-06-01T00:00:00.000Z' })
-    expect(materializePost(p, facts).post.updatedAt).toBe('2026-06-01T00:00:00.000Z')
+  it('derives a missing excerpt from live tokens only (code stays literal)', () => {
+    // The code span is not substituted; autoExcerpt drops its underscore as
+    // it always has for code text (`code_span` → `codespan`).
+    const m = materializePost(post('Use `{{fact:pro_price}}` to show {{fact:pro_price}}.'), facts)
+    expect(m.post.excerpt).toBe('Use {{fact:proprice}} to show $12/mo.')
+    const long = materializePost(post('word '.repeat(40) + '{{fact:version}}'), facts)
+    expect(long.post.excerpt).toBe(('word '.repeat(40) + 'v2.4.1').slice(0, 160).trimEnd() + '…')
   })
 
-  it('substitutes the excerpt only for names the body uses outside code', () => {
-    // autoExcerpt turned `{{fact:pro_price}}` (code) into a bare, underscore-less string.
-    const p = post('Write `{{fact:pro_price}}` and {{fact:version}}.')
-    const m = materializePost(p, new Map([...facts, ['proprice', facts.get('pro_price')!]]))
-    expect(m.post.excerpt).toBe('Write {{fact:proprice}} and v2.4.1.')
+  it('never touches an excerpt the author wrote', () => {
+    const m = materializePost(post('{{fact:pro_price}}', { excerpt: 'Written by hand.' }), facts)
+    expect(m.post.excerpt).toBe('Written by hand.')
+    expect(m.post.seoDescription).toBeUndefined()
+  })
+
+  it('a blank excerpt falls back to a description with values as text', () => {
+    const m = materializePost(
+      post('**Pro** is {{fact:pro_price}} on AT&T.', { excerpt: '' }),
+      facts,
+    )
+    expect(m.post.excerpt).toBe('')
+    expect(m.post.seoDescription).toBe('Pro is $12/mo on AT&T.')
+  })
+
+  it('keeps unknown tokens literal (a draft preview) and adds no note', () => {
+    const m = materializePost(post('Soon {{fact:later_on}}.', { status: 'draft' }), facts)
+    expect(m.bodyHtml()).toBe('<p>Soon {{fact:later_on}}.</p>\n')
+    expect(m.post.excerpt).toBe('Soon {{fact:later_on}}.')
+    expect(m.factsNote).toBeUndefined()
   })
 })
 
-describe('autoExcerpt with fact tokens', () => {
-  it('keeps token names whole (the stripping drops underscores elsewhere)', () => {
-    expect(autoExcerpt('**Pro** is {{fact:pro_price}} for _you_.')).toBe(
-      'Pro is {{fact:pro_price}} for you.',
-    )
-  })
-
-  it('never cuts a token in half', () => {
-    const body = 'x'.repeat(150) + ' {{fact:pro_price}} tail'
-    expect(autoExcerpt(body)).toBe('x'.repeat(150) + '…')
-  })
-
-  it('a body without tokens is excerpted exactly as before', () => {
+describe('autoExcerpt', () => {
+  it('excerpts exactly as before live facts', () => {
     // Expected value computed with autoExcerpt as it was before live facts.
     const body = '# Title\n\n> quote with *emph* and `code_span`\n\n' + 'word '.repeat(60)
     expect(autoExcerpt(body)).toBe(

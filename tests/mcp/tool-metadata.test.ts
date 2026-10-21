@@ -380,6 +380,12 @@ describe('MCP tool metadata', () => {
           lines: [{ line: 1, before: 'Pro: $12/mo', after: 'Pro: $15/mo' }],
         },
       ])
+      // A dry run writes nothing, not even a replay record.
+      const keys = () =>
+        (store.db.prepare('SELECT COUNT(*) AS n FROM idempotency_keys').get() as { n: number }).n
+      const before = keys()
+      await ok('set_fact', { name: 'pro_price', value: '$1', dry_run: true, idempotency_key: 'd1' })
+      expect(keys()).toBe(before)
       const args = { name: 'pro_price', value: '$15/mo', idempotency_key: 'f1' }
       const first = await ok('set_fact', args)
       expect(first).toMatchObject({ changed: true, rerendered: 1 })

@@ -141,6 +141,24 @@ describe('live facts', () => {
       expect(lastmod('other')).not.toBe(T2)
     })
 
+    it('feed items of fact-using posts carry <atom:updated>; confirmations never move it', () => {
+      const item = (slug: string) =>
+        read('feed.xml')
+          .split('<item>')
+          .find((i) => i.includes(`/${slug}/</link>`))!
+      at(T2)
+      set('pro_price', { value: '$15/mo' })
+      expect(item('pricing')).toContain(`<atom:updated>${T2}</atom:updated>`)
+      expect(item('pricing')).toContain(
+        '<guid isPermaLink="true">https://f.example/pricing/</guid>',
+      )
+      expect(item('other')).not.toContain('atom:updated')
+      at(T3)
+      set('pro_price', { value: '$15/mo' })
+      expect(item('pricing')).toContain(`<atom:updated>${T2}</atom:updated>`)
+      expect(read('feed.xml')).toContain('xmlns:atom="http://www.w3.org/2005/Atom"')
+    })
+
     it('a same-value set moves the confirmation date only', () => {
       at(T2)
       set('pro_price', { value: '$15/mo' })
@@ -238,7 +256,10 @@ describe('live facts', () => {
         ],
       }
       expect(listFacts(store, renderer, blogId)).toEqual({ facts: [fact], render_pending: false })
-      expect(getFact(store, renderer, blogId, 'pro_price')).toEqual(fact)
+      expect(getFact(store, renderer, blogId, 'pro_price')).toEqual({
+        fact,
+        render_pending: false,
+      })
       expect(thrown(() => getFact(store, renderer, blogId, 'nope')).code).toBe('FACT_NOT_FOUND')
     })
 
@@ -338,7 +359,10 @@ describe('live facts', () => {
       const err = thrown(() => set('pro_price', { value: '$15/mo' }, failing))
       expect(err.code).toBe('FACT_RENDER_PENDING')
       expect(rows().pending).toHaveLength(1)
-      expect(getFact(store, failing, blogId, 'pro_price').value).toBe('$15/mo')
+      expect(getFact(store, failing, blogId, 'pro_price')).toMatchObject({
+        fact: { value: '$15/mo' },
+        render_pending: true,
+      })
       expect(read('pricing/index.html')).toContain('$12/mo')
     }
 
@@ -348,6 +372,30 @@ describe('live facts', () => {
       expect(listFacts(store, renderer, blogId).render_pending).toBe(false)
       expect(read('pricing/index.html')).toContain('Pro costs $15/mo.')
       expect(rows().pending).toEqual([])
+    })
+
+    it('retrying a compare-and-set whose render failed repairs the pages, then conflicts', () => {
+      const cas = { value: '$15/mo', expected_value: '$12/mo' }
+      expect(thrown(() => set('pro_price', cas, failing)).code).toBe('FACT_RENDER_PENDING')
+      expect(read('pricing/index.html')).toContain('$12/mo')
+      // The identical retry drains first: pages repaired, then the stale
+      // expected_value is reported with the value that is now current.
+      const err = thrown(() => set('pro_price', cas))
+      expect(err.code).toBe('FACT_CONFLICT')
+      expect(err.details).toMatchObject({ current_value: '$15/mo' })
+      expect(rows().pending).toEqual([])
+      expect(read('pricing/index.html')).toContain('Pro costs $15/mo.')
+    })
+
+    it('a capped request still writes nothing, pending render included', () => {
+      failOnce()
+      const insert = store.db.prepare(
+        "INSERT INTO facts VALUES (?, ?, '1', NULL, NULL, 'x', 'x', 'x')",
+      )
+      for (let i = 0; i < 99; i++) insert.run(blogId, `f${i}`)
+      const before = { files: tree(out), rows: rows() }
+      expect(thrown(() => set('one_more', { value: '1' })).code).toBe('FACT_LIMIT')
+      expect({ files: tree(out), rows: rows() }).toEqual(before)
     })
 
     it('re-sending the same value repairs it', () => {
@@ -417,13 +465,17 @@ describe('live facts', () => {
       expect(read('d/index.html')).toContain('Price soon on v2.')
     })
 
-    it('an auto-derived excerpt follows a body edit into and out of facts', () => {
+    it('a fact-using post without its own excerpt stores none; rendering derives it', () => {
       set('a', { value: '$12' })
       const excerpt = () => getPost(store, blogId, 'e').excerpt
       post({ title: 'E', body: 'Costs $9 today.' })
+      expect(excerpt()).toBe('Costs $9 today.')
       updatePost(store, renderer, blogId, 'e', { body: 'Costs {{fact:a}} today.' })
-      expect(excerpt()).toBe('Costs {{fact:a}} today.')
+      expect(excerpt()).toBeUndefined()
       expect(read('index.html')).toContain('<p>Costs $12 today.</p>')
+      set('a', { value: '$14' })
+      expect(read('index.html')).toContain('<p>Costs $14 today.</p>')
+      // Leaving facts brings a stored auto-excerpt back.
       updatePost(store, renderer, blogId, 'e', { body: 'Costs $13 today.' })
       expect(excerpt()).toBe('Costs $13 today.')
       // Without facts on either side, the excerpt stays as it was (as before).
@@ -433,6 +485,36 @@ describe('live facts', () => {
       post({ title: 'H', body: 'Old.', excerpt: 'Hand-written.' })
       updatePost(store, renderer, blogId, 'h', { body: 'Now {{fact:a}}.' })
       expect(getPost(store, blogId, 'h').excerpt).toBe('Hand-written.')
+      expect(post({ title: 'N', body: 'New {{fact:a}}.' }).excerpt).toBeUndefined()
+    })
+
+    it('a value is text: never a YouTube player, a link or a share image', () => {
+      set('video', { value: 'https://youtu.be/3mlRiF-LeMc' })
+      set('site', { value: 'www.example.com' })
+      post({ title: 'V', body: 'Watch:\n\n{{fact:video}}\n\nOr visit {{fact:site}}.' })
+      const page = read('v/index.html')
+      expect(page).toContain('<p>https://youtu.be/3mlRiF-LeMc</p>')
+      expect(page).toContain('<p>Or visit www.example.com.</p>')
+      expect(page).not.toContain('<iframe')
+      expect(page).not.toContain('i.ytimg.com')
+      expect(read('feed.xml')).not.toContain('href="https://youtu.be')
+      expect(read('v.md')).toContain('https\\://youtu.be/3mlRiF-LeMc')
+      expect(read('v.md')).toContain('Or visit www\\.example.com.')
+    })
+
+    it('literal {{…}} and {{{…}}} in a post render as written (no template re-reading)', () => {
+      post({ title: 'Braces', body: 'Write {{foo}} and {{{bar}}} and {{postTitle}} literally.' })
+      expect(read('braces/index.html')).toContain(
+        '<p>Write {{foo}} and {{{bar}}} and {{postTitle}} literally.</p>',
+      )
+      // A value that completes {{…}} around a token used to throw on render,
+      // leaving the fact pending and every later post write failing.
+      set('a', { value: 'hello world' })
+      post({ title: 'Wrapped', body: 'x {{{{fact:a}}}} y' })
+      set('a', { value: 'missing' })
+      expect(read('wrapped/index.html')).toContain('<p>x {{missing}} y</p>')
+      expect(rows().pending).toEqual([])
+      post({ title: 'Still works', body: 'ok' })
     })
 
     it('rejects tokens in headings, addresses and fields other than the body', () => {

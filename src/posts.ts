@@ -3,6 +3,7 @@ import type { Store } from './db/store.js'
 import { SlopItError } from './errors.js'
 import { blogFactNames, drainFactRender } from './facts.js'
 import { generateShortId, generateSlug } from './ids.js'
+import { autoExcerpt } from './rendering/excerpt.js'
 import { scanFacts, validatePostFacts } from './rendering/facts.js'
 import type { MutationRenderer } from './rendering/generator.js'
 import { PostInputSchema, type Blog, type Post, type PostInput } from './schema/index.js'
@@ -24,56 +25,8 @@ export function isPostSlugConflict(err: unknown): boolean {
   )
 }
 
-/**
- * Build an auto-excerpt from markdown body: strip common syntax, collapse
- * whitespace, truncate to 160 chars with a trailing ellipsis on overflow.
- *
- * Not a real markdown parser — good enough for v1 for typical posts. Edge
- * cases (inline HTML, code fences with content) produce noisy excerpts,
- * which is acceptable; callers who care supply an explicit excerpt field.
- *
- * Live facts: the body's fact tokens (outside code) come through intact
- * (the stripping would eat the underscores in their names) and are never
- * cut in half; rendering substitutes them like the body's. A body without
- * tokens takes exactly the path it always did.
- *
- * @internal — exported for unit testing; not re-exported from src/index.ts.
- */
-export function autoExcerpt(body: string): string {
-  const tokens = scanFacts(body)
-  if (tokens.length === 0) return stripExcerpt(body)
-  // Park each token as a private-use placeholder, strip, put them back.
-  let masked = ''
-  let pos = 0
-  tokens.forEach((t, i) => {
-    masked += body.slice(pos, t.start) + `\uE000${i}\uE001`
-    pos = t.end
-  })
-  masked += body.slice(pos)
-  const restored = stripExcerpt(masked, Infinity).replace(/\uE000(\d+)\uE001/g, (_m, i: string) => {
-    const t = tokens[Number(i)]
-    return body.slice(t.start, t.end)
-  })
-  if (restored.length <= 160) return restored
-  let cut = 160
-  for (const t of scanFacts(restored)) if (t.start < cut && t.end > cut) cut = t.start
-  return restored.slice(0, cut).trimEnd() + '…'
-}
-
-function stripExcerpt(body: string, max = 160): string {
-  const stripped = body
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/^[ \t]*#+ /gm, '')
-    .replace(/^[ \t]*> /gm, '')
-    .replace(/^[ \t]*[-*+] /gm, '')
-    .replace(/[*_`]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (stripped.length <= max) return stripped
-  return stripped.slice(0, max).trimEnd() + '…'
-}
+// Re-exported for the tests that have always imported it from here.
+export { autoExcerpt }
 
 /**
  * Consumer policy consulted when a write links a post into a translation
@@ -460,7 +413,11 @@ export function createPost(
   const language =
     link.group !== null ? (parsed.language ?? blog.language) : (parsed.language ?? null)
   const id = generateShortId()
-  const excerpt = parsed.excerpt ?? autoExcerpt(parsed.body)
+  // A body that uses live facts and has no excerpt of its own stores none:
+  // rendering derives it from the body each time, with current values and
+  // only the live tokens substituted (rendering/facts.ts materializePost).
+  const excerpt =
+    parsed.excerpt ?? (scanFacts(parsed.body).length > 0 ? null : autoExcerpt(parsed.body))
   const now = new Date().toISOString()
   const publishedAt = parsed.status === 'published' ? now : null
   const tagsJson = JSON.stringify(parsed.tags)
@@ -639,26 +596,25 @@ export function updatePost(
         ? (parsed.language ?? null)
         : (prior.language ?? null)
 
-  // Live facts: an excerpt derived from the old body follows a body edit
-  // when either body uses facts, so it never keeps a figure the body now
-  // takes from a fact, or a token the body no longer has. Bodies without
-  // facts keep the old behaviour (the excerpt stays as it was).
-  const excerptFollowsBody =
-    parsed.body !== undefined &&
-    !('excerpt' in parsed) &&
-    prior.excerpt === autoExcerpt(prior.body) &&
-    (scanFacts(prior.body).length > 0 || scanFacts(parsed.body).length > 0)
+  // Live facts: a body that uses facts and has no excerpt of its own
+  // stores none (rendering derives it). A body edit moves an excerpt that
+  // was derived from the old body along with it: to none when the new body
+  // uses facts, back to a stored auto-excerpt when it stops. An excerpt
+  // the author wrote, and every post without facts, behave as before.
+  let excerpt = 'excerpt' in parsed ? parsed.excerpt : prior.excerpt
+  if (parsed.body !== undefined && !('excerpt' in parsed)) {
+    const priorDerived = prior.excerpt === undefined && scanFacts(prior.body).length > 0
+    const priorAuto = priorDerived || prior.excerpt === autoExcerpt(prior.body)
+    const usesFacts = scanFacts(parsed.body).length > 0
+    if (usesFacts && priorAuto) excerpt = undefined
+    else if (!usesFacts && priorDerived) excerpt = autoExcerpt(parsed.body)
+  }
 
   // Merge patched fields into prior row
   const merged = {
     title: parsed.title ?? prior.title,
     body: parsed.body ?? prior.body,
-    excerpt:
-      'excerpt' in parsed
-        ? parsed.excerpt
-        : excerptFollowsBody
-          ? autoExcerpt(parsed.body!)
-          : prior.excerpt,
+    excerpt,
     tags: parsed.tags ?? prior.tags,
     status: parsed.status ?? prior.status,
     seoTitle: 'seoTitle' in parsed ? parsed.seoTitle : prior.seoTitle,

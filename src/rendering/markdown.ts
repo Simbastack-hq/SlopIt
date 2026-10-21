@@ -18,17 +18,6 @@ import { Marked, type MarkedExtension, type Token, type Tokens } from 'marked'
 // validated video id (see youtubeEmbedSrc). A raw <iframe> is still
 // stripped like any other HTML.
 
-/**
- * `md` cut at code: even indices are prose, odd indices are code (fenced
- * blocks and inline spans, as listed below); `join('')` gives `md` back.
- * The one definition of "code" shared by the HTML stripping here and the
- * live-facts scanner (rendering/facts.ts), so a fact token is never
- * substituted inside code that the stripping also leaves alone.
- */
-export function splitCode(md: string): string[] {
-  return md.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g)
-}
-
 // Strip <script>...</script>, <style>...</style>, <iframe>...</iframe>
 // (case-insensitive) — but only outside code contexts. The split regex
 // captures code segments at odd indices so we can skip them. We protect:
@@ -43,7 +32,7 @@ export function splitCode(md: string): string[] {
 // We accept this trade-off for v1; authors who want HTML examples should
 // use fenced code blocks, which are the idiomatic form and preserved.
 function stripDangerousBlocks(md: string): string {
-  const parts = splitCode(md)
+  const parts = md.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g)
   for (let i = 0; i < parts.length; i += 2) {
     parts[i] = parts[i]
       .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')

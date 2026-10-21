@@ -300,18 +300,21 @@ function notFound(name: string): SlopItError {
   )
 }
 
-/** One fact with the posts that use it. Throws FACT_NOT_FOUND. */
+/** One fact with the posts that use it, and whether pages are behind. Throws FACT_NOT_FOUND. */
 export function getFact(
   store: Store,
   renderer: MutationRenderer,
   blogId: string,
   name: string,
-): FactWithUses {
+): { fact: FactWithUses; render_pending: boolean } {
   getBlogInternal(store, blogId)
   drainForRead(store, renderer, blogId)
   const fact = readFact(store, blogId, name)
   if (fact === undefined) throw notFound(name)
-  return { ...fact, used_by: usedBy(postUses(store, blogId), name) }
+  return {
+    fact: { ...fact, used_by: usedBy(postUses(store, blogId), name) },
+    render_pending: isPending(store, blogId),
+  }
 }
 
 const ISO_DATE =
@@ -361,18 +364,6 @@ export function setFact(
   const confirmedAt = parseConfirmedAt(parsed.confirmed_at, now)
   const prior = readFact(store, blogId, name)
 
-  if (parsed.expected_value !== undefined) {
-    const current = prior?.value ?? null
-    const expected = parsed.expected_value === null ? null : parsed.expected_value.trim()
-    if (expected !== current) {
-      throw new SlopItError(
-        'FACT_CONFLICT',
-        `"${name}" is ${current === null ? 'not set' : `"${current}"`}, not what expected_value says. Nothing changed: look at the current value and decide again`,
-        { name, current_value: current },
-      )
-    }
-  }
-
   if (prior === undefined) {
     const { n } = store.db
       .prepare('SELECT COUNT(*) AS n FROM facts WHERE blog_id = ?')
@@ -394,6 +385,24 @@ export function setFact(
       `${fanout} published posts use facts; a fact change re-renders all of them and the limit is ${FACT_FANOUT_LIMIT}. Nothing changed`,
       { posts: fanout, limit: FACT_FANOUT_LIMIT },
     )
+  }
+
+  // A real write first finishes a render an earlier change left pending,
+  // so retrying a compare-and-set whose render failed repairs the pages
+  // even though its expected_value is now stale. The caps above still
+  // reject before anything is written; a dry run never drains.
+  if (parsed.dry_run !== true) drainFactRender(store, renderer, blogId)
+
+  if (parsed.expected_value !== undefined) {
+    const current = prior?.value ?? null
+    const expected = parsed.expected_value === null ? null : parsed.expected_value.trim()
+    if (expected !== current) {
+      throw new SlopItError(
+        'FACT_CONFLICT',
+        `"${name}" is ${current === null ? 'not set' : `"${current}"`}, not what expected_value says. Nothing changed: look at the current value and decide again`,
+        { name, current_value: current },
+      )
+    }
   }
 
   const changed = prior === undefined || prior.value !== value

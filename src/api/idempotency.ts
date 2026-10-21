@@ -23,7 +23,7 @@ export interface IdempotencyMiddlewareConfig {
  */
 export function idempotencyMiddleware(
   config: IdempotencyMiddlewareConfig,
-): MiddlewareHandler<{ Variables: { apiKeyHash: string } }> {
+): MiddlewareHandler<{ Variables: { apiKeyHash: string; skipIdempotencyRecord?: boolean } }> {
   return async (c, next) => {
     if (!APPLIES_TO.has(c.req.method)) return next()
     const key = c.req.header('Idempotency-Key')
@@ -83,6 +83,8 @@ export function idempotencyMiddleware(
     await next()
     const status = c.res.status
     if (status < 200 || status >= 300) return
+    // A handler that wrote nothing (a fact dry run) asks not to be stored.
+    if (c.var.skipIdempotencyRecord === true) return
 
     const body = await c.res.clone().text()
     recordIdempotencyResponse(config.store, scope, body, status)

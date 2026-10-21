@@ -33,6 +33,11 @@ export function extractDescription(body: string, max = 160): string {
   // 9. Collapse whitespace.
   s = s.replace(/\s+/g, ' ').trim()
   // 10. Truncate on word boundary.
+  return clipDescription(s, max)
+}
+
+/** `s` cut on a word boundary to at most `max` chars, ending in `…` when cut. */
+export function clipDescription(s: string, max = 160): string {
   if (s.length <= max) return s
   const head = s.slice(0, max - 1)
   const lastSpace = head.lastIndexOf(' ')

@@ -93,18 +93,34 @@ Hostile values (each forbidden char; leading `#`/`-`/`1.` at line start), tokens
 - **Recovery via a durable pending row drained on the next touch and at boot**, not a background worker. Synchronous single-threaded rendering already prevents older-over-newer writes.
 - **Facts banned from headings** rather than making anchors fact-stable.
 
-## As built (2026-10-21)
+## As built (2026-10-21, revised after code review)
 
-Departures from the text above, each the smallest sound call when the spec turned out wrong or underspecified:
+Departures from the text above. Each is the smallest sound call where the spec turned out wrong or underspecified. The second group came from an outside code review of the first implementation.
 
-- **`~` is a forbidden value character too.** A value starting with `~~~` at a line start opens a fenced code block that swallows the rest of the post, and `~` pairs into strikethrough. The rest of the charset is as specified.
-- **Line-start escaping looks at the whole block start, not just the token.** It also applies after container markers (`> {{fact:x}}`, `- {{fact:x}}`), to back-to-back tokens as one piece, and to the author's text around them (`{{fact:n}}. Item` with n = 5 would otherwise be an ordered list).
-- **Contexts are classified with the page's own lexer.** Tokens are swapped for alphanumeric sentinels and lexed: a sentinel in a heading's text, or a link, image or definition's address or title, marks its token. This catches setext headings over several lines, headings inside quotes and lists, reference links and bare-URL autolinks, without flagging a list item followed by `---`. `<…>` is checked on the source, since the lexer reads `<{{fact:x}}>` as an HTML tag.
-- **The auto-excerpt keeps tokens and is substituted at render time.** A post created without `excerpt` stores an excerpt derived from its body, which held tokens with their underscores stripped and could cut one in half. Tokens now survive intact and whole, and rendering substitutes them (for names the body itself uses outside code) like the body. Otherwise every home page, meta description, feed item and "More from" blurb would show the raw token or a stale value.
-- **An auto-derived excerpt follows a body edit when either body uses facts.** Core never recomputed the excerpt on a body edit; for fact-using bodies that would leave a figure the body now takes from a fact (or a token the body no longer has) in the meta description, home list and feeds. Bodies without facts on either side keep the old behaviour, and a hand-written excerpt is never replaced.
-- **The pending render re-renders every published post page and the home pages**, not only the fact-using posts: the "More from this blog" blurbs on every other page and the home page list quote fact-using posts' excerpts. Then the `.md` twins of fact-using posts and the manifests. Nothing renders when no published post uses a fact. This is the same work a post publish already does.
-- **`drainPendingFactRenders(store, rendererFor)`** takes the per-blog renderer factory the API and MCP server use, not one renderer: a multi-blog host renders each blog at its own base URL. It returns `{ drained, failed }` and never throws for one blog's failure.
-- **A failed render is `FACT_RENDER_PENDING` (500)** on writes ("saved, but the pages are behind: retry"); reads (`list`, `get`) report `render_pending: true` instead of failing.
-- **`FACT_NOT_FOUND` is 404** for both a missing fact and a post write naming one (one code, one status; `translationOf` to a missing slug is already a 404 on post writes). `FACT_LIMIT` is 413 like the media quota. Invalid names are `FACT_NAME_INVALID` (400).
-- **No `get_fact` MCP tool**: `list_facts` returns at most 100 facts. REST has `GET /blogs/:id/facts/:name`.
-- **`note` and `source_url` on `PUT`**: omitted keeps the stored value, `null` clears it.
+**Substitution and syntax**
+
+- **Values never go back through markdown on the way to HTML.** §2's "substitute on the markdown source before parsing" lets a value become a YouTube embed (a URL alone in a paragraph), an autolink (URL, `www.`, email), an entity (`&#49;`) or a table row, whatever the charset. Instead each live token becomes an inert placeholder (private-use characters around a per-render random nonce and an index), the markdown is rendered, and the placeholders are filled with `escapeHtml(value)`. Excerpts and descriptions are derived the same way, with plain values. Line-start escaping is no longer needed for HTML.
+- **The `.md` twin is the one place a value is written into markdown.** It is serialised as literal-equivalent markdown with minimal escaping: `&`, `@`, `<`, `>`, `|`, the `:` of `://`, the `.` after a word-start `www`, an entity the author started right before a token (`&#`), plus the line-start rules (container markers, back-to-back tokens, the author's text around them, a `#`/`-`/`=` run typed right before). The result is checked against the parsed structure of the placeholder version. If a value still joins the author's text into syntax (`https:{{fact:a}}` with `//x`, `[{{fact:a}}]` matching a reference), strict escaping is used: every ASCII punctuation character of the value, plus the author's punctuation next to it. A test renders the twin with the page's parser for a matrix of hostile values × contexts and requires byte-equal HTML to the page.
+- **Values may not be only `-`, `:`, `=` and spaces**, nor contain `~` (a `~~~` at a line start opens a fence; `~` pairs into strikethrough). The rest of the charset is as specified.
+- **Code is decided by marked's lexer, not the split regex.** Tokens are swapped for alphanumeric sentinels and the body is lexed as a render lexes it. That covers multi-backtick spans, inline code over several lines, unclosed fences that run to the end, a 4-backtick fence holding ```` ``` ````, and indented code (the spec's indented-code exception is gone). The same pass classifies contexts: a sentinel in a heading is `FACT_IN_HEADING`, and one in a link or image address or title, or a reference definition's label, address or title, is `FACT_IN_URL`. `<…>` is checked on the source. `\{{fact:name}}` is literal, as markdown escaping says it is.
+- **`render()` (the theme template) expands in one pass** and never re-reads inserted values. Two passes made any post text holding `{{x}}` expand or throw. A value could complete one (`{{{{fact:a}}}}`), leaving the fact pending and every later post write failing.
+
+**Excerpts and dates**
+
+- **A post whose body uses facts and has no excerpt of its own stores none.** Rendering derives it from the body each time, live tokens only, values as text (`autoExcerpt` on the placeholder version). A blank excerpt's description fallback is derived the same way and carried in `seoDescription`, the first link of `resolveDescription`'s chain and read nowhere else. A body edit moves a derived excerpt along: to none when the new body uses facts, back to a stored auto-excerpt when it stops. A hand-written excerpt is never replaced, and posts without facts behave as before.
+- **Feed items of fact-using posts carry `<atom:updated>`** (the channel already declares the Atom namespace) when the effective modified time is later than publication. `pubDate` and the guid are unchanged, and confirmations never move it. Other posts' items are unchanged, so every existing feed stays byte-identical.
+
+**Writes and recovery**
+
+- **The pending render re-renders every published post page and the home pages**, not only the fact-using posts, because the "More from this blog" blurbs and the home list quote fact-using posts' excerpts. Then the `.md` twins of fact-using posts and the manifests. It renders nothing when no published post uses a fact.
+- **A non-dry-run `PUT` drains a pending render before evaluating `expected_value`.** Retrying a compare-and-set whose render failed then repairs the pages, and reports the conflict with the current value. Caps (`FACT_LIMIT`, `FACT_FANOUT`) are still checked first and reject before anything is written or rendered.
+- **A dry run writes nothing at all**: no fact, pending row or files, and no idempotency record in either REST or MCP.
+- **`drainPendingFactRenders(store, rendererFor)`** takes the per-blog renderer factory (a multi-blog host renders each blog at its own base URL) and returns `{ drained, failed }`.
+- **A failed render is `FACT_RENDER_PENDING` (500)** on writes ("saved, pages behind: retry"). Reads (`list`, `get`) report `render_pending: true` instead of failing.
+
+**API**
+
+- **Status codes.** `FACT_NOT_FOUND` is 404 both for a missing fact and for a post write naming one (one code, one status; `translationOf` to a missing slug is already a 404). `FACT_LIMIT` is 413, like the media quota. Invalid names are `FACT_NAME_INVALID` (400).
+- **No `get_fact` MCP tool**: `list_facts` returns at most 100 facts. REST has `GET /blogs/:id/facts/:name`, which returns `{ fact, render_pending }`.
+- **On `PUT`, `note` and `source_url`**: omitted keeps the stored value, `null` clears it.
+- **Tool and schema descriptions use no price examples**, because connector app directories bar prices in an app. SKILL.md keeps its pricing example.
