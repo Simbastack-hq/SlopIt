@@ -220,6 +220,14 @@ describe('MCP tool metadata', () => {
       const all = JSON.stringify(tools) + (client.getInstructions() ?? '')
       expect(all).not.toContain('slopit.io')
     })
+
+    // App directories (ChatGPT, Claude) bar prices inside an app, and a
+    // connector host lists these tools as they are: examples use sizes and
+    // versions, never money.
+    it('no tool metadata or instructions quote a price', () => {
+      const all = JSON.stringify(tools) + (client.getInstructions() ?? '')
+      expect(all).not.toMatch(/\$\d|\/mo\b|per month/i)
+    })
   })
 
   describe('structuredContent matches outputSchema', () => {

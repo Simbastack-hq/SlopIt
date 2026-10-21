@@ -553,8 +553,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       ...meta('Set live fact', UPDATE),
       description: [
         'Create or change a live fact: a short current claim (a price, version, limit or count) that post bodies show inline as {{fact:name}}. Every post that uses it is re-rendered with the new value.',
-        'Use facts only for things that should stay current. Write history ("we launched at $9") as plain text, or it will change when the fact does.',
-        'Put units and qualifiers inside the value when they change together ("$12/mo", "v2.4.1"): the words around a fact never update.',
+        'Use facts only for things that should stay current. Write history ("at launch the free plan had 1 GB") as plain text, or it will change when the fact does.',
+        'Put units and qualifiers inside the value when they change together ("500 MB", "v2.4.1"): the words around a fact never update.',
         '`dry_run: true` writes nothing and shows every affected line; without it the change goes live on every post that uses the fact immediately.',
         'Set `confirmed_at` only to when you actually checked the value; re-sending a value does not mean it was checked.',
         "Facts can't go in headings, links, titles or excerpts. A fact used by any post can't be deleted until those posts stop using it.",

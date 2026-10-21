@@ -76,7 +76,7 @@ export const SetFactInputSchema = z
     value: z
       .string()
       .describe(
-        'The current value, as plain text: 1–120 characters, one line, none of [ ] < > * _ ~ ` | \\ { }. Put units and qualifiers inside it when they change together, e.g. "$12/mo" or "v2.4.1".',
+        'The current value, as plain text: 1–120 characters, one line, none of [ ] < > * _ ~ ` | \\ { }. Put units and qualifiers inside it when they change together, e.g. "500 MB" or "v2.4.1".',
       ),
     note: z
       .string()
