@@ -366,10 +366,7 @@ article td code {
   border-inline-start: 1px solid var(--border);
 }
 .toc a {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: block;
   padding-block: 6px;
   padding-inline-start: 16px;
   font-size: 13px;
@@ -377,6 +374,15 @@ article td code {
   color: var(--text-muted);
   text-decoration: none;
   transition: color 0.3s ease;
+}
+/* Clamp the text, not the padded link: line-clamp clips at the padding
+   box, so clamping the link let the top of a third line show in its
+   bottom padding. Three lines fits a question-style heading. */
+.toc a > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .toc a:hover,
 .toc a[aria-current] {
