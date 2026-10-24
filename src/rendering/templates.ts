@@ -10,6 +10,23 @@ export interface ThemeAssets {
 }
 
 /**
+ * True only for absolute http/https URLs. Parses with the WHATWG `URL`
+ * constructor and checks the normalized protocol — the same basis as the
+ * `httpUrl` schema, so a value that passes the write boundary is never
+ * silently dropped at render time for a spelling the schema would have
+ * accepted.
+ */
+export function isHttpUrl(s: string): boolean {
+  let protocol: string
+  try {
+    protocol = new URL(s).protocol
+  } catch {
+    return false
+  }
+  return protocol === 'http:' || protocol === 'https:'
+}
+
+/**
  * HTML-escape the five canonical special characters. Ampersand MUST be
  * replaced first, otherwise other replacements introduce ampersands that
  * get doubly-escaped.

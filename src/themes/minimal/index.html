@@ -6,13 +6,12 @@
     <title>{{blogName}}</title>
     <link rel="canonical" href="{{canonicalUrl}}" />
     <link rel="alternate" type="application/rss+xml" title="{{blogName}}" href="{{feedUrl}}" />
-    <link rel="icon" type="image/svg+xml" href="{{faviconHref}}" />
-    {{{alternates}}}
+    {{{faviconLink}}} {{{alternates}}}
     <link rel="stylesheet" href="{{themeCssHref}}" />
   </head>
   <body>
     <header class="masthead">
-      <h1 class="masthead-name">{{blogName}}</h1>
+      <h1 class="masthead-name">{{{mastheadName}}}</h1>
       {{{parentSiteLink}}}
     </header>
     {{{languageNav}}}

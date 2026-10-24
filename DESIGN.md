@@ -22,7 +22,7 @@ Seven tokens. That's all.
 | `accent` | `#FF4F00` | Links, accent underlines |
 | `accent-dark` | `#D34000` | `:hover` / `:active` on accent |
 
-No dark mode in v1. No additional colors. If a theme wants a different feel, it gets there by varying weight, scale, and whitespace — not by adding tokens.
+A blog may replace `accent` with its own brand color (`accentColor`; `accent-dark` is derived from it), so draw accents through the custom properties only. No dark mode in v1. No additional colors. If a theme wants a different feel, it gets there by varying weight, scale, and whitespace — not by adding tokens.
 
 ## Typography
 

@@ -69,6 +69,13 @@ const BlogShape = z.looseObject({
     .describe('Absent when no analytics is configured.'),
   parentSiteUrl: z.string().nullable(),
   language: z.string().describe("The blog's default BCP-47 language tag."),
+  accentColor: z
+    .string()
+    .nullable()
+    .optional()
+    .describe("Brand color, #rrggbb. null: the theme's color."),
+  logoUrl: z.string().nullable().optional().describe('null: the masthead shows the name.'),
+  faviconUrl: z.string().nullable().optional().describe('null: the default icon.'),
 })
 
 const MediaShape = z.looseObject({
