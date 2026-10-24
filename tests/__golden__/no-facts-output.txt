@@ -7,8 +7,7 @@
     <title>Code excerpt — Golden</title>
     <link rel="canonical" href="https://golden.example/code-excerpt/" />
     <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="alternate" type="text/markdown" href="https://golden.example/code-excerpt.md">  <meta name="description" content="Write {{fact:incode}} in a body.">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" /> <link rel="alternate" type="text/markdown" href="https://golden.example/code-excerpt.md">  <meta name="description" content="Write {{fact:incode}} in a body.">
 <meta property="og:title" content="Code excerpt">
 <meta property="og:description" content="Write {{fact:incode}} in a body.">
 <meta property="og:type" content="article">
@@ -61,8 +60,7 @@ Write `{{fact:in_code}}` in a body.
     <title>Everything at once — Golden</title>
     <link rel="canonical" href="https://golden.example/everything/" />
     <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="alternate" type="text/markdown" href="https://golden.example/everything.md">  <meta name="description" content="Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" /> <link rel="alternate" type="text/markdown" href="https://golden.example/everything.md">  <meta name="description" content="Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…">
 <meta name="author" content="Ada">
 <meta property="og:title" content="Everything at once">
 <meta property="og:description" content="Intro paragraph with bold, emphasis, a link and code. A section item one item {{ fact:spaced }} two 1. first quoted {{fact:Upper}} text | Plan | Price | |---|--…">
@@ -182,8 +180,7 @@ Setext heading
     <title>SEO title</title>
     <link rel="canonical" href="https://golden.example/explicit/" />
     <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="alternate" type="text/markdown" href="https://golden.example/explicit.md">  <meta name="description" content="SEO description.">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" /> <link rel="alternate" type="text/markdown" href="https://golden.example/explicit.md">  <meta name="description" content="SEO description.">
 <meta property="og:title" content="SEO title">
 <meta property="og:description" content="SEO description.">
 <meta property="og:type" content="article">
@@ -335,8 +332,7 @@ Text.
     <title>Hallo Welt — Golden</title>
     <link rel="canonical" href="https://golden.example/hallo/" />
     <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="alternate" type="text/markdown" href="https://golden.example/hallo.md"> <link rel="alternate" hreflang="en" href="https://golden.example/hello/">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" /> <link rel="alternate" type="text/markdown" href="https://golden.example/hallo.md"> <link rel="alternate" hreflang="en" href="https://golden.example/hello/">
 <link rel="alternate" hreflang="de" href="https://golden.example/hallo/">
 <link rel="alternate" hreflang="x-default" href="https://golden.example/hello/"> <meta name="description" content="Ein deutscher Beitrag.">
 <meta property="og:title" content="Hallo Welt">
@@ -392,8 +388,7 @@ Ein deutscher Beitrag.
     <title>Hello world — Golden</title>
     <link rel="canonical" href="https://golden.example/hello/" />
     <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="alternate" type="text/markdown" href="https://golden.example/hello.md"> <link rel="alternate" hreflang="en" href="https://golden.example/hello/">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" /> <link rel="alternate" type="text/markdown" href="https://golden.example/hello.md"> <link rel="alternate" hreflang="en" href="https://golden.example/hello/">
 <link rel="alternate" hreflang="de" href="https://golden.example/hallo/">
 <link rel="alternate" hreflang="x-default" href="https://golden.example/hello/"> <meta name="description" content="An English post.">
 <meta property="og:title" content="Hello world">
@@ -449,8 +444,7 @@ An English post.
     <title>Golden</title>
     <link rel="canonical" href="https://golden.example/" />
     <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
-    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-    <link rel="alternate" hreflang="en" href="https://golden.example/">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" /> <link rel="alternate" hreflang="en" href="https://golden.example/">
 <link rel="alternate" hreflang="de" href="https://golden.example/lang/de/">
 <link rel="alternate" hreflang="x-default" href="https://golden.example/">
     <link rel="stylesheet" href="style.css" />
@@ -497,8 +491,7 @@ An English post.
     <title>Golden</title>
     <link rel="canonical" href="https://golden.example/lang/de/" />
     <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/lang/de/feed.xml" />
-    <link rel="icon" type="image/svg+xml" href="../../favicon.svg" />
-    <link rel="alternate" hreflang="en" href="https://golden.example/">
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg" /> <link rel="alternate" hreflang="en" href="https://golden.example/">
 <link rel="alternate" hreflang="de" href="https://golden.example/lang/de/">
 <link rel="alternate" hreflang="x-default" href="https://golden.example/">
     <link rel="stylesheet" href="../../style.css" />
@@ -606,8 +599,7 @@ An English post.
     <title>Golden</title>
     <link rel="canonical" href="https://golden.example/" />
     <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/lang/en/feed.xml" />
-    <link rel="icon" type="image/svg+xml" href="../../favicon.svg" />
-    
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg" /> 
     <link rel="stylesheet" href="../../style.css" />
   </head>
   <body>
@@ -754,8 +746,7 @@ Sitemap: https://golden.example/sitemap.xml
     <title>Still a draft — Golden</title>
     <link rel="canonical" href="https://golden.example/draft/" />
     <link rel="alternate" type="application/rss+xml" title="Golden" href="https://golden.example/feed.xml" />
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-      <meta name="description" content="Not live.">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />   <meta name="description" content="Not live.">
 <meta property="og:title" content="Still a draft">
 <meta property="og:description" content="Not live.">
 <meta property="og:type" content="article">

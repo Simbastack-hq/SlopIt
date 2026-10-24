@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { BrandPolicy } from '../blogs.js'
 import type { Store } from '../db/store.js'
 import type { TranslationPolicy } from '../posts.js'
 import type { MutationRenderer } from '../rendering/generator.js'
@@ -37,6 +38,8 @@ export interface McpServerConfig {
    * `translationOf` identically. See that field's doc.
    */
   translationPolicy?: TranslationPolicy
+  /** Mirrors ApiRouterConfig.brandPolicy: gates setting brand fields in update_blog. */
+  brandPolicy?: BrandPolicy
   /** Mirrors ApiRouterConfig.previewUrlFor: `preview_url` on draft responses. */
   previewUrlFor?: PreviewUrlFor
   /**

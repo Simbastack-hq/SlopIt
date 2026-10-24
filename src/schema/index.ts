@@ -95,16 +95,30 @@ export const BlogSchema = z.object({
   // canonical). Always present — the column is NOT NULL DEFAULT 'en'.
   // Posts may override it individually via `Post.language`.
   language: z.string(),
+  // Brand (migration 013). NULL = the theme's default for that piece.
+  // Validated at the write boundary (BlogPatchSchema + updateBlog's
+  // readability check); the renderer escapes all three on output.
+  accentColor: z.string().nullable(),
+  logoUrl: z.string().nullable(),
+  faviconUrl: z.string().nullable(),
 })
 export type Blog = z.infer<typeof BlogSchema>
 
+// `#rrggbb`, stored lowercase so "#1F6FEB" and "#1f6feb" are one value.
+// No shorthand, names or rgb(): one spelling an agent can't get wrong.
+const hexColor = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, 'Use a 6-digit hex color like "#1f6feb"')
+  .toLowerCase()
+
 // Patch schema for updateBlog. Allows `title`, `analytics`,
-// `parentSiteUrl` and `language` — theme is immutable (no theme switcher
+// `parentSiteUrl`, `language` and the brand (`accentColor`, `logoUrl`,
+// `faviconUrl`) — theme is immutable (no theme switcher
 // UI yet), name changes have their own flow (TBD), id is permanent.
 // Strict rejects unknown keys at the boundary.
 //
-// `title: null`, `analytics: null` and `parentSiteUrl: null` are the
-// documented ways to clear those columns; the PATCH body distinguishes
+// `null` on any field but `language` is the documented way to clear
+// that column; the PATCH body distinguishes
 // "omit field from patch" (no-op) vs "set field to null" (clear column)
 // via Object.keys(parsed) in updateBlog, same pattern as PostPatchSchema.
 export const BlogPatchSchema = z
@@ -130,6 +144,24 @@ export const BlogPatchSchema = z
     // Not nullable: a blog always has a language. "Reset" is `'en'`.
     language: languageTag
       .describe('Default language for the blog as a BCP-47 tag, e.g. "en", "ru", "pt-BR".')
+      .optional(),
+    accentColor: hexColor
+      .nullable()
+      .describe(
+        "Brand color as #rrggbb, e.g. the main site's primary color. Used for links, the main-site button and the default favicon. Must be readable on the light page background (3:1); a refusal suggests a darker shade. null restores the theme's color.",
+      )
+      .optional(),
+    logoUrl: httpUrl
+      .nullable()
+      .describe(
+        "Logo image URL (http/https), shown at the top of every page in place of the blog's name (which becomes its alt text). A wide wordmark works best; it is shown 32px tall. Use an uploaded image URL or the main site's logo. null shows the name again.",
+      )
+      .optional(),
+    faviconUrl: httpUrl
+      .nullable()
+      .describe(
+        "Browser-tab icon URL (http/https): a square PNG, SVG or ICO, e.g. the main site's favicon. null restores the default icon (drawn in accentColor when set).",
+      )
       .optional(),
   })
   .strict()

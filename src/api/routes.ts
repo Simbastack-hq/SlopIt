@@ -123,15 +123,17 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     })
   })
 
-  // Patch blog metadata. v1 surface allows mutation of `analytics` only;
-  // BlogPatchSchema.strict() rejects unknown keys (theme/name/id are
-  // immutable through this entry point).
+  // Patch blog settings (see BlogPatchSchema). BlogPatchSchema.strict()
+  // rejects unknown keys (theme/name/id are immutable through this entry
+  // point).
   app.patch('/blogs/:id', async (c) => {
     const renderer = config.rendererFor(c.var.blog)
     // updateBlog re-parses via BlogPatchSchema.strict(); cast is honest —
     // Zod is the source of truth, this layer only guarantees JSON parsed.
     const raw = (await readJsonBodyOptional(c)) as BlogPatchInput
-    const blog = updateBlog(config.store, renderer, c.var.blog.id, raw)
+    const blog = updateBlog(config.store, renderer, c.var.blog.id, raw, {
+      brandPolicy: config.brandPolicy,
+    })
     return c.json({ blog, _links: buildLinks(c.var.blog, config) })
   })
 

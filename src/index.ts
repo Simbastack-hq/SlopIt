@@ -15,6 +15,7 @@ export {
   getBlogsByEmail,
   updateBlog,
 } from './blogs.js'
+export type { BlogWriteOptions, BrandPolicy } from './blogs.js'
 
 // Signup orchestration — single source of truth for REST + MCP signup.
 export { signupBlog } from './signup.js'

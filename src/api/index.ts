@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { BrandPolicy } from '../blogs.js'
 import type { Store } from '../db/store.js'
 import type { TranslationPolicy } from '../posts.js'
 import type { MutationRenderer } from '../rendering/generator.js'
@@ -49,6 +50,14 @@ export interface ApiRouterConfig {
    * Platform passes a plan check; self-hosted leaves unset (allowed).
    */
   translationPolicy?: TranslationPolicy
+  /**
+   * Optional per-blog policy consulted when a blog patch sets a brand
+   * field (`accentColor`, `logoUrl`, `faviconUrl`) to a new value. A
+   * rejection becomes a `BRANDING_DISABLED` error carrying the policy's
+   * `reason` as the message. Clearing a field is never consulted.
+   * Platform passes a plan check; self-hosted leaves unset (allowed).
+   */
+  brandPolicy?: BrandPolicy
   /**
    * Draft previews. When set, draft responses from create, patch and get
    * carry `preview_url`, a private link where the human can see the draft

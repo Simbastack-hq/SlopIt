@@ -1,5 +1,4 @@
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -22,6 +21,7 @@ import {
   ROBOTS_TXT_HEADER,
 } from './feeds.js'
 import { instant, materializePost, type FactRecord, type MaterializedPost } from './facts.js'
+import { brandCss, brandFavicon, renderFaviconLink, renderMastheadName } from './brand.js'
 import { buildFrontmatter } from './frontmatter.js'
 import {
   blogDisplayName,
@@ -453,17 +453,30 @@ function isRendererRobotsTxt(path: string): boolean {
 }
 
 /**
- * Copy the theme's per-blog static assets (style.css, favicon.svg) into
- * a blog's output directory. Always overwrites (not copy-if-missing) so
- * blogs pick up theme changes on the next publish after a package
- * upgrade. Creates the blog dir if it doesn't exist yet.
+ * Write the theme's per-blog static assets (style.css, favicon.svg) into
+ * a blog's output directory, in the blog's accent color when it has one
+ * (see brand.ts). Always overwrites (not copy-if-missing) so blogs pick
+ * up theme changes on the next publish after a package upgrade, and a
+ * brand change on the next render. Creates the blog dir if it doesn't
+ * exist yet.
  *
  * @internal
  */
-export function ensureThemeAssets(theme: ThemeAssets, blogOutputDir: string): void {
+export function ensureThemeAssets(
+  theme: ThemeAssets,
+  blogOutputDir: string,
+  blog: Pick<Blog, 'accentColor'>,
+): void {
   mkdirSync(blogOutputDir, { recursive: true })
-  copyFileSync(theme.cssPath, join(blogOutputDir, 'style.css'))
-  copyFileSync(theme.faviconPath, join(blogOutputDir, 'favicon.svg'))
+  const accent = blog.accentColor
+  writeFileAtomic(
+    join(blogOutputDir, 'style.css'),
+    brandCss(readFileSync(theme.cssPath, 'utf8'), accent),
+  )
+  writeFileAtomic(
+    join(blogOutputDir, 'favicon.svg'),
+    brandFavicon(readFileSync(theme.faviconPath, 'utf8'), accent),
+  )
 }
 
 export function createRenderer(config: RendererConfig): MutationRenderer {
@@ -716,6 +729,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       lang,
       dir,
       blogName: blogDisplayName(blog),
+      mastheadName: renderMastheadName(blogDisplayName(blog), blog.logoUrl),
+      faviconLink: renderFaviconLink(blog.faviconUrl, '../favicon.svg'),
       // <title> is the search result and follows seoTitle; the <h1> stays post.title.
       pageTitle: resolvePageTitle(post, blog),
       postTitle: post.title,
@@ -770,7 +785,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const blogDir = blogOutputDir(blogId)
 
       // ensureThemeAssets BEFORE HTML write — see spec's Render sequencing section
-      ensureThemeAssets(theme, blogDir)
+      ensureThemeAssets(theme, blogDir, blog)
 
       const facts = loadBlogFacts(config.store, blogId)
       const self = materializePost(post, facts)
@@ -795,7 +810,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const blog = getBlogInternal(config.store, blogId)
       const blogDir = blogOutputDir(blogId)
 
-      ensureThemeAssets(theme, blogDir)
+      ensureThemeAssets(theme, blogDir, blog)
 
       const published = materializeAll(
         listPublishedPostsForBlog(config.store, blogId),
@@ -812,7 +827,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       const blog = getBlogInternal(config.store, blogId)
       const blogDir = blogOutputDir(blogId)
 
-      ensureThemeAssets(theme, blogDir)
+      ensureThemeAssets(theme, blogDir, blog)
 
       const facts = loadBlogFacts(config.store, blogId)
       const posts = materializeAll(listPublishedPostsForBlog(config.store, blogId), facts).map(
@@ -871,8 +886,9 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
           lang,
           dir: dirAttr,
           blogName: blogDisplayName(blog),
+          mastheadName: renderMastheadName(blogDisplayName(blog), blog.logoUrl),
           themeCssHref: prefix + 'style.css',
-          faviconHref: prefix + 'favicon.svg',
+          faviconLink: renderFaviconLink(blog.faviconUrl, prefix + 'favicon.svg'),
           canonicalUrl: homeUrl(root, lang, rootLang),
           // `/` → the all-languages feed; `lang/<tag>/` → that language's.
           feedUrl: page.feedUrl,
