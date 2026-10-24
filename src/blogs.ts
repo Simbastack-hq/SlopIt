@@ -9,6 +9,7 @@ import {
   rederiveBlogOutput,
   rethrowWithRecovery,
 } from './posts.js'
+import { accentReadability } from './rendering/brand.js'
 import type { MutationRenderer } from './rendering/generator.js'
 import {
   BlogAnalyticsSchema,
@@ -19,6 +20,54 @@ import {
   type BlogPatchInput,
   type CreateBlogInput,
 } from './schema/index.js'
+
+/**
+ * Consumer policy consulted when a blog patch sets a brand field
+ * (`accentColor`, `logoUrl`, `faviconUrl`) to a new value. Same shape as
+ * `TranslationPolicy`: the consumer decides, core turns a rejection into
+ * `BRANDING_DISABLED` with `reason` as the message. Clearing a field is
+ * never consulted, so a blog the host stops allowing can still go back
+ * to the theme's defaults.
+ */
+export type BrandPolicy = (blog: Blog) => { ok: true } | { ok: false; reason: string }
+
+export interface BlogWriteOptions {
+  brandPolicy?: BrandPolicy
+}
+
+// Every column a Blog is read from, in one place for the three readers.
+const BLOG_COLUMNS =
+  'id, name, title, theme, created_at, analytics_json, parent_site_url, language, accent_color, logo_url, favicon_url'
+
+interface BlogRow {
+  id: string
+  name: string | null
+  title: string | null
+  theme: 'minimal'
+  created_at: string
+  analytics_json: string | null
+  parent_site_url: string | null
+  language: string
+  accent_color: string | null
+  logo_url: string | null
+  favicon_url: string | null
+}
+
+function rowToBlog(row: BlogRow): Blog {
+  return {
+    id: row.id,
+    name: row.name,
+    title: row.title,
+    theme: row.theme,
+    createdAt: isoTimestamp(row.created_at),
+    analytics: parseAnalytics(row.analytics_json),
+    parentSiteUrl: row.parent_site_url,
+    language: row.language,
+    accentColor: row.accent_color,
+    logoUrl: row.logo_url,
+    faviconUrl: row.favicon_url,
+  }
+}
 
 /**
  * Deserialize the `analytics_json` column. NULL → undefined; valid JSON
@@ -96,6 +145,10 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
     createdAt: isoTimestamp(row.created_at),
     parentSiteUrl,
     language: row.language,
+    // Signup never sets a brand; it is a blog patch.
+    accentColor: null,
+    logoUrl: null,
+    faviconUrl: null,
   }
 
   return { blog }
@@ -113,28 +166,9 @@ export function createBlog(store: Store, input: CreateBlogInput): { blog: Blog }
  */
 export function getBlogsByEmail(store: Store, email: string): Blog[] {
   const rows = store.db
-    .prepare(
-      'SELECT id, name, title, theme, created_at, parent_site_url, language FROM blogs WHERE email = ?',
-    )
-    .all(email) as Array<{
-    id: string
-    name: string | null
-    title: string | null
-    theme: 'minimal'
-    created_at: string
-    parent_site_url: string | null
-    language: string
-  }>
-
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    title: row.title,
-    theme: row.theme,
-    createdAt: isoTimestamp(row.created_at),
-    parentSiteUrl: row.parent_site_url,
-    language: row.language,
-  }))
+    .prepare(`SELECT ${BLOG_COLUMNS} FROM blogs WHERE email = ?`)
+    .all(email) as BlogRow[]
+  return rows.map(rowToBlog)
 }
 
 export function createApiKey(store: Store, blogId: string): { apiKey: string } {
@@ -176,50 +210,32 @@ export function getBlog(store: Store, blogId: string): Blog {
  * so an exact match is sufficient.
  */
 export function getBlogByName(store: Store, name: string): Blog | null {
-  const row = store.db
-    .prepare(
-      'SELECT id, name, title, theme, created_at, analytics_json, parent_site_url, language FROM blogs WHERE name = ?',
-    )
-    .get(name) as
-    | {
-        id: string
-        name: string
-        title: string | null
-        theme: 'minimal'
-        created_at: string
-        analytics_json: string | null
-        parent_site_url: string | null
-        language: string
-      }
+  const row = store.db.prepare(`SELECT ${BLOG_COLUMNS} FROM blogs WHERE name = ?`).get(name) as
+    | BlogRow
     | undefined
-
-  if (row === undefined) return null
-
-  return {
-    id: row.id,
-    name: row.name,
-    title: row.title,
-    theme: row.theme,
-    createdAt: isoTimestamp(row.created_at),
-    analytics: parseAnalytics(row.analytics_json),
-    parentSiteUrl: row.parent_site_url,
-    language: row.language,
-  }
+  return row === undefined ? null : rowToBlog(row)
 }
 
 /**
  * Patch fields on a blog row. v1 surface allows mutation of `title`,
- * `analytics`, `parentSiteUrl`, and `language`. Theme/name/id remain
- * immutable through this function.
+ * `analytics`, `parentSiteUrl`, `language` and the brand (`accentColor`,
+ * `logoUrl`, `faviconUrl`). Theme/name/id remain immutable through this
+ * function.
  *
  * Side effects:
  *  - When any patched field changes (set, cleared, or modified), every
  *    published post page is re-rendered via `renderer.renderBlogPosts`
  *    so any postprocessHtml hook (Phase 3c's injection wrapper) sees
- *    the new value. `renderer.renderBlog` is also called once.
+ *    the new value. `renderer.renderBlog` is also called once; both
+ *    rewrite the blog's style.css and favicon.svg, which carry the brand.
  *  - Empty patch, patches with explicit `undefined` values, and
  *    patches that leave every field functionally unchanged are no-ops:
  *    no DB write, no re-render.
+ *
+ * Refusals, before any write: a brand field set to a new value when
+ * `opts.brandPolicy` refuses (BRANDING_DISABLED), then an `accentColor`
+ * too light to read on the page (BAD_REQUEST, with a darker suggestion
+ * in `details.suggestion`).
  *
  * Compensation: same shape as updatePost. DB UPDATE runs first; on
  * render failure the prior values are restored via a reverse UPDATE
@@ -231,6 +247,7 @@ export function updateBlog(
   renderer: MutationRenderer,
   blogId: string,
   patch: BlogPatchInput,
+  opts?: BlogWriteOptions,
 ): Blog {
   const parsed = BlogPatchSchema.parse(patch)
 
@@ -240,8 +257,7 @@ export function updateBlog(
   // Empty patch → no-op fast path
   if (Object.keys(parsed).length === 0) return prior
 
-  // Detect per-field change semantics. For each patchable field there are
-  // four input states:
+  // Each patchable field has four input states:
   //   patch has no key for the field       → leave column untouched
   //   patch field === undefined (explicit) → treat as omitted, leave column untouched
   //   patch field === null                 → clear column to NULL
@@ -251,62 +267,92 @@ export function updateBlog(
   // `{ field: undefined }` in the parsed output (the key is present, value
   // is undefined). Treat it as "no change" — same effective semantics as
   // omitting the key.
-  const patchTouchesTitle = 'title' in parsed && parsed.title !== undefined
-  const patchTouchesAnalytics = 'analytics' in parsed && parsed.analytics !== undefined
-  const patchTouchesParentSiteUrl = 'parentSiteUrl' in parsed && parsed.parentSiteUrl !== undefined
-  const patchTouchesLanguage = 'language' in parsed && parsed.language !== undefined
-
-  const newTitle: string | null = patchTouchesTitle ? (parsed.title ?? null) : prior.title
+  const next = <T>(value: T | null | undefined, current: T | null): T | null =>
+    value === undefined ? current : value
 
   const priorAnalyticsJson = prior.analytics === undefined ? null : JSON.stringify(prior.analytics)
-  const newAnalyticsJson: string | null = patchTouchesAnalytics
-    ? parsed.analytics === null
-      ? null
-      : JSON.stringify(parsed.analytics)
-    : priorAnalyticsJson
+  const before: BlogColumns = {
+    title: prior.title,
+    analyticsJson: priorAnalyticsJson,
+    parentSiteUrl: prior.parentSiteUrl,
+    language: prior.language,
+    accentColor: prior.accentColor,
+    logoUrl: prior.logoUrl,
+    faviconUrl: prior.faviconUrl,
+  }
+  const after: BlogColumns = {
+    title: next(parsed.title, prior.title),
+    analyticsJson:
+      parsed.analytics === undefined
+        ? priorAnalyticsJson
+        : parsed.analytics === null
+          ? null
+          : JSON.stringify(parsed.analytics),
+    parentSiteUrl: next(parsed.parentSiteUrl, prior.parentSiteUrl),
+    // Not nullable: a blog always has a language.
+    language: parsed.language ?? prior.language,
+    accentColor: next(parsed.accentColor, prior.accentColor),
+    logoUrl: next(parsed.logoUrl, prior.logoUrl),
+    faviconUrl: next(parsed.faviconUrl, prior.faviconUrl),
+  }
 
-  const priorParentSiteUrl = prior.parentSiteUrl
-  const newParentSiteUrl: string | null = patchTouchesParentSiteUrl
-    ? (parsed.parentSiteUrl ?? null)
-    : priorParentSiteUrl
+  const changed = (Object.keys(after) as (keyof BlogColumns)[]).filter(
+    (k) => after[k] !== before[k],
+  )
+  if (changed.length === 0) return prior
 
-  const newLanguage = patchTouchesLanguage ? parsed.language! : prior.language
+  // Setting a new brand value is what a host may restrict; clearing one
+  // never is.
+  const brandSet = (['accentColor', 'logoUrl', 'faviconUrl'] as const).some(
+    (k) => changed.includes(k) && after[k] !== null,
+  )
+  if (brandSet && opts?.brandPolicy !== undefined) {
+    const verdict = opts.brandPolicy(prior)
+    if (!verdict.ok) throw new SlopItError('BRANDING_DISABLED', verdict.reason)
+  }
+  if (changed.includes('accentColor') && after.accentColor !== null) {
+    const verdict = accentReadability(after.accentColor)
+    if (!verdict.ok) {
+      throw new SlopItError('BAD_REQUEST', verdict.message, {
+        accentColor: after.accentColor,
+        suggestion: verdict.suggestion,
+      })
+    }
+  }
 
-  const titleChanged = newTitle !== prior.title
-  const analyticsChanged = newAnalyticsJson !== priorAnalyticsJson
-  const parentSiteUrlChanged = newParentSiteUrl !== priorParentSiteUrl
-  const languageChanged = newLanguage !== prior.language
-  if (!titleChanged && !analyticsChanged && !parentSiteUrlChanged && !languageChanged) return prior
-
-  // One UPDATE over all four columns; unchanged ones are rewritten with
+  // One UPDATE over every column; unchanged ones are rewritten with
   // their prior value. Compensation mirrors it exactly.
-  const write = (
-    title: string | null,
-    analyticsJson: string | null,
-    parentSiteUrl: string | null,
-    language: string,
-  ) =>
+  const write = (c: BlogColumns) =>
     store.db
       .prepare(
-        'UPDATE blogs SET title = ?, analytics_json = ?, parent_site_url = ?, language = ? WHERE id = ?',
+        'UPDATE blogs SET title = ?, analytics_json = ?, parent_site_url = ?, language = ?, accent_color = ?, logo_url = ?, favicon_url = ? WHERE id = ?',
       )
-      .run(title, analyticsJson, parentSiteUrl, language, blogId)
+      .run(
+        c.title,
+        c.analyticsJson,
+        c.parentSiteUrl,
+        c.language,
+        c.accentColor,
+        c.logoUrl,
+        c.faviconUrl,
+        blogId,
+      )
 
-  write(newTitle, newAnalyticsJson, newParentSiteUrl, newLanguage)
+  write(after)
 
   // Hydrate the updated row
   const updated = getBlogInternal(store, blogId)
 
-  // Compensation: restore prior column values on render failure.
-  const compensate = () =>
-    write(prior.title, priorAnalyticsJson, priorParentSiteUrl, prior.language)
+  const languageChanged = changed.includes('language')
+  const titleChanged = changed.includes('title')
 
-  // Re-render side effects. The renderer reads blog.title, blog.analytics,
-  // blog.parentSiteUrl, and blog.language on every call, so rendered
-  // output on disk is stale until we re-run it. Analytics and the parent
-  // link affect HTML only. The title is the masthead and <title> of every
-  // page and also heads feed.xml and llms.txt. Language also lands in
-  // every post's `.md` frontmatter and in feed.xml.
+  // Re-render side effects. The renderer reads every one of these fields
+  // on every call, so rendered output on disk is stale until we re-run
+  // it. Analytics, the parent link and the brand affect HTML (and the
+  // brand the blog's style.css and favicon.svg) only. The title is the
+  // masthead and <title> of every page and also heads feed.xml and
+  // llms.txt. Language also lands in every post's `.md` frontmatter and
+  // in feed.xml.
   try {
     renderer.renderBlogPosts(blogId)
     renderer.renderBlog(blogId)
@@ -322,7 +368,7 @@ export function updateBlog(
   } catch (renderErr) {
     const failures: unknown[] = []
     try {
-      compensate()
+      write(before)
     } catch (e) {
       failures.push(e)
     }
@@ -346,6 +392,17 @@ export function updateBlog(
   return updated
 }
 
+// The patchable columns of a blog row, as updateBlog writes them.
+interface BlogColumns {
+  title: string | null
+  analyticsJson: string | null
+  parentSiteUrl: string | null
+  language: string
+  accentColor: string | null
+  logoUrl: string | null
+  faviconUrl: string | null
+}
+
 /**
  * Fetch a blog by id, throwing SlopItError(BLOG_NOT_FOUND) if missing.
  * Used by the renderer (for display name / theme) and by createPost's
@@ -355,35 +412,11 @@ export function updateBlog(
  * @internal
  */
 export function getBlogInternal(store: Store, blogId: string): Blog {
-  const row = store.db
-    .prepare(
-      'SELECT id, name, title, theme, created_at, analytics_json, parent_site_url, language FROM blogs WHERE id = ?',
-    )
-    .get(blogId) as
-    | {
-        id: string
-        name: string | null
-        title: string | null
-        theme: 'minimal'
-        created_at: string
-        analytics_json: string | null
-        parent_site_url: string | null
-        language: string
-      }
+  const row = store.db.prepare(`SELECT ${BLOG_COLUMNS} FROM blogs WHERE id = ?`).get(blogId) as
+    | BlogRow
     | undefined
-
   if (row === undefined) {
     throw new SlopItError('BLOG_NOT_FOUND', `Blog "${blogId}" does not exist`, { blogId })
   }
-
-  return {
-    id: row.id,
-    name: row.name,
-    title: row.title,
-    theme: row.theme,
-    createdAt: isoTimestamp(row.created_at),
-    analytics: parseAnalytics(row.analytics_json),
-    parentSiteUrl: row.parent_site_url,
-    language: row.language,
-  }
+  return rowToBlog(row)
 }

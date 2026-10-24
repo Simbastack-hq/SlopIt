@@ -75,6 +75,12 @@ Variables available (exact list will stabilize as the renderer lands):
 - `{{post.title}}`, `{{post.body}}` (pre-rendered HTML), `{{post.publishedAt}}`, `{{post.tags}}`
 - `{{baseUrl}}`
 - `{{poweredByFooter}}` — HTML for the SlopIt footer (or empty string if platform has disabled it)
+- `{{{mastheadName}}}` — the blog's name, or its logo (`logoUrl`) with the name as alt text
+- `{{{faviconLink}}}` — `<link rel="icon">` for the blog's `faviconUrl`, else the theme's `favicon.svg`
+
+## Brand
+
+A blog may set an `accentColor`, a `logoUrl` and a `faviconUrl` (see `docs/solutions/blog-brand.md`). The accent replaces `--accent` / `--accent-dark` through a trailing `:root` block in the blog's own copy of `style.css`, and recolors the default `favicon.svg`. So a theme must draw every accent through those two custom properties, never a literal color, and keep its favicon's accent as `fill="#ff4f00"`.
 
 CSS is a sibling file loaded via `<link>`. No `<style>` blocks, no Tailwind build. Plain CSS.
 

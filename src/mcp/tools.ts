@@ -277,8 +277,8 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   )
 
   // 5. update_blog — patch the authenticated blog: title, analytics,
-  // parentSiteUrl, language. theme/name/id stay immutable through this
-  // entry point. crossBlogGuard rejects mismatched blog_id.
+  // parentSiteUrl, language, brand. theme/name/id stay immutable through
+  // this entry point. crossBlogGuard rejects mismatched blog_id.
   const UpdateBlogInputSchema = z
     .object({
       blog_id: BlogId,
@@ -292,7 +292,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     {
       ...meta('Update blog settings', UPDATE),
       description:
-        'Edit blog settings: `title`, `language` (BCP-47, e.g. "ru"), `parentSiteUrl`, `analytics`; null clears any but `language`. Set `title` to the blog\'s display name, e.g. the project or person\'s name; otherwise the URL name is shown.',
+        'Edit blog settings: `title` (otherwise the URL name is shown), `language` (BCP-47), `parentSiteUrl`, `analytics`, and brand `accentColor`, `logoUrl`, `faviconUrl` to match a main site. null clears any but `language`.',
       inputSchema: UpdateBlogInputSchema,
       outputSchema: BlogOutput,
     },
@@ -302,7 +302,9 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       { auth: 'required', idempotent: true, crossBlogGuard: true },
       (args, ctx) => {
         const renderer = config.rendererFor(ctx.blog!)
-        const blog = updateBlog(config.store, renderer, ctx.blog!.id, args.patch)
+        const blog = updateBlog(config.store, renderer, ctx.blog!.id, args.patch, {
+          brandPolicy: config.brandPolicy,
+        })
         return { blog, blog_url: renderer.baseUrl }
       },
     ),

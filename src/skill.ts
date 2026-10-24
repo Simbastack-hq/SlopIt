@@ -126,7 +126,7 @@ All routes are absolute URLs against the API base **\`${baseUrl}\`**. Copy them 
 | GET ${baseUrl}/schema | Return the PostInput JSONSchema. No auth. |
 | POST ${baseUrl}/bridge/report_bug | Submit a bug report (501 in core; platform overrides). No auth. |
 | GET ${baseUrl}/blogs/:id | Get blog info. Auth required. |
-| PATCH ${baseUrl}/blogs/:id | Patch blog metadata: \`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`. |
+| PATCH ${baseUrl}/blogs/:id | Patch blog metadata: \`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`, and the brand: \`accentColor\`, \`logoUrl\`, \`faviconUrl\`. |
 | POST ${baseUrl}/blogs/:id/posts | Create a post. JSON body, or a \`text/markdown\` body with a required \`?title=\` query parameter (see Schema). |
 | GET ${baseUrl}/blogs/:id/posts | List posts (query: ?status=draft|published). |
 | GET ${baseUrl}/blogs/:id/posts/:slug | Get a single post. |
@@ -194,6 +194,16 @@ The blog object additionally carries an optional \`analytics\` field — a per-b
 
 Analytics is opt-in. Blogs that have never been patched return \`analytics: undefined\` (the field is omitted from the response). To remove a previously-configured value send \`PATCH\` with body \`{ "analytics": null }\`.
 
+### Brand: match the main site
+
+Three fields make the blog look like the site it belongs to. Each is \`null\` until set, and \`null\` puts the theme's default back:
+
+- \`accentColor\` — the site's primary color as \`#rrggbb\`. Links, the "Main site →" button and the default tab icon use it. It must be readable on the light page background (3:1 contrast). A color that is too light is refused with BAD_REQUEST; \`details.suggestion\` is the same color darkened just enough, so retry with that or another darker brand shade.
+- \`logoUrl\` — an http(s) image shown at the top of every page in place of the blog's name (the name becomes its alt text). Shown 32px tall, so a wide wordmark works best.
+- \`faviconUrl\` — an http(s) image for the browser tab: a square PNG, SVG or ICO.
+
+When the blog has a \`parentSiteUrl\`, take these from that site: its primary button or link color, its header logo, its favicon (\`<link rel="icon">\`). Use the image URLs as they are, or upload the files (see Posts with images) and use the returned \`url\`. Set them in one call: \`PATCH ${baseUrl}/blogs/:id\` with \`{ "accentColor": "#1f6feb", "logoUrl": "https://acme.example/logo.svg", "faviconUrl": "https://acme.example/favicon.png" }\` (or \`update_blog\`). Every page is re-rendered with them. A hosting provider may restrict setting them to certain plans; the refusal is BRANDING_DISABLED with the reason in \`message\`. Clearing always works.
+
 ## Language
 
 Every blog has a default \`language\` (a BCP-47 tag such as \`en\`, \`ru\`, \`pt-BR\`; default \`en\`). Set it at signup (\`{ "name": "...", "language": "ru" }\`) or later via \`PATCH ${baseUrl}/blogs/:id\` / \`update_blog\`. A post may override it with its own \`language\`; send \`null\` in a post patch to clear the override and inherit the blog's again. A post's effective language drives its page's \`<html lang>\` and text direction, date formatting, \`og:locale\`, JSON-LD \`inLanguage\`, and the \`language\` key in \`{post-slug}.md\` frontmatter. Tags are validated against the server's locale data and canonicalised (\`EN-us\` → \`en-US\`); an unknown tag is rejected with ZOD_VALIDATION.
@@ -225,6 +235,7 @@ ${emailRequiredError}| UNAUTHORIZED | 401 | Missing or invalid api key. |
 | POST_SLUG_RESERVED | 400 | The slug \`lang\` is reserved for the per-language home pages. Pass another slug. |
 | TRANSLATION_CONFLICT | 409 | The translation group already has a post in this language. \`details.{language, slug}\` names it. Set a different \`language\` or update that post instead. |
 | TRANSLATIONS_DISABLED | 403 | This host does not allow \`translationOf\` for this blog. \`message\` says why (e.g. plan). |
+| BRANDING_DISABLED | 403 | This host does not allow setting \`accentColor\`, \`logoUrl\` or \`faviconUrl\` for this blog. \`message\` says why (e.g. plan). Clearing them still works. |
 | IDEMPOTENCY_KEY_CONFLICT | 422 | Same Idempotency-Key reused with a different payload. |
 | NOT_IMPLEMENTED | 501 | Bug-report stub (platform overrides in production). |
 | MEDIA_NOT_FOUND | 404 | Unknown media id (within the authenticated blog). |
@@ -274,7 +285,7 @@ Over HTTP (the streamable HTTP transport), every \`POST\` to the MCP endpoint mu
 | create_post | bearer | yes | Publish a post. |
 | update_post | bearer | yes | Edit an existing post. |
 | delete_post | bearer | yes | Remove a post permanently. |
-| update_blog | bearer | yes | Edit blog metadata (\`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`). |
+| update_blog | bearer | yes | Edit blog metadata (\`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`, \`accentColor\`, \`logoUrl\`, \`faviconUrl\`). |
 | get_blog | bearer | — | Get blog metadata and its public URL (\`blog_url\`). |
 | get_post | bearer | — | Get a single post by slug. |
 | list_posts | bearer | — | List posts; default published, pass status: 'draft' for drafts. |

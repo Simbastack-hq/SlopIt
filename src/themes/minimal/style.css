@@ -48,6 +48,23 @@ body {
 a.masthead-name:hover {
   color: var(--accent);
 }
+/* The blog's logo (logoUrl), in place of the name. Fixed height so any
+   logo sits like the 18px name does; a wide wordmark is the common case.
+   The name may shrink so the logo never pushes the main-site pill off a
+   phone screen; `contain` keeps it in proportion when it does. */
+.masthead:has(.masthead-logo) {
+  align-items: center;
+}
+.masthead-name:has(.masthead-logo) {
+  min-width: 0;
+}
+.masthead-logo {
+  display: block;
+  height: 32px;
+  width: auto;
+  max-width: min(240px, 100%);
+  object-fit: contain;
+}
 .parent-site {
   flex-shrink: 0;
   font-size: 14px;

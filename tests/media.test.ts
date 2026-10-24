@@ -31,6 +31,9 @@ function makeFixtures() {
     theme: 'minimal',
     createdAt: '',
     parentSiteUrl: null,
+    accentColor: null,
+    logoUrl: null,
+    faviconUrl: null,
     language: 'en',
   }
   const renderer = createRenderer({
@@ -123,6 +126,9 @@ describe('uploadMedia', () => {
       theme: 'minimal',
       createdAt: '',
       parentSiteUrl: null,
+      accentColor: null,
+      logoUrl: null,
+      faviconUrl: null,
       language: 'en',
     }
     const renderer = createRenderer({

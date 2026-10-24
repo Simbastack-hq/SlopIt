@@ -9,6 +9,9 @@ const blog: Blog = {
   theme: 'minimal',
   createdAt: '2026-04-23T00:00:00Z',
   parentSiteUrl: null,
+  accentColor: null,
+  logoUrl: null,
+  faviconUrl: null,
   language: 'en',
 }
 
