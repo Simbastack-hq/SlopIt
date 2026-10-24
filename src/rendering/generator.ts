@@ -33,7 +33,7 @@ import {
   resolvePageTitle,
   textDirection,
 } from './seo.js'
-import { escapeHtml, loadTheme, render, type ThemeAssets } from './templates.js'
+import { escapeHtml, isHttpUrl, loadTheme, render, type ThemeAssets } from './templates.js'
 import { languageLabel, stringsFor } from './strings.js'
 import { renderToc } from './toc.js'
 
@@ -375,22 +375,6 @@ export function renderPoweredBy(): string {
  *
  * @internal
  */
-/**
- * True only for absolute http/https URLs. Parses with the WHATWG `URL`
- * constructor and checks the normalized protocol — the same basis as the
- * `httpUrl` schema, so a value that passes the write boundary is never
- * silently dropped here for a spelling the schema would have accepted.
- */
-function isHttpUrl(s: string): boolean {
-  let protocol: string
-  try {
-    protocol = new URL(s).protocol
-  } catch {
-    return false
-  }
-  return protocol === 'http:' || protocol === 'https:'
-}
-
 export function renderParentSiteLink(
   parentSiteUrl: string | null | undefined,
   label: string,
@@ -465,17 +449,16 @@ function isRendererRobotsTxt(path: string): boolean {
 export function ensureThemeAssets(
   theme: ThemeAssets,
   blogOutputDir: string,
-  blog: Pick<Blog, 'accentColor'>,
+  blog: Pick<Blog, 'accentColor' | 'logoUrl' | 'faviconUrl'>,
 ): void {
   mkdirSync(blogOutputDir, { recursive: true })
-  const accent = blog.accentColor
   writeFileAtomic(
     join(blogOutputDir, 'style.css'),
-    brandCss(readFileSync(theme.cssPath, 'utf8'), accent),
+    brandCss(readFileSync(theme.cssPath, 'utf8'), blog),
   )
   writeFileAtomic(
     join(blogOutputDir, 'favicon.svg'),
-    brandFavicon(readFileSync(theme.faviconPath, 'utf8'), accent),
+    brandFavicon(readFileSync(theme.faviconPath, 'utf8'), blog),
   )
 }
 
@@ -729,8 +712,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       lang,
       dir,
       blogName: blogDisplayName(blog),
-      mastheadName: renderMastheadName(blogDisplayName(blog), blog.logoUrl),
-      faviconLink: renderFaviconLink(blog.faviconUrl, '../favicon.svg'),
+      mastheadName: renderMastheadName(blogDisplayName(blog), blog),
+      faviconLink: renderFaviconLink(blog, '../favicon.svg'),
       // <title> is the search result and follows seoTitle; the <h1> stays post.title.
       pageTitle: resolvePageTitle(post, blog),
       postTitle: post.title,
@@ -886,9 +869,9 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
           lang,
           dir: dirAttr,
           blogName: blogDisplayName(blog),
-          mastheadName: renderMastheadName(blogDisplayName(blog), blog.logoUrl),
+          mastheadName: renderMastheadName(blogDisplayName(blog), blog),
           themeCssHref: prefix + 'style.css',
-          faviconLink: renderFaviconLink(blog.faviconUrl, prefix + 'favicon.svg'),
+          faviconLink: renderFaviconLink(blog, prefix + 'favicon.svg'),
           canonicalUrl: homeUrl(root, lang, rootLang),
           // `/` → the all-languages feed; `lang/<tag>/` → that language's.
           feedUrl: page.feedUrl,

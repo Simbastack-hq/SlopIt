@@ -1,4 +1,5 @@
-import { escapeHtml } from './templates.js'
+import type { Blog } from '../schema/index.js'
+import { escapeHtml, isHttpUrl } from './templates.js'
 
 // A blog's brand: an accent color, a masthead logo and a favicon. The
 // theme stays the theme; these only swap its accent and its marks so a
@@ -114,8 +115,31 @@ export function accentReadability(accent: string): AccentVerdict {
   }
 }
 
+type BrandFields = Pick<Blog, 'accentColor' | 'logoUrl' | 'faviconUrl'>
+
+/**
+ * The blog's brand as it may be rendered: each stored value re-checked,
+ * anything that fails treated as unset. The write boundary already
+ * validates (BlogPatchSchema); this keeps a row written some other way
+ * (a direct DB edit, a future bug) from injecting CSS into style.css or
+ * markup into favicon.svg and the page head. Every helper below goes
+ * through it, so no caller can skip it.
+ */
+export function renderableBrand(blog: BrandFields): BrandFields {
+  const url = (v: string | null) => (v !== null && isHttpUrl(v) ? v : null)
+  return {
+    accentColor:
+      blog.accentColor !== null && /^#[0-9a-f]{6}$/.test(blog.accentColor)
+        ? blog.accentColor
+        : null,
+    logoUrl: url(blog.logoUrl),
+    faviconUrl: url(blog.faviconUrl),
+  }
+}
+
 /** The blog's style.css: the theme's, plus the accent override when set. */
-export function brandCss(themeCss: string, accent: string | null): string {
+export function brandCss(themeCss: string, blog: BrandFields): string {
+  const accent = renderableBrand(blog).accentColor
   if (accent === null) return themeCss
   return `${themeCss}
 /* Blog brand (accentColor) */
@@ -127,7 +151,8 @@ export function brandCss(themeCss: string, accent: string | null): string {
 }
 
 /** The blog's favicon.svg: the theme's, in the accent when one is set. */
-export function brandFavicon(themeSvg: string, accent: string | null): string {
+export function brandFavicon(themeSvg: string, blog: BrandFields): string {
+  const accent = renderableBrand(blog).accentColor
   if (accent === null) return themeSvg
   const marker = `fill="${THEME_ACCENT}"`
   if (!themeSvg.includes(marker)) {
@@ -140,7 +165,8 @@ export function brandFavicon(themeSvg: string, accent: string | null): string {
  * `<link rel="icon">`: the blog's own favicon when set (any image type,
  * so no `type`), else the theme's SVG at `localHref`.
  */
-export function renderFaviconLink(faviconUrl: string | null, localHref: string): string {
+export function renderFaviconLink(blog: BrandFields, localHref: string): string {
+  const faviconUrl = renderableBrand(blog).faviconUrl
   if (faviconUrl !== null) return `<link rel="icon" href="${escapeHtml(faviconUrl)}" />`
   return `<link rel="icon" type="image/svg+xml" href="${escapeHtml(localHref)}" />`
 }
@@ -149,7 +175,8 @@ export function renderFaviconLink(faviconUrl: string | null, localHref: string):
  * What the masthead shows: the logo, named by the blog's display name
  * for screen readers and search, else the name as text.
  */
-export function renderMastheadName(blogName: string, logoUrl: string | null): string {
+export function renderMastheadName(blogName: string, blog: BrandFields): string {
+  const logoUrl = renderableBrand(blog).logoUrl
   if (logoUrl === null) return escapeHtml(blogName)
   return `<img class="masthead-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(blogName)}">`
 }

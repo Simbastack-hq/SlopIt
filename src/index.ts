@@ -64,6 +64,9 @@ export type { SlopItErrorCode } from './errors.js'
 // Rendering
 export { createRenderer } from './rendering/generator.js'
 export type { Renderer, MutationRenderer, RendererConfig } from './rendering/generator.js'
+// A blog's brand re-checked for rendering (bad stored values → unset), for
+// consumers that render their own pages for a blog (platform's 404 page).
+export { renderableBrand } from './rendering/brand.js'
 
 // REST router factory
 export { createApiRouter } from './api/index.js'

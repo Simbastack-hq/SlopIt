@@ -9,7 +9,7 @@ import { createApiKey, createBlog, getBlog, getBlogsByEmail, updateBlog } from '
 import { createStore, type Store } from '../src/db/store.js'
 import { createMcpServer } from '../src/mcp/server.js'
 import { createPost } from '../src/posts.js'
-import { accentReadability, contrastRatio } from '../src/rendering/brand.js'
+import { accentReadability, contrastRatio, renderableBrand } from '../src/rendering/brand.js'
 import { createRenderer, type MutationRenderer } from '../src/rendering/generator.js'
 import { BlogPatchSchema } from '../src/schema/index.js'
 import type { Blog } from '../src/schema/index.js'
@@ -199,6 +199,33 @@ describe('blog brand: store, render, re-render', () => {
     const home = read(blog.id, 'index.html')
     expect(home).toContain('src="https://x.example/l.svg?a=1&amp;b=&quot;2&quot;"')
     expect(home).toContain('alt="A &quot;quoted&quot; &lt;b&gt;name&lt;/b&gt;"')
+  })
+
+  it('a stored value that skipped validation renders as unset, never injected', () => {
+    const blog = publish()
+    store.db
+      .prepare('UPDATE blogs SET accent_color = ?, logo_url = ?, favicon_url = ? WHERE id = ?')
+      .run(
+        '#123456"/><script>alert(1)</script><rect fill="#123456',
+        'javascript:alert(1)',
+        'data:image/svg+xml,<svg onload=alert(1)>',
+        blog.id,
+      )
+    renderer.renderBlog(blog.id)
+    renderer.renderBlogPosts(blog.id)
+    expect(read(blog.id, 'style.css')).toBe(readFileSync(join(THEME_DIR, 'style.css'), 'utf8'))
+    expect(read(blog.id, 'favicon.svg')).toBe(readFileSync(join(THEME_DIR, 'favicon.svg'), 'utf8'))
+    for (const page of [read(blog.id, 'index.html'), read(blog.id, 'hello', 'index.html')]) {
+      expect(page).not.toContain('alert(1)')
+      expect(page).not.toContain('masthead-logo')
+    }
+    expect(
+      renderableBrand({
+        accentColor: '#1F6FEB',
+        logoUrl: 'https://x.example/l.svg',
+        faviconUrl: null,
+      }),
+    ).toEqual({ accentColor: null, logoUrl: 'https://x.example/l.svg', faviconUrl: null })
   })
 
   it('brands the empty-state home too', () => {
