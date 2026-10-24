@@ -16,34 +16,77 @@ const THEME_ACCENT = '#ff4f00'
 // UI components, and what the default coral itself reaches (3.2:1).
 const MIN_ACCENT_CONTRAST = 3
 
-// `--accent-dark` (hover/active) is the accent at 83% brightness, the
-// ratio between the theme's own two coral shades.
-const DARK_FACTOR = 0.83
+// `--accent-dark` (hover/active) is the accent this much darker in
+// OKLab lightness: the gap between the theme's own two coral shades.
+const DARK_STEP = 0.08
 
-function channels(hex: string): [number, number, number] {
-  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
+type Rgb = [number, number, number]
+
+function linear(hex: string): Rgb {
+  return [1, 3, 5].map((i) => {
+    const s = parseInt(hex.slice(i, i + 2), 16) / 255
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }) as Rgb
 }
 
-function toHex(rgb: readonly number[]): string {
-  return '#' + rgb.map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')
+function toHex(lin: Rgb): string {
+  return (
+    '#' +
+    lin
+      .map((x) => {
+        const c = Math.min(1, Math.max(0, x))
+        const s = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055
+        return Math.round(s * 255)
+          .toString(16)
+          .padStart(2, '0')
+      })
+      .join('')
+  )
 }
 
 function luminance(hex: string): number {
-  const [r, g, b] = channels(hex).map((c) => {
-    const s = c / 255
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
-  })
+  const [r, g, b] = linear(hex)
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+// OKLab (Björn Ottosson's matrices): lowering L keeps the hue and the
+// colorfulness, where scaling RGB toward black turns a brand color muddy.
+function toOklab(hex: string): Rgb {
+  const [r, g, b] = linear(hex)
+  const [l, m, s] = [
+    0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b,
+    0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b,
+    0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b,
+  ].map(Math.cbrt)
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ]
+}
+
+function fromOklab([L, a, b]: Rgb): string {
+  const [l, m, s] = [
+    L + 0.3963377774 * a + 0.2158037573 * b,
+    L - 0.1055613458 * a - 0.0638541728 * b,
+    L - 0.0894841775 * a - 1.291485548 * b,
+  ].map((x) => x ** 3)
+  return toHex([
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ])
+}
+
+function darken(hex: string, step: number): string {
+  const [L, a, b] = toOklab(hex)
+  return fromOklab([Math.max(0, L - step), a, b])
 }
 
 /** WCAG 2 contrast ratio between two `#rrggbb` colors, 1 to 21. */
 export function contrastRatio(a: string, b: string): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
   return (hi + 0.05) / (lo + 0.05)
-}
-
-function scale(hex: string, factor: number): string {
-  return toHex(channels(hex).map((c) => c * factor))
 }
 
 export type AccentVerdict =
@@ -59,8 +102,9 @@ export function accentReadability(accent: string): AccentVerdict {
   const ratio = contrastRatio(accent, PAGE_BACKGROUND)
   if (ratio >= MIN_ACCENT_CONTRAST) return { ok: true }
   let suggestion = accent
-  for (let f = 0.98; contrastRatio(suggestion, PAGE_BACKGROUND) < MIN_ACCENT_CONTRAST; f -= 0.02) {
-    suggestion = scale(accent, f)
+  for (let step = 0.005; contrastRatio(suggestion, PAGE_BACKGROUND) < MIN_ACCENT_CONTRAST; ) {
+    suggestion = darken(accent, step)
+    step += 0.005
   }
   return {
     ok: false,
@@ -77,7 +121,7 @@ export function brandCss(themeCss: string, accent: string | null): string {
 /* Blog brand (accentColor) */
 :root {
   --accent: ${accent};
-  --accent-dark: ${scale(accent, DARK_FACTOR)};
+  --accent-dark: ${darken(accent, DARK_STEP)};
 }
 `
 }
