@@ -324,11 +324,23 @@ export interface LanguageNavEntry {
 }
 
 /**
+ * From this many languages on, a page switches language through the
+ * masthead menu (renderLanguageMenu) instead of the inline row
+ * (renderLanguageNav). Two or three names sit on one line under a title;
+ * eight wrap onto two lines of links above the cover on a phone, and any
+ * one reader needs at most one of them.
+ *
+ * @internal
+ */
+export const LANGUAGE_MENU_MIN = 4
+
+/**
  * The language switcher: one item per language, each named in its own
  * language (`Deutsch · English · Français`), the current one a plain
  * `<span aria-current="page">`. `dir="auto"` isolates an Arabic or
  * Hebrew name inside an LTR row and vice versa. Returns '' for fewer
- * than two entries. Every label, attribute and href is escaped here so
+ * than two entries, and from LANGUAGE_MENU_MIN on, where the masthead
+ * menu takes over. Every label, attribute and href is escaped here so
  * the `{{{…}}}` raw injection stays safe.
  *
  * @internal
@@ -338,7 +350,7 @@ export function renderLanguageNav(
   current: string,
   label: string,
 ): string {
-  if (entries.length < 2) return ''
+  if (entries.length < 2 || entries.length >= LANGUAGE_MENU_MIN) return ''
   const items = entries
     .map((e) => {
       const name = escapeHtml(languageLabel(e.language))
@@ -349,6 +361,73 @@ export function renderLanguageNav(
     })
     .join('')
   return `<nav class="translations" aria-label="${escapeHtml(label)}">${items}</nav>`
+}
+
+// Feather's "globe" (MIT), drawn in the text color.
+const GLOBE =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+
+// The menu is a <details>, so it opens and closes without this. The
+// script only closes it the way a menu is expected to close: Escape
+// (focus back on the button), a click outside, or tabbing past it. A
+// block, not top-level consts, so it can't collide with the contents
+// rail's script on the same page.
+const LANGUAGE_MENU_SCRIPT = `<script>
+{
+  const menu = document.currentScript.previousElementSibling
+  addEventListener('click', (e) => {
+    if (menu.open && !menu.contains(e.target)) menu.open = false
+  })
+  addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !menu.open) return
+    const inside = menu.contains(document.activeElement)
+    menu.open = false
+    if (inside) menu.querySelector('summary').focus()
+  })
+  menu.addEventListener('focusout', (e) => {
+    if (e.relatedTarget && !menu.contains(e.relatedTarget)) menu.open = false
+  })
+}
+</script>`
+
+/**
+ * The masthead language menu, for a page in LANGUAGE_MENU_MIN or more
+ * languages: a globe and the current language's code (`EN`) that opens
+ * a list of every language, each named in its own language and linked,
+ * the current one marked `aria-current="page"`. The code is the primary
+ * subtag unless two entries share it (`pt-BR` and `pt-PT` → `PT-BR`),
+ * then at most two subtags so the button stays small
+ * (`en-Latn-US-oxendict` → `EN-LATN`); the list names it in full.
+ * The button's accessible name is the visible code and then the
+ * current language's name ("EN English"), so speech control can target
+ * what is on screen (WCAG 2.5.3) and a screen reader still hears the
+ * language. Returns '' below LANGUAGE_MENU_MIN, where the inline
+ * row is used. Escaped here like renderLanguageNav.
+ *
+ * @internal
+ */
+export function renderLanguageMenu(
+  entries: readonly LanguageNavEntry[],
+  current: string,
+  label: string,
+): string {
+  if (entries.length < LANGUAGE_MENU_MIN) return ''
+  const primary = (tag: string) => tag.split('-')[0]
+  const shared = entries.filter((e) => primary(e.language) === primary(current)).length > 1
+  const code = (shared ? current.split('-').slice(0, 2).join('-') : primary(current)).toUpperCase()
+  const items = entries
+    .map((e) => {
+      const lang = escapeHtml(e.language)
+      const here = e.language === current ? ' aria-current="page"' : ''
+      return `<li><a lang="${lang}" hreflang="${lang}" href="${escapeHtml(e.href)}"${here}><span dir="auto">${escapeHtml(languageLabel(e.language))}</span></a></li>`
+    })
+    .join('')
+  return (
+    `<nav class="lang-menu" aria-label="${escapeHtml(label)}"><details><summary>` +
+    `${GLOBE}<span class="lang-menu-code">${escapeHtml(code)}</span>` +
+    `<span class="visually-hidden" lang="${escapeHtml(current)}"> ${escapeHtml(languageLabel(current))}</span>` +
+    `</summary><ul>${items}</ul></details>${LANGUAGE_MENU_SCRIPT}</nav>`
+  )
 }
 
 /**
@@ -707,6 +786,10 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
     // negotiate — a reader who chose a language keeps it while navigating.
     const blogHomeHref = languages.length === 1 ? '..' : `../lang/${languageSegment(lang)}/`
     const postBody = bodyHtml()
+    const languageEntries = members.map((p) => ({
+      language: resolveLanguage(p, blog),
+      href: `../${p.slug}/`,
+    }))
 
     const html = render(theme.post, {
       lang,
@@ -738,14 +821,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
       }),
       jsonLd: buildJsonLd({ post, blog, canonicalUrl }),
       coverImage: renderCoverImage(post.coverImage, post.title),
-      translations: renderLanguageNav(
-        members.map((p) => ({
-          language: resolveLanguage(p, blog),
-          href: `../${p.slug}/`,
-        })),
-        lang,
-        strings.otherLanguages,
-      ),
+      translations: renderLanguageNav(languageEntries, lang, strings.otherLanguages),
+      languageMenu: renderLanguageMenu(languageEntries, lang, strings.otherLanguages),
       postBody,
       factsNote: factsNote
         ? `<p class="facts-note">${escapeHtml(factsNoteText(factsNote, lang))}</p>`
@@ -864,6 +941,10 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
         mkdirSync(page.dir, { recursive: true })
         const dirAttr = textDirection(lang)
         const strings = stringsFor(lang)
+        const languageEntries = languages.map((l) => ({
+          language: l,
+          href: `${prefix}lang/${languageSegment(l)}/`,
+        }))
 
         const html = render(theme.index, {
           lang,
@@ -876,14 +957,8 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
           // `/` → the all-languages feed; `lang/<tag>/` → that language's.
           feedUrl: page.feedUrl,
           alternates: page.canonical ? renderAlternates(homes, rootLang) : '',
-          languageNav: renderLanguageNav(
-            languages.map((l) => ({
-              language: l,
-              href: `${prefix}lang/${languageSegment(l)}/`,
-            })),
-            lang,
-            strings.otherLanguages,
-          ),
+          languageNav: renderLanguageNav(languageEntries, lang, strings.otherLanguages),
+          languageMenu: renderLanguageMenu(languageEntries, lang, strings.otherLanguages),
           postList: renderPostList(
             posts.filter((p) => resolveLanguage(p, blog) === lang),
             lang,
