@@ -7,7 +7,7 @@ Core ships one built-in theme in v1: `minimal`. The theme system is designed to 
 ```
 Title
 Date
-Languages (only when the post has translations: the other languages' names, linked)
+Languages (only when the post has translations: the other languages' names, linked; from four languages on, a globe menu in the masthead instead)
 Body (rendered markdown), with a contents rail beside it on long posts
 Tags
 More from this blog (the 3 newest other posts in this language: title + description, clamped to two lines)
@@ -18,7 +18,9 @@ Powered by SlopIt footer link
 
 "More from this blog" is the one piece of chrome that earned its place: readers mostly land on old posts from search, and three fresh links keep them on the blog and give every new post inbound links the moment it's published. It is fixed at three, blog-level (not author-level), zero JavaScript, and disappears entirely on a one-post blog. Because it embeds blog-wide state, every post page is re-rendered whenever the blog's published set changes (`Renderer.renderBlogPosts`). Spec: `docs/superpowers/specs/2026-09-02-related-posts-design.md`.
 
-The contents rail is the second: on a post with at least three `##` sections and about 1,000 words, the sections are listed in the margin beside the column, on screens 1240px and wider. Every `##`–`######` heading gets an id slugged from its text, so sections are linkable on every post, rail or not. The rail is the one place a theme ships JavaScript: an inline module script, only on pages that have a rail, that marks the section being read and moves the marker. Without it the rail is a list of working links. Spec: `docs/superpowers/specs/2026-10-08-contents-rail-design.md`.
+The contents rail is the second: on a post with at least three `##` sections and about 1,000 words, the sections are listed in the margin beside the column, on screens 1240px and wider. Every `##`–`######` heading gets an id slugged from its text, so sections are linkable on every post, rail or not. The rail is the one place a theme ships JavaScript: an inline module script, only on pages that have a rail, that marks the section being read and moves the marker. Without it the rail is a list of working links.
+
+The language menu is the other: on a page in four or more languages (a post's translation group, or a blog's language homes), the row of language names would wrap onto several lines above the post, so the masthead gets a globe and the current language's code instead, opening the same names as a list. It is a `<details>`, so it opens and its links work without JavaScript; a few inline lines, only on pages that have the menu, close it on Escape, a click outside, or tabbing past it. Two or three languages keep the row. Spec: `docs/superpowers/specs/2026-10-08-contents-rail-design.md`.
 
 Explicitly *not* shipped in v1:
 
@@ -49,7 +51,7 @@ Think "a GitHub README rendered as a webpage" — not "a Medium article."
 
 A blog's index (`/` on the subdomain, or `/b/:id/` on the path-based route) is a simple reverse-chronological list of posts. Title + date + excerpt (if present) + link. Same typography, same constraints.
 
-A blog that publishes in more than one language gets one such home page per language: `/` for its root language and `/lang/<tag>/` for every other (`/lang/de/`, `/lang/pt-br/`), each listing only that language's posts in that language's chrome, plus a language row under the masthead. `/lang/` is a reserved directory (the post slug `lang` is refused) so post URLs and language homes never collide. Spec: `docs/superpowers/specs/2026-09-15-translations-design.md`.
+A blog that publishes in more than one language gets one such home page per language: `/` for its root language and `/lang/<tag>/` for every other (`/lang/de/`, `/lang/pt-br/`), each listing only that language's posts in that language's chrome, plus a language row under the masthead (the masthead language menu from four languages on). `/lang/` is a reserved directory (the post slug `lang` is refused) so post URLs and language homes never collide. Spec: `docs/superpowers/specs/2026-09-15-translations-design.md`.
 
 ## Nav on a blog page
 
@@ -77,6 +79,7 @@ Variables available (exact list will stabilize as the renderer lands):
 - `{{poweredByFooter}}` — HTML for the SlopIt footer (or empty string if platform has disabled it)
 - `{{{mastheadName}}}` — the blog's name, or its logo (`logoUrl`) with the name as alt text
 - `{{{faviconLink}}}` — `<link rel="icon">` for the blog's `faviconUrl`, else the theme's `favicon.svg`
+- `{{{languageMenu}}}` — the masthead language menu on a page in four or more languages, else empty; `{{{translations}}}` (post) and `{{{languageNav}}}` (home) are the row, empty from four languages on
 
 ## Brand
 
