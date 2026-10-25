@@ -127,6 +127,158 @@ article .translations a:hover {
   font-weight: 500;
 }
 
+/* Language menu — replaces the row on a page in four or more languages
+   (LANGUAGE_MENU_MIN): a globe and the current language's code at the
+   masthead's end, quieter than the accent main-site pill beside it. A
+   <details>, so it works without JavaScript; the list drops from the
+   button's end edge (the left one in RTL). */
+.masthead .masthead-name {
+  margin-inline-end: auto;
+}
+.masthead .parent-site + .lang-menu {
+  margin-inline-start: -8px;
+}
+/* On a phone too narrow for name, pill and menu, what doesn't fit drops
+   to a second line, still at the end edge the list opens from. A logo
+   counts as 96px when deciding that, so it shrinks before anything
+   wraps, then grows back toward its own width (at most 240px, like the
+   image) on the line it keeps. Scoped to pages with the menu so every
+   other masthead lays out as before. */
+.masthead:has(.lang-menu) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 12px;
+}
+.masthead:has(.lang-menu) .masthead-name:has(.masthead-logo) {
+  flex: 1 1 96px;
+  max-width: 240px;
+}
+.lang-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.lang-menu summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.lang-menu summary::-webkit-details-marker {
+  display: none;
+}
+.lang-menu summary::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  margin: -3px 1px 0;
+  /* Physical sides: these are glyphs (a down chevron, a check), which
+     don't mirror in RTL the way layout does. */
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+.lang-menu details[open] > summary::after {
+  margin-top: 3px;
+  transform: rotate(-135deg);
+}
+.lang-menu summary:hover,
+.lang-menu details[open] > summary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.lang-menu summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.lang-menu svg {
+  flex-shrink: 0;
+}
+.lang-menu ul {
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: 0;
+  z-index: 10;
+  min-width: 200px;
+  max-width: calc(100vw - 48px);
+  max-height: min(70vh, 480px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow:
+    0 12px 32px rgb(0 0 0 / 0.12),
+    0 2px 6px rgb(0 0 0 / 0.06);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lang-menu details[open] ul {
+    animation: lang-menu-in 0.14s ease-out;
+  }
+}
+@keyframes lang-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+/* Every name is a 44px touch target; the current one is bold with an
+   accent check at the end of its line. */
+.lang-menu a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+  text-decoration: none;
+}
+.lang-menu a:hover {
+  background: var(--surface);
+}
+.lang-menu a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.lang-menu a[aria-current] {
+  font-weight: 700;
+}
+.lang-menu a[aria-current]::after {
+  content: '';
+  flex-shrink: 0;
+  width: 10px;
+  height: 5px;
+  margin-top: -3px;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(-45deg);
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 article header h1 {
   font-size: 32px;
   font-weight: 900;

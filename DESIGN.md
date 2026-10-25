@@ -83,6 +83,7 @@ Only what a post page or a blog index actually renders.
 - **Tag pill** — `surface` fill, `text-muted` text, `0.25rem` radius, `4px 8px` padding, `caption` type. That's the only "component" on a post page beyond prose.
 - **Date / meta line** — `caption` type, `text-muted` color. Above or below the title, theme's choice.
 - **Contents rail** — long posts only (3+ `##` sections, ~1,000+ words). A list of the sections in the margin beside the column, on screens 1240px and wider; hidden below that. `text-muted` at 13px on a `border` hairline; the section being read turns `text`, and a 2px `accent` marker glides along the hairline to it. That marker is the one motion on a post page. Spec: `docs/superpowers/specs/2026-10-08-contents-rail-design.md`.
+- **Language switcher** — only on a page in more than one language. Two or three: a row of language names, each in its own language, `text-muted` and underlined, the current one `text`. Four or more: a globe and the current language's code at the masthead's end, a `border` pill that turns `accent`, opening the same names as a list.
 - **"Powered by SlopIt" footer** — one line, `caption` type, `text-muted`, link to `https://slopit.io`. Platform can hide it per plan; core always emits it.
 - **Blog nav** — blog name only, linking to the blog index. `body` type, `text`, left-aligned. No marketing nav. Ever.
 
@@ -90,7 +91,7 @@ If a theme wants to vary, it varies the above — nothing new gets introduced.
 
 ## What we don't do
 
-- **No JavaScript**, with one exception. Not for interactivity, not for analytics. Themes are static HTML + one CSS file. The exception: a long post's contents rail carries ~30 lines of inline script that marks the section being read. It ships only on pages that have a rail, and the rail is plain working links without it.
+- **No JavaScript**, with two exceptions. Not for interactivity, not for analytics. Themes are static HTML + one CSS file. The exceptions: a long post's contents rail carries ~30 lines of inline script that marks the section being read, and the masthead language menu carries ~15 that close it on Escape, an outside click or tabbing away. Each ships only on pages that have its feature, and works without the script (the rail is plain links; the menu is a `<details>`).
 - **No Tailwind build.** No PostCSS, no utility CSS compiler. Plain CSS in a sibling `style.css`, loaded via `<link>`.
 - **No inline `<style>` in templates.** CSS lives in one file per theme. One.
 - **No fonts beyond Satoshi + JetBrains Mono.** If a theme wants a different feel, it changes weight, not family.
