@@ -42,6 +42,9 @@ describe('generateSkillFile', () => {
     expect(section).toContain('{{fact:name}}')
     expect(section).toContain('Write history ("we launched at $9") as plain text')
     expect(section).toContain('Put units and qualifiers inside the value')
+    // A fact has one value for every language, so worded values leak into translations.
+    expect(section).toContain('keep the value language-neutral')
+    expect(section).toContain('a fact shows the same in every language')
     expect(section).toContain('`dry_run: true` writes nothing')
     expect(section).toContain('goes live on every post that uses the fact immediately')
     expect(section).toContain('Set `confirmed_at` only to when you actually checked the value')
