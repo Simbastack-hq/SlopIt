@@ -75,6 +75,8 @@ describe('language menu — fragments', () => {
     expect(code(['en', 'pt-PT', 'fr', 'pt-BR'], 'pt-BR')).toBe('PT-BR')
     expect(code(['en', 'zh-Hant', 'zh', 'fr'], 'zh-Hant')).toBe('ZH-HANT')
     expect(code(['en', 'zh-Hant', 'zh', 'fr'], 'en')).toBe('EN')
+    // At most two subtags on the button; the list names it in full.
+    expect(code(['en', 'en-Latn-US-oxendict', 'de', 'fr'], 'en-Latn-US-oxendict')).toBe('EN-LATN')
   })
 
   it('escapes the label and every href', () => {
@@ -108,14 +110,18 @@ describe('language menu — fragments', () => {
     expect(list).not.toMatch(/\b(left|right):/)
   })
 
-  it('the list never outgrows a phone, and a text-name masthead may wrap', () => {
+  it('the list never outgrows a phone, and a masthead with the menu may wrap', () => {
     const css = readFileSync(loadTheme('minimal').cssPath, 'utf8')
     expect(css.match(/\.lang-menu ul \{([^}]*)\}/)![1]).toContain('max-width: calc(100vw - 48px);')
     // Names wrap inside the list rather than widening it.
     expect(css.match(/\.lang-menu a \{([^}]*)\}/)![1]).not.toContain('nowrap')
+    // Any masthead with the menu may wrap; a logo counts as 96px for that.
+    expect(css.match(/\.masthead:has\(\.lang-menu\) \{([^}]*)\}/)![1]).toContain('flex-wrap: wrap;')
     expect(
-      css.match(/\.masthead:has\(\.lang-menu\):not\(:has\(\.masthead-logo\)\) \{([^}]*)\}/)![1],
-    ).toContain('flex-wrap: wrap;')
+      css.match(
+        /\.masthead:has\(\.lang-menu\) \.masthead-name:has\(\.masthead-logo\) \{([^}]*)\}/,
+      )![1],
+    ).toContain('flex: 1 1 96px;')
   })
 })
 

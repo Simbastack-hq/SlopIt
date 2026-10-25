@@ -138,15 +138,20 @@ article .translations a:hover {
 .masthead .parent-site + .lang-menu {
   margin-inline-start: -8px;
 }
-/* A logo shrinks to make room (above); a name can't, so on a phone too
-   narrow for name, pill and menu, what doesn't fit drops to a second
-   line, still at the end edge the list opens from. Scoped to pages with
-   the menu so a long title beside the pill alone keeps wrapping inside
-   itself as before. */
-.masthead:has(.lang-menu):not(:has(.masthead-logo)) {
+/* On a phone too narrow for name, pill and menu, what doesn't fit drops
+   to a second line, still at the end edge the list opens from. A logo
+   counts as 96px when deciding that, so it shrinks before anything
+   wraps, then grows back toward its own width (at most 240px, like the
+   image) on the line it keeps. Scoped to pages with the menu so every
+   other masthead lays out as before. */
+.masthead:has(.lang-menu) {
   flex-wrap: wrap;
   justify-content: flex-end;
   row-gap: 12px;
+}
+.masthead:has(.lang-menu) .masthead-name:has(.masthead-logo) {
+  flex: 1 1 96px;
+  max-width: 240px;
 }
 .lang-menu {
   position: relative;

@@ -395,7 +395,9 @@ const LANGUAGE_MENU_SCRIPT = `<script>
  * languages: a globe and the current language's code (`EN`) that opens
  * a list of every language, each named in its own language and linked,
  * the current one marked `aria-current="page"`. The code is the primary
- * subtag unless two entries share it (`pt-BR` and `pt-PT` → `PT-BR`).
+ * subtag unless two entries share it (`pt-BR` and `pt-PT` → `PT-BR`),
+ * then at most two subtags so the button stays small
+ * (`en-Latn-US-oxendict` → `EN-LATN`); the list names it in full.
  * The button's accessible name is the visible code and then the
  * current language's name ("EN English"), so speech control can target
  * what is on screen (WCAG 2.5.3) and a screen reader still hears the
@@ -412,7 +414,7 @@ export function renderLanguageMenu(
   if (entries.length < LANGUAGE_MENU_MIN) return ''
   const primary = (tag: string) => tag.split('-')[0]
   const shared = entries.filter((e) => primary(e.language) === primary(current)).length > 1
-  const code = (shared ? current : primary(current)).toUpperCase()
+  const code = (shared ? current.split('-').slice(0, 2).join('-') : primary(current)).toUpperCase()
   const items = entries
     .map((e) => {
       const lang = escapeHtml(e.language)
