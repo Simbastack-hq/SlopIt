@@ -132,12 +132,21 @@ article .translations a:hover {
    masthead's end, quieter than the accent main-site pill beside it. A
    <details>, so it works without JavaScript; the list drops from the
    button's end edge (the left one in RTL). */
-.masthead .parent-site,
-.masthead .lang-menu {
-  margin-inline-start: auto;
+.masthead .masthead-name {
+  margin-inline-end: auto;
 }
 .masthead .parent-site + .lang-menu {
   margin-inline-start: -8px;
+}
+/* A logo shrinks to make room (above); a name can't, so on a phone too
+   narrow for name, pill and menu, what doesn't fit drops to a second
+   line, still at the end edge the list opens from. Scoped to pages with
+   the menu so a long title beside the pill alone keeps wrapping inside
+   itself as before. */
+.masthead:has(.lang-menu):not(:has(.masthead-logo)) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 12px;
 }
 .lang-menu {
   position: relative;
@@ -198,6 +207,7 @@ article .translations a:hover {
   inset-inline-end: 0;
   z-index: 10;
   min-width: 200px;
+  max-width: calc(100vw - 48px);
   max-height: min(70vh, 480px);
   overflow-y: auto;
   margin: 0;
@@ -234,7 +244,6 @@ article .translations a:hover {
   line-height: 22px;
   color: var(--text);
   text-decoration: none;
-  white-space: nowrap;
 }
 .lang-menu a:hover {
   background: var(--surface);
@@ -248,6 +257,7 @@ article .translations a:hover {
 }
 .lang-menu a[aria-current]::after {
   content: '';
+  flex-shrink: 0;
   width: 10px;
   height: 5px;
   margin-top: -3px;

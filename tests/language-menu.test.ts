@@ -33,13 +33,21 @@ describe('language menu — fragments', () => {
     expect(renderLanguageMenu(four, 'en', 'x')).toContain('class="lang-menu"')
   })
 
-  it('a labelled nav around a <details>: globe, code for the eye, autonym for screen readers', () => {
+  it('a labelled nav around a <details>: globe, then the code and the autonym as the name', () => {
     const html = renderLanguageMenu(entries('en', 'de', 'fr', 'ar'), 'de', 'Andere Sprachen')
     expect(html).toMatch(
       /^<nav class="lang-menu" aria-label="Andere Sprachen"><details><summary><svg [^>]*aria-hidden="true"/,
     )
-    expect(html).toContain('<span class="lang-menu-code" aria-hidden="true">DE</span>')
-    expect(html).toContain('<span class="visually-hidden" lang="de">Deutsch</span></summary>')
+    // The visible code is in the accessible name (label in name, WCAG
+    // 2.5.3), followed by the language it stands for: "DE Deutsch".
+    const summary = html.match(/<summary>([\s\S]*?)<\/summary>/)![1]
+    const name = summary
+      .replace(/<svg[\s\S]*?<\/svg>/, '')
+      .replace(/<[^>]+>/g, '')
+      .trim()
+    expect(name).toBe('DE Deutsch')
+    expect(summary).toContain('<span class="lang-menu-code">DE</span>')
+    expect(summary).toContain('<span class="visually-hidden" lang="de"> Deutsch</span>')
     expect(html).toContain('</ul></details><script>')
     expect(html.endsWith('</script></nav>')).toBe(true)
   })
@@ -61,7 +69,7 @@ describe('language menu — fragments', () => {
   it('the code is the primary subtag unless two entries share it', () => {
     const code = (tags: string[], current: string) =>
       renderLanguageMenu(entries(...tags), current, 'x').match(
-        /class="lang-menu-code" aria-hidden="true">([^<]*)</,
+        /class="lang-menu-code">([^<]*)</,
       )![1]
     expect(code(['en', 'de', 'fr', 'pt-BR'], 'pt-BR')).toBe('PT')
     expect(code(['en', 'pt-PT', 'fr', 'pt-BR'], 'pt-BR')).toBe('PT-BR')
@@ -98,6 +106,16 @@ describe('language menu — fragments', () => {
     const list = css.match(/\.lang-menu ul \{([^}]*)\}/)![1]
     expect(list).toContain('inset-inline-end: 0;')
     expect(list).not.toMatch(/\b(left|right):/)
+  })
+
+  it('the list never outgrows a phone, and a text-name masthead may wrap', () => {
+    const css = readFileSync(loadTheme('minimal').cssPath, 'utf8')
+    expect(css.match(/\.lang-menu ul \{([^}]*)\}/)![1]).toContain('max-width: calc(100vw - 48px);')
+    // Names wrap inside the list rather than widening it.
+    expect(css.match(/\.lang-menu a \{([^}]*)\}/)![1]).not.toContain('nowrap')
+    expect(
+      css.match(/\.masthead:has\(\.lang-menu\):not\(:has\(\.masthead-logo\)\) \{([^}]*)\}/)![1],
+    ).toContain('flex-wrap: wrap;')
   })
 })
 
@@ -160,7 +178,7 @@ describe('language menu — rendered pages', () => {
     expect(head).toContain(
       '<a class="parent-site" href="https://multi.example">Main site &rarr;</a><nav class="lang-menu" aria-label="Other languages">',
     )
-    expect(head).toContain('<span class="lang-menu-code" aria-hidden="true">EN</span>')
+    expect(head).toContain('<span class="lang-menu-code">EN</span>')
     expect(head.match(/<li>/g)).toHaveLength(8)
     for (const lang of GROUP.slice(1)) {
       expect(head).toContain(`<a lang="${lang}" hreflang="${lang}" href="../${slugOf(lang)}/">`)
@@ -188,13 +206,13 @@ describe('language menu — rendered pages', () => {
     const { id } = blog()
     const de = read(id, slugOf('de'), 'index.html')
     expect(masthead(de)).toContain('<nav class="lang-menu" aria-label="Andere Sprachen">')
-    expect(masthead(de)).toContain('<span class="lang-menu-code" aria-hidden="true">DE</span>')
+    expect(masthead(de)).toContain('<span class="lang-menu-code">DE</span>')
     expect(de).toContain(`href="../${slugOf('de')}/" aria-current="page"`)
 
     const ar = read(id, slugOf('ar'), 'index.html')
     expect(ar).toContain('<html lang="ar" dir="rtl">')
     expect(masthead(ar)).toContain('<nav class="lang-menu" aria-label="لغات أخرى">')
-    expect(masthead(ar)).toContain('<span class="lang-menu-code" aria-hidden="true">AR</span>')
+    expect(masthead(ar)).toContain('<span class="lang-menu-code">AR</span>')
   })
 
   it('a post in three languages keeps the row and gets no menu', () => {

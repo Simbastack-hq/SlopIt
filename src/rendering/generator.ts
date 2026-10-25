@@ -396,8 +396,10 @@ const LANGUAGE_MENU_SCRIPT = `<script>
  * a list of every language, each named in its own language and linked,
  * the current one marked `aria-current="page"`. The code is the primary
  * subtag unless two entries share it (`pt-BR` and `pt-PT` → `PT-BR`).
- * Screen readers hear the nav's label and the current language's name,
- * not the code. Returns '' below LANGUAGE_MENU_MIN, where the inline
+ * The button's accessible name is the visible code and then the
+ * current language's name ("EN English"), so speech control can target
+ * what is on screen (WCAG 2.5.3) and a screen reader still hears the
+ * language. Returns '' below LANGUAGE_MENU_MIN, where the inline
  * row is used. Escaped here like renderLanguageNav.
  *
  * @internal
@@ -420,8 +422,8 @@ export function renderLanguageMenu(
     .join('')
   return (
     `<nav class="lang-menu" aria-label="${escapeHtml(label)}"><details><summary>` +
-    `${GLOBE}<span class="lang-menu-code" aria-hidden="true">${escapeHtml(code)}</span>` +
-    `<span class="visually-hidden" lang="${escapeHtml(current)}">${escapeHtml(languageLabel(current))}</span>` +
+    `${GLOBE}<span class="lang-menu-code">${escapeHtml(code)}</span>` +
+    `<span class="visually-hidden" lang="${escapeHtml(current)}"> ${escapeHtml(languageLabel(current))}</span>` +
     `</summary><ul>${items}</ul></details>${LANGUAGE_MENU_SCRIPT}</nav>`
   )
 }
