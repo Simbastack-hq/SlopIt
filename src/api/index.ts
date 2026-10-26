@@ -73,6 +73,13 @@ export interface ApiRouterConfig {
    * the signup response — they never fail the signup itself.
    */
   onSignup?: OnSignupHook
+  /**
+   * Host fields added to the REST signup, create-post and patch-post
+   * responses, e.g. the platform's `plan` and `upgrade_url`. REST only:
+   * MCP tool results never carry them. Keys must not reuse core's
+   * response keys. Self-hosted leaves unset (no extra fields).
+   */
+  responseFieldsFor?: (blog: Blog) => Record<string, unknown>
 }
 
 type Vars = { blog: Blog; apiKeyHash: string; skipIdempotencyRecord?: boolean }
