@@ -111,6 +111,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       ...(config.termsUrl !== undefined ? { terms_url: config.termsUrl } : {}),
       onboarding_text: result.onboardingText,
       email_sent: result.emailSent,
+      ...config.responseFieldsFor?.(result.blog),
       _links: buildLinks(result.blog, config),
     })
   })
@@ -158,6 +159,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       post,
       ...(postUrl !== undefined ? { post_url: postUrl } : {}),
       ...previewFields(config.previewUrlFor, c.var.blog, post),
+      ...config.responseFieldsFor?.(c.var.blog),
       _links: buildLinks(c.var.blog, config),
     })
   })
@@ -202,6 +204,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       post,
       ...(postUrl !== undefined ? { post_url: postUrl } : {}),
       ...previewFields(config.previewUrlFor, c.var.blog, post),
+      ...config.responseFieldsFor?.(c.var.blog),
       _links: buildLinks(c.var.blog, config),
     })
   })

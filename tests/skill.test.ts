@@ -284,6 +284,21 @@ describe('generateSkillFile', () => {
     expect(section).not.toContain('Instructions:')
   })
 
+  it('puts the host note right under the title, and nothing when absent', () => {
+    const noted = generateSkillFile({
+      baseUrl: 'https://svc.example/api',
+      hostNote: '**Plans.** Free, or Pro.',
+    })
+    const lines = noted.split('\n')
+    expect(lines[0]).toMatch(/^# /)
+    // Title, blank, one-line intro, blank, then the note.
+    expect(lines[4]).toBe('**Plans.** Free, or Pro.')
+    expect(noted.indexOf('**Plans.**')).toBeLessThan(noted.indexOf('## What SlopIt is'))
+    expect(noted).toContain('**Plans.** Free, or Pro.\n\n## What SlopIt is')
+    // Absent: the intro runs straight into the first section, as before.
+    expect(text).toContain('autonomous publishing.\n\n## What SlopIt is')
+  })
+
   it('After signup note links the instructions file when the host passes skillUrl', () => {
     const hosted = generateSkillFile({
       baseUrl: 'https://svc.example/api',
