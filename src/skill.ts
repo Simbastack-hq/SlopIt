@@ -373,6 +373,7 @@ A live fact is a short current claim the blog keeps under a name: a price, a ver
 
 - Use facts only for things that should stay current (prices, versions, limits, counts). Write history ("we launched at $9") as plain text, or it will change when the fact does.
 - Put units and qualifiers inside the value when they can change together (\`$12/mo\`, \`v2.4.1\`): the words around a fact never update.
+- On a blog that publishes in more than one language, keep the value language-neutral: a number with its currency or unit symbol (\`$45\`, not \`$45 per person\`; \`v2.4.1\`). Write the words around it in each post's own language, because a fact shows the same in every language.
 - \`dry_run: true\` writes nothing and returns every affected post and line. Without it, the change goes live on every post that uses the fact immediately.
 - Set \`confirmed_at\` only to when you actually checked the value. It defaults to now, and re-sending a value doesn't mean it was checked.
 - Facts can't go in headings, link or image addresses, titles, excerpts or any field but the body. A fact used by any post (drafts included) can't be deleted until those posts stop using it.

@@ -114,4 +114,32 @@ describe('MCP tool descriptions', () => {
     await client.close()
     await server.close()
   })
+
+  it('set_fact tells a multilingual blog to keep words out of the value', async () => {
+    const renderer = createRenderer({
+      store,
+      outputDir: join(dir, 'out'),
+      baseUrl: 'https://b.example',
+    })
+    const server = createMcpServer({
+      store,
+      rendererFor: () => renderer,
+      baseUrl: 'https://api.example',
+    })
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair()
+    await server.connect(serverT)
+    const client = new Client({ name: 'test', version: '0' }, {})
+    await client.connect(clientT)
+
+    const { tools } = await client.listTools()
+    const setFact = tools.find((tool) => tool.name === 'set_fact')
+    // The tool description is at its length cap, so the hint rides on the value field.
+    const value = (setFact?.inputSchema.properties as Record<string, { description?: string }>)
+      .value
+    expect(value?.description).toContain('more than one language, keep words out of it')
+    expect(value?.description).toContain('shows the same in every language')
+
+    await client.close()
+    await server.close()
+  })
 })
