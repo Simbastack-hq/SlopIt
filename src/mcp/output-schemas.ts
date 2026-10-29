@@ -123,6 +123,12 @@ export const PostWriteOutput = toolOutput({
     .optional()
     .describe('Live URL of the post. Present only when it is published.'),
   preview_url: PreviewUrl,
+  next_post_hint: z
+    .string()
+    .optional()
+    .describe(
+      "One line for you, the agent, on a young blog's first posts: offer your human the next post.",
+    ),
 })
 
 export const PostOutput = toolOutput({ post: PostShape.optional(), preview_url: PreviewUrl })

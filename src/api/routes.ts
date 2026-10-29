@@ -12,6 +12,7 @@ import { signupBlog } from '../signup.js'
 import { uploadMedia, listMedia, getMedia, deleteMedia } from '../media.js'
 import type { MediaLimits } from '../media.js'
 import { previewFields } from '../preview.js'
+import { nextPostFields, postStatusBefore } from '../next-post.js'
 import { deleteFact, getFact, listFacts, setFact, type SetFactInput } from '../facts.js'
 
 const StatusQuerySchema = z.enum(['draft', 'published']).optional()
@@ -159,6 +160,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       post,
       ...(postUrl !== undefined ? { post_url: postUrl } : {}),
       ...previewFields(config.previewUrlFor, c.var.blog, post),
+      ...nextPostFields(config.store, post, false),
       ...config.responseFieldsFor?.(c.var.blog),
       _links: buildLinks(c.var.blog, config),
     })
@@ -192,6 +194,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
     // the cast here is honest — Zod is the source of truth for shape
     // validation, we only guarantee JSON-parse success at this layer.
     const raw = (await readJsonBodyOptional(c)) as PostPatchInput
+    const before = postStatusBefore(config.store, c.var.blog.id, c.req.param('slug'))
     const { post, postUrl } = updatePost(
       config.store,
       renderer,
@@ -204,6 +207,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       post,
       ...(postUrl !== undefined ? { post_url: postUrl } : {}),
       ...previewFields(config.previewUrlFor, c.var.blog, post),
+      ...nextPostFields(config.store, post, before === 'published'),
       ...config.responseFieldsFor?.(c.var.blog),
       _links: buildLinks(c.var.blog, config),
     })
