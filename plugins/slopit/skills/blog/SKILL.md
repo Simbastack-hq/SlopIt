@@ -86,7 +86,7 @@ curl -sS -X POST "https://slopit.io/api/blogs/<blog_id>/posts" \
   -H "Idempotency-Key: <unique string>" --data @"${TMPDIR:-/tmp}/slopit-post.json"
 ```
 
-The body takes the same fields as `create_post`: `title`, `body`, `slug`, `seoTitle`, `seoDescription`, `excerpt`, `tags`, `status`.
+The body takes the same fields as `create_post`: `title`, `body`, `slug`, `seoTitle`, `seoDescription`, `excerpt`, `tags`, `status`. In REST mode, use REST for the earlier steps too, with the same header: `GET https://slopit.io/api/me` gives the `blog_id` and `live_url`, and `GET https://slopit.io/api/blogs/<blog_id>/posts` (add `?status=draft` for drafts) lists the posts.
 
 ## 5. Report
 
