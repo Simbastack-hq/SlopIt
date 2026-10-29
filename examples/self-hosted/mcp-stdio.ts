@@ -12,6 +12,7 @@ import { createMcpServer } from '../../src/mcp/server.js'
 import { createRenderer } from '../../src/rendering/generator.js'
 import { createStore } from '../../src/db/store.js'
 import { drainPendingFactRenders } from '../../src/facts.js'
+import { publishDuePosts } from '../../src/schedule.js'
 
 async function main(): Promise<void> {
   const store = createStore({ dbPath: process.env.SLOPIT_DB ?? './slopit.db' })
@@ -23,6 +24,8 @@ async function main(): Promise<void> {
 
   // Finish any live-fact re-render a crash or failed write left pending.
   drainPendingFactRenders(store, () => renderer)
+  // Publish scheduled posts (publishAt) once their time comes.
+  setInterval(() => publishDuePosts(store, () => renderer), 60_000).unref()
 
   const server = createMcpServer({
     store,

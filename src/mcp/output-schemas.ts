@@ -45,6 +45,10 @@ const PostShape = z.looseObject({
     .describe("The post's own BCP-47 language tag. Absent: it uses the blog's language."),
   translationGroup: z.string().optional().describe('Shared by every translation of the same post.'),
   publishedAt: z.string().nullable().describe('ISO 8601 publish time. null for drafts.'),
+  publishAt: z
+    .string()
+    .optional()
+    .describe('ISO 8601 time a scheduled draft goes live. Absent when not scheduled.'),
   createdAt: z.string().describe('ISO 8601.'),
   updatedAt: z.string().describe('ISO 8601.'),
 })
