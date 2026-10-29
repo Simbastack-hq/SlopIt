@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "slopit": {
+      "type": "http",
+      "url": "https://slopit.io/mcp",
+      "headersHelper": "sh \"${CLAUDE_PLUGIN_ROOT}/scripts/slopit-headers.sh\""
+    }
+  }
+}
