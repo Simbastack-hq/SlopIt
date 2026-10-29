@@ -8,7 +8,7 @@ import type { PostInput } from '../schema/index.js'
  * surface through the same path as JSON bodies.
  *
  * Only the Tier-1 fields are supported on this path (title, status,
- * slug, tags). Other PostInput fields (excerpt, seoTitle, etc.) are
+ * slug, tags, publishAt). Other PostInput fields (excerpt, seoTitle, etc.) are
  * unsupported — agents who need them use JSON.
  */
 export function parseMarkdownBody(input: { body: string; query: URLSearchParams }): PostInput {
@@ -34,6 +34,9 @@ export function parseMarkdownBody(input: { body: string; query: URLSearchParams 
 
   const slug = input.query.get('slug')
   if (slug !== null) result.slug = slug
+
+  const publishAt = input.query.get('publishAt')
+  if (publishAt !== null) result.publishAt = publishAt
 
   const tagsParam = input.query.get('tags')
   if (tagsParam !== null) {

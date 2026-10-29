@@ -29,6 +29,7 @@ export type SlopItErrorCode =
   | 'FACT_IN_URL'
   | 'FACT_NOT_ALLOWED_HERE'
   | 'FACT_RENDER_PENDING'
+  | 'PUBLISH_AT_INVALID'
 
 export class SlopItError extends Error {
   readonly code: SlopItErrorCode

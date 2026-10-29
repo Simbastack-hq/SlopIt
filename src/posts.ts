@@ -54,7 +54,7 @@ const RESERVED_SLUGS = new Set(['lang'])
 
 const POST_COLUMNS = `id, blog_id, slug, title, body, excerpt, tags, status,
               seo_title, seo_description, author, cover_image, language,
-              translation_group, published_at, created_at, updated_at`
+              translation_group, published_at, publish_at, created_at, updated_at`
 
 interface PostRow {
   id: string
@@ -72,6 +72,7 @@ interface PostRow {
   language: string | null
   translation_group: string | null
   published_at: string | null
+  publish_at: string | null
   created_at: string
   updated_at: string
 }
@@ -93,6 +94,7 @@ function rowToPost(row: PostRow): Post {
     language: row.language ?? undefined,
     translationGroup: row.translation_group ?? undefined,
     publishedAt: isoTimestamp(row.published_at),
+    publishAt: row.publish_at ?? undefined,
     createdAt: isoTimestamp(row.created_at),
     updatedAt: isoTimestamp(row.updated_at),
   }
@@ -348,6 +350,34 @@ export function rethrowWithRecovery(original: unknown, failures: readonly unknow
   })
 }
 
+/** Furthest ahead a post can be scheduled. */
+export const MAX_SCHEDULE_DAYS = 90
+
+/**
+ * Validate a requested publish time and return it normalised to UTC ISO.
+ * It must be in the future and at most MAX_SCHEDULE_DAYS ahead, so a blog
+ * can't queue up a year of posts in one call.
+ *
+ * @internal
+ */
+export function resolvePublishAt(value: string, now = Date.now()): string {
+  const at = Date.parse(value)
+  if (Number.isNaN(at) || at <= now) {
+    throw new SlopItError('PUBLISH_AT_INVALID', 'publishAt must be in the future', {
+      publishAt: value,
+      now: new Date(now).toISOString(),
+    })
+  }
+  if (at > now + MAX_SCHEDULE_DAYS * 86_400_000) {
+    throw new SlopItError(
+      'PUBLISH_AT_INVALID',
+      `publishAt can be at most ${MAX_SCHEDULE_DAYS} days ahead`,
+      { publishAt: value, maxDays: MAX_SCHEDULE_DAYS },
+    )
+  }
+  return new Date(at).toISOString()
+}
+
 /**
  * Create a post. For published posts, also renders the post page + blog
  * index + CSS to disk, and returns a postUrl. For drafts, writes the DB
@@ -373,6 +403,10 @@ export function createPost(
   opts?: PostWriteOptions,
 ): { post: Post; postUrl?: string } {
   const parsed = PostInputSchema.parse(input)
+  // A scheduled post is stored as a draft until publishDuePosts flips it,
+  // whatever `status` said (it defaults to "published").
+  const publishAt = parsed.publishAt !== undefined ? resolvePublishAt(parsed.publishAt) : null
+  if (publishAt !== null) parsed.status = 'draft'
 
   // Step 2: blog exists (throws BLOG_NOT_FOUND with details.blogId)
   const blog = getBlogInternal(store, blogId)
@@ -392,7 +426,8 @@ export function createPost(
       author: parsed.author,
       coverImage: parsed.coverImage,
     },
-    parsed.status === 'published',
+    // A scheduled post will publish unattended, so its facts must exist now.
+    parsed.status === 'published' || publishAt !== null,
     blogFactNames(store, blogId),
   )
 
@@ -443,8 +478,8 @@ export function createPost(
           `INSERT INTO posts (
              id, blog_id, slug, title, body, excerpt, tags, status,
              seo_title, seo_description, author, cover_image, language,
-             translation_group, published_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             translation_group, published_at, publish_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id,
@@ -462,6 +497,7 @@ export function createPost(
           language,
           link.group,
           publishedAt,
+          publishAt,
         )
     } catch (e) {
       if (isPostSlugConflict(e)) {
@@ -624,8 +660,29 @@ export function updatePost(
     coverImage: 'coverImage' in parsed ? parsed.coverImage : prior.coverImage,
   }
 
+  // Schedule after this patch. A time is only valid on a post that stays
+  // a draft (rescheduling a live post means unpublishing it first, so it
+  // never drops offline as a side effect); `null` cancels; publishing by
+  // hand clears it.
+  let publishAt: string | null = prior.publishAt ?? null
+  if (typeof parsed.publishAt === 'string') {
+    if (merged.status !== 'draft') {
+      throw new SlopItError(
+        'PUBLISH_AT_INVALID',
+        prior.status === 'published' && parsed.status === undefined
+          ? 'This post is already published. Set status "draft" in the same call to unpublish and reschedule it'
+          : 'publishAt schedules a draft; it cannot be combined with status "published"',
+        { slug, status: merged.status },
+      )
+    }
+    publishAt = resolvePublishAt(parsed.publishAt)
+  } else if (parsed.publishAt === null || merged.status === 'published') {
+    publishAt = null
+  }
+
   // Live facts: tokens only in the body, never in a heading or an address,
-  // and every fact must exist once the post is (or stays) published.
+  // and every fact must exist once the post is (or stays) published, or
+  // will publish unattended on a schedule.
   validatePostFacts(
     merged.body,
     {
@@ -637,7 +694,7 @@ export function updatePost(
       author: parsed.author,
       coverImage: parsed.coverImage,
     },
-    merged.status === 'published',
+    merged.status === 'published' || publishAt !== null,
     blogFactNames(store, blogId),
   )
 
@@ -657,7 +714,8 @@ export function updatePost(
     `UPDATE posts
         SET title = ?, body = ?, excerpt = ?, tags = ?, status = ?,
             seo_title = ?, seo_description = ?, author = ?, cover_image = ?,
-            language = ?, translation_group = ?, published_at = ?, updated_at = ?
+            language = ?, translation_group = ?, published_at = ?, publish_at = ?,
+            updated_at = ?
       WHERE blog_id = ? AND slug = ?`,
   )
 
@@ -680,6 +738,7 @@ export function updatePost(
       language,
       link.group,
       publishedAt,
+      publishAt,
       nowIso,
       blogId,
       slug,
@@ -705,6 +764,7 @@ export function updatePost(
         prior.language ?? null,
         prior.translationGroup ?? null,
         prior.publishedAt,
+        prior.publishAt ?? null,
         prior.updatedAt,
         blogId,
         slug,

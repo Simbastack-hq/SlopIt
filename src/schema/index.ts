@@ -235,6 +235,15 @@ export const PostPatchSchema = z
         'Language of this post as a BCP-47 tag, e.g. "en", "ru", "pt-BR". Send null to clear the override and inherit the blog\'s language.',
       )
       .optional(),
+    // A time schedules a draft; `null` cancels the schedule (the post stays
+    // a draft); omitting the key leaves the schedule unchanged.
+    publishAt: z.iso
+      .datetime({ offset: true })
+      .nullable()
+      .describe(
+        'Schedule this draft to go live at an ISO 8601 time with a timezone, at most 90 days ahead. Send null to cancel the schedule (the post stays a draft). Only for drafts: unpublish first with status "draft" to reschedule a live post.',
+      )
+      .optional(),
     // A slug joins this post to that post's translation group (creating
     // the group if needed); `null` leaves the group; omitting the key
     // leaves membership unchanged.
