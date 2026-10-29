@@ -141,6 +141,12 @@ export const PostInputBaseSchema = z.object({
       'Language of this post as a BCP-47 tag, e.g. "en", "ru", "pt-BR". Omit to inherit the blog\'s language.',
     )
     .optional(),
+  publishAt: z.iso
+    .datetime({ offset: true })
+    .describe(
+      'Schedule the post: an ISO 8601 time with a timezone, e.g. "2026-11-03T09:00:00Z", in the future and at most 90 days ahead. The post is saved as a draft and goes live by itself at that time (within a minute or so). Omit to publish or save now.',
+    )
+    .optional(),
   // Input-only: resolved to a shared `translationGroup` id on write.
   translationOf: z
     .string()

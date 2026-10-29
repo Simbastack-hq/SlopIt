@@ -37,6 +37,9 @@ export {
   listBlogLanguages,
 } from './posts.js'
 export type { TranslationPolicy } from './posts.js'
+// Scheduled publishing: hosts call publishDuePosts on a timer.
+export { publishDuePosts } from './schedule.js'
+export type { DuePublishResult } from './schedule.js'
 
 // Live-fact primitives. drainPendingFactRenders is for hosts to call at
 // boot: it finishes fact re-renders a crash or failure left pending.
