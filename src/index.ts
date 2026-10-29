@@ -70,6 +70,10 @@ export type { Renderer, MutationRenderer, RendererConfig } from './rendering/gen
 // A blog's brand re-checked for rendering (bad stored values → unset), for
 // consumers that render their own pages for a blog (platform's 404 page).
 export { renderableBrand } from './rendering/brand.js'
+// The safe markdown renderer posts use (raw HTML stripped, heading ids,
+// scrollable tables), for hosts rendering their own pages from markdown
+// (platform's /docs page renders the SKILL file with it).
+export { renderMarkdown } from './rendering/markdown.js'
 
 // REST router factory
 export { createApiRouter } from './api/index.js'
