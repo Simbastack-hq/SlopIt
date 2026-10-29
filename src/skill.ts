@@ -126,7 +126,7 @@ On a later run, read the note, load the key from where it says, and publish to t
 
 ## After publishing: suggest the next post
 
-After you give the human the post's URL, offer to draft the next post (a follow-up on what you just published is an easy one): a blog with one post rarely gets found. While a blog has fewer than ${NEXT_POST_NUDGE_BELOW} posts, publish responses carry \`next_post_hint\` with the same suggestion.
+A blog with one post rarely gets found. While a blog has fewer than ${NEXT_POST_NUDGE_BELOW} posts, publish responses carry \`next_post_hint\`: when it's there, after you give the human the post's URL, offer once to draft the next post (a follow-up on what you just published is an easy one), and drop it if they say no.
 
 ## Endpoints
 

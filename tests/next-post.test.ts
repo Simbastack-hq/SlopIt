@@ -98,6 +98,11 @@ describe('next_post_hint (post-again nudge)', () => {
       expect(next.next_post_hint).toContain('This blog has 2 posts;')
     })
 
+    it('keeps a multi-line title on one line', async () => {
+      const r = await create({ title: 'Line one\n\nline   two', body: 'b' })
+      expect(r.next_post_hint).toContain('a follow-up on "Line one line two".')
+    })
+
     it('shortens a long title', async () => {
       const r = await create({ title: 'x'.repeat(150), body: 'b' })
       const topic = /follow-up on "(.*)"\.$/.exec(r.next_post_hint!)![1]
@@ -140,7 +145,7 @@ describe('next_post_hint (post-again nudge)', () => {
   it('SKILL tells agents to suggest the next post after publishing', () => {
     const text = generateSkillFile({ baseUrl: 'https://svc.example/api' })
     expect(text).toContain('## After publishing: suggest the next post')
-    expect(text).toContain('offer to draft the next post')
+    expect(text).toContain('offer once to draft the next post')
     expect(text).toContain('`next_post_hint`')
   })
 })

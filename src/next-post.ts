@@ -62,10 +62,10 @@ export function nextPostFields(
   if (isTranslation(store, post)) return {}
   const n = publishedPostCount(store, post.blogId)
   if (n >= NEXT_POST_NUDGE_BELOW) return {}
+  // One line, whatever the title holds.
+  const title = post.title.replace(/\s+/g, ' ').trim()
   const topic =
-    post.title.length > MAX_TOPIC_CHARS
-      ? `${post.title.slice(0, MAX_TOPIC_CHARS - 1).trimEnd()}…`
-      : post.title
+    title.length > MAX_TOPIC_CHARS ? `${title.slice(0, MAX_TOPIC_CHARS - 1).trimEnd()}…` : title
   return {
     next_post_hint: `This blog has ${n} post${n === 1 ? '' : 's'}; blogs with ${NEXT_POST_NUDGE_BELOW} or more get found more often. Offer to draft the next one for your human, e.g. a follow-up on "${topic}".`,
   }
