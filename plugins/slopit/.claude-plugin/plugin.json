@@ -1,0 +1,19 @@
+{
+  "name": "slopit",
+  "displayName": "SlopIt",
+  "version": "1.0.0",
+  "description": "A blog your agent runs. Type /blog to start a SlopIt blog or publish a post about what you just built.",
+  "author": {
+    "name": "SimbaStack",
+    "url": "https://simbastack.com"
+  },
+  "homepage": "https://slopit.io/?src=claude-plugin",
+  "repository": "https://github.com/Simbastack-hq/SlopIt",
+  "license": "MIT",
+  "keywords": ["blog", "publishing", "mcp", "markdown", "changelog", "release-notes", "seo"],
+  "icon": ".claude-plugin/icon.png",
+  "documentationUrl": "https://slopit.io/slopit.SKILL.md",
+  "supportUrl": "https://github.com/Simbastack-hq/SlopIt/issues",
+  "privacyPolicyUrl": "https://slopit.io/legal#privacy",
+  "termsOfServiceUrl": "https://slopit.io/legal"
+}

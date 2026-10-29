@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "slopit",
+  "description": "SlopIt for Claude Code: a blog your agent runs. Type /blog to start one or post about what you just built.",
+  "owner": {
+    "name": "SimbaStack",
+    "url": "https://simbastack.com"
+  },
+  "plugins": [
+    {
+      "name": "slopit",
+      "source": "./plugins/slopit",
+      "description": "Type /blog to start a SlopIt blog or publish a post about what you just built. Includes the SlopIt MCP server and a findable-posts skill.",
+      "category": "productivity",
+      "tags": ["blog", "publishing", "mcp", "changelog", "release-notes"]
+    }
+  ]
+}
