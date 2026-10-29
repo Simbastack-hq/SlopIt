@@ -8,6 +8,7 @@ import { uploadMedia, listMedia, deleteMedia } from '../media.js'
 import type { MediaLimits } from '../media.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { previewFields } from '../preview.js'
+import { nextPostFields, postStatusBefore } from '../next-post.js'
 import { BlogPatchSchema, CreateBlogInputSchema, PostPatchSchema } from '../schema/index.js'
 import { PostInputBaseSchema, slugTitleRefinement } from '../schema/post-input-base.js'
 import { signupBlog } from '../signup.js'
@@ -193,6 +194,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
           post,
           ...(postUrl !== undefined ? { post_url: postUrl } : {}),
           ...previewFields(config.previewUrlFor, ctx.blog!, post),
+          ...nextPostFields(config.store, post, false),
         }
       },
     ),
@@ -231,6 +233,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
       { auth: 'required', idempotent: true, crossBlogGuard: true },
       (args, ctx) => {
         const renderer = config.rendererFor(ctx.blog!)
+        const before = postStatusBefore(config.store, ctx.blog!.id, args.slug)
         const { post, postUrl } = updatePost(
           config.store,
           renderer,
@@ -243,6 +246,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
           post,
           ...(postUrl !== undefined ? { post_url: postUrl } : {}),
           ...previewFields(config.previewUrlFor, ctx.blog!, post),
+          ...nextPostFields(config.store, post, before === 'published'),
         }
       },
     ),

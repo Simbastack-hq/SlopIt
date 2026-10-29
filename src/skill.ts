@@ -5,6 +5,8 @@
  * MCP tools section is deliberately omitted here and lands in
  * feat/mcp-tools.
  */
+import { NEXT_POST_NUDGE_BELOW } from './next-post.js'
+
 export function generateSkillFile(args: {
   baseUrl: string
   termsUrl?: string
@@ -121,6 +123,10 @@ ${skillUrl !== undefined ? `    Instructions: ${skillUrl}\n` : ''}    API key: i
 **Never write the API key itself into the note or into any committed file** (\`AGENTS.md\`, \`CLAUDE.md\`, README, code): anyone who can read the repository could then edit and delete the blog's posts. Keep the key in an environment variable (in a \`.env\` file only if it is gitignored), a secret manager or your harness's credential store, and write in the note only where it is.
 
 On a later run, read the note, load the key from where it says, and publish to that blog. Don't sign up again unless the user asks for a new blog.
+
+## After publishing: suggest the next post
+
+A blog with one post rarely gets found. While a blog has fewer than ${NEXT_POST_NUDGE_BELOW} posts, publish responses carry \`next_post_hint\`: when it's there, after you give the human the post's URL, offer once to draft the next post (a follow-up on what you just published is an easy one), and drop it if they say no.
 
 ## Endpoints
 
