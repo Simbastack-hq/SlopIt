@@ -120,6 +120,22 @@ describe('signup extras: first post and invite codes', () => {
       expect(policy.redeemed).toEqual([`VIP-1:${body.blog_id}`])
     })
 
+    it('redeems before the welcome email goes out, so the email sees the new plan', async () => {
+      const order: string[] = []
+      const policy: InvitePolicy = {
+        check: () => ({ ok: true }),
+        redeem: () => {
+          order.push('redeem')
+          return { note: 'Pro' }
+        },
+      }
+      const onSignup = async () => {
+        order.push('email')
+      }
+      await signup({ email: 'a@example.com', invite: 'VIP-1' }, { invites: policy, onSignup })
+      expect(order).toEqual(['redeem', 'email'])
+    })
+
     it('rejects an unknown code before creating anything', async () => {
       const { status, body } = await signup(
         { name: 'typo', invite: 'VIP-2' },
