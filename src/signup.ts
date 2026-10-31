@@ -159,6 +159,18 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
   const { apiKey } = createApiKey(config.store, blog.id)
   const renderer = config.rendererFor(blog)
 
+  // Redeem the invite before the welcome email, so the email already sees
+  // what the code unlocked (no upgrade pitch to someone just given Pro).
+  let invite: SignupResult['invite']
+  if (inviteCode !== undefined) {
+    try {
+      invite = { applied: true, note: config.invites!.redeem(inviteCode, blog).note }
+    } catch (err) {
+      console.error('[slopit] invite redeem failed; signup continues:', err)
+      invite = { applied: false }
+    }
+  }
+
   let emailSent = false
   if (email !== null && config.onSignup !== undefined) {
     try {
@@ -171,16 +183,6 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
       // copy was sent.
       const message = err instanceof Error ? err.message : String(err)
       console.error('[slopit] onSignup hook failed; signup continues without email:', message)
-    }
-  }
-
-  let invite: SignupResult['invite']
-  if (inviteCode !== undefined) {
-    try {
-      invite = { applied: true, note: config.invites!.redeem(inviteCode, blog).note }
-    } catch (err) {
-      console.error('[slopit] invite redeem failed; signup continues:', err)
-      invite = { applied: false }
     }
   }
 
