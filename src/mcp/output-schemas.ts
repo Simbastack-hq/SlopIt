@@ -111,6 +111,22 @@ export const SignupOutput = toolOutput({
     .boolean()
     .optional()
     .describe('True only when an email was given and the welcome email went out.'),
+  post: PostShape.optional().describe('The first post, when `post` was given and it was created.'),
+  post_url: z.string().optional().describe("The first post's live URL. Give it to the human."),
+  preview_url: z
+    .string()
+    .optional()
+    .describe('Private preview link when the first post was saved as a draft.'),
+  post_error: z
+    .looseObject({ code: z.string(), message: z.string() })
+    .optional()
+    .describe(
+      'Why the first post failed. The blog and key were still created: retry with create_post.',
+    ),
+  invite: z
+    .looseObject({ applied: z.boolean(), note: z.string().optional() })
+    .optional()
+    .describe('Present when an invite code was given; `note` says what it unlocked.'),
 })
 
 const PreviewUrl = z
