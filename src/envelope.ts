@@ -42,6 +42,7 @@ const CODE_TO_STATUS: Record<SlopItErrorCode, number> = {
   // by the next facts call or post write (see facts.ts).
   FACT_RENDER_PENDING: 500,
   PUBLISH_AT_INVALID: 400,
+  INVITE_INVALID: 400,
 }
 
 /**

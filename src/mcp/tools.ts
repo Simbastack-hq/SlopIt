@@ -9,9 +9,9 @@ import type { MediaLimits } from '../media.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { previewFields } from '../preview.js'
 import { nextPostFields, postStatusBefore } from '../next-post.js'
-import { BlogPatchSchema, CreateBlogInputSchema, PostPatchSchema } from '../schema/index.js'
+import { BlogPatchSchema, PostPatchSchema } from '../schema/index.js'
 import { PostInputBaseSchema, slugTitleRefinement } from '../schema/post-input-base.js'
-import { signupBlog } from '../signup.js'
+import { SignupInputSchema, signupBlog, signupExtraFields } from '../signup.js'
 import {
   BlogOutput,
   DeletedOutput,
@@ -122,7 +122,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
   ].join(' ')
 
   // 1. signup — create a blog + API key in one call.
-  // Schema: exactly CreateBlogInputSchema — idempotency_key is deliberately
+  // Schema: exactly SignupInputSchema — idempotency_key is deliberately
   // absent so SDK validation rejects it at the schema layer (decision #22
   // parity, decision #15 explains the SDK-shaped error that results).
   server.registerTool(
@@ -130,10 +130,10 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     {
       ...meta('Create blog (sign up)', CREATE_IRREVERSIBLE),
       description: signupDescription,
-      inputSchema: CreateBlogInputSchema.strict(),
+      inputSchema: SignupInputSchema.strict(),
       outputSchema: SignupOutput,
     },
-    wrapTool<z.input<typeof CreateBlogInputSchema>>(
+    wrapTool<z.input<typeof SignupInputSchema>>(
       config,
       'signup',
       { auth: 'public' },
@@ -147,6 +147,7 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
           ...(config.termsUrl !== undefined ? { terms_url: config.termsUrl } : {}),
           onboarding_text: result.onboardingText,
           email_sent: result.emailSent,
+          ...signupExtraFields(result),
         }
       },
     ),

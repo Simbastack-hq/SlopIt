@@ -8,7 +8,7 @@ import { buildLinks } from './links.js'
 import { updateBlog } from '../blogs.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { parseMarkdownBody } from './markdown-body.js'
-import { signupBlog } from '../signup.js'
+import { signupBlog, signupExtraFields } from '../signup.js'
 import { uploadMedia, listMedia, getMedia, deleteMedia } from '../media.js'
 import type { MediaLimits } from '../media.js'
 import { previewFields } from '../preview.js'
@@ -112,6 +112,7 @@ export function mountRoutes(app: Hono<{ Variables: Vars }>, config: ApiRouterCon
       ...(config.termsUrl !== undefined ? { terms_url: config.termsUrl } : {}),
       onboarding_text: result.onboardingText,
       email_sent: result.emailSent,
+      ...signupExtraFields(result),
       ...config.responseFieldsFor?.(result.blog),
       _links: buildLinks(result.blog, config),
     })
