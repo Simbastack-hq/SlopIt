@@ -1,0 +1,21 @@
+# Each published release's notes go to https://changelog.slopit.io, as written.
+name: Release notes to SlopIt
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to republish (after editing its notes)
+        required: true
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Simbastack-hq/slopit-release-notes-action@v0
+        with:
+          api-key: ${{ secrets.SLOPIT_API_KEY }}
+          tag: ${{ inputs.tag }}
+          slug-prefix: slopit
