@@ -316,7 +316,7 @@ describe('MCP tool metadata', () => {
     })
 
     it('report_bug (always an error in core)', async () => {
-      await fails('report_bug', { summary: 'broken' }, 'NOT_IMPLEMENTED')
+      await fails('report_bug', { summary: 'create_post returned 500' }, 'NOT_IMPLEMENTED')
     })
 
     it('upload_media', async () => {

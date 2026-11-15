@@ -87,6 +87,20 @@ describe('generateSkillFile', () => {
     }
   })
 
+  it('says report_bug needs a summary, on both transports', () => {
+    const rows = text.split('\n').filter((l) => l.includes('report_bug'))
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      expect(row).toContain('`summary`')
+      expect(row).toContain('required')
+      expect(row).toContain('10 to 300 characters')
+    }
+    // Hosts that make report_bug work rewrite these two sentences by exact
+    // match (docs/solutions/report-bug-input-contract.md). Keep them whole.
+    expect(text).toContain('Submit a bug report (501 in core; platform overrides). No auth.')
+    expect(text).toContain('Always errors with NOT_IMPLEMENTED; platform provides a bridge.')
+  })
+
   it('lists all SlopItErrorCode values plus the envelope codes', () => {
     const codes = [
       // SlopItErrorCode values
