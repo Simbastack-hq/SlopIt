@@ -66,7 +66,7 @@ describe('MCP tool: report_bug', () => {
     await boot()
     const result = (await client.callTool({
       name: 'report_bug',
-      arguments: {},
+      arguments: { summary: '  create_post returned 500 twice  ' },
     })) as unknown as {
       isError: boolean
       structuredContent: { error: { code: string; details: Record<string, unknown> } }
@@ -74,5 +74,39 @@ describe('MCP tool: report_bug', () => {
     expect(result.isError).toBe(true)
     expect(result.structuredContent.error.code).toBe('NOT_IMPLEMENTED')
     expect(result.structuredContent.error.details).toEqual({})
+  })
+
+  // A directory scanner calls every listed tool with no arguments. The
+  // schema has to turn that away before a host's handler stores or emails it.
+  it.each([
+    ['no arguments', {}],
+    ['details only', { details: { tool: 'create_post' } }],
+    ['empty summary', { summary: '' }],
+    ['whitespace summary', { summary: '   \n\t            ' }],
+    ['summary too short', { summary: 'broken' }],
+    ['summary too long', { summary: 'x'.repeat(301) }],
+    ['summary not a string', { summary: 42 }],
+  ])('rejects a report with %s and says what to send', async (_label, args) => {
+    await boot('https://slopit.io/bridge')
+    const result = (await client.callTool({ name: 'report_bug', arguments: args })) as {
+      isError?: boolean
+      content: { text: string }[]
+    }
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('Input validation error')
+    expect(result.content[0].text).toContain('summary is required: one sentence')
+    expect(result.content[0].text).not.toContain('NOT_IMPLEMENTED')
+  })
+
+  it('lists summary as required with its length limits', async () => {
+    await boot()
+    const { tools } = await client.listTools()
+    const schema = tools.find((t) => t.name === 'report_bug')!.inputSchema as unknown as {
+      required?: string[]
+      properties: { summary: { minLength?: number; maxLength?: number } }
+    }
+    expect(schema.required).toEqual(['summary'])
+    expect(schema.properties.summary.minLength).toBe(10)
+    expect(schema.properties.summary.maxLength).toBe(300)
   })
 })

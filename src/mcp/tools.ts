@@ -9,7 +9,7 @@ import type { MediaLimits } from '../media.js'
 import { createPost, deletePost, getPost, listPosts, updatePost } from '../posts.js'
 import { previewFields } from '../preview.js'
 import { nextPostFields, postStatusBefore } from '../next-post.js'
-import { BlogPatchSchema, PostPatchSchema } from '../schema/index.js'
+import { BlogPatchSchema, BugReportInputSchema, PostPatchSchema } from '../schema/index.js'
 import { PostInputBaseSchema, slugTitleRefinement } from '../schema/post-input-base.js'
 import { SignupInputSchema, signupBlog, signupExtraFields } from '../signup.js'
 import {
@@ -395,16 +395,9 @@ export function registerTools(server: McpServer, config: McpServerConfig): void 
     'report_bug',
     {
       ...meta('Report a bug', READ),
-      description: 'Report a bug or something unexpected. Returns a link to submit the report.',
-      inputSchema: z.object({
-        summary: z.string().describe('One line on what went wrong.').optional(),
-        details: z
-          .unknown()
-          .describe(
-            'Anything that helps reproduce it, e.g. the tool you called, its arguments and the error you got.',
-          )
-          .optional(),
-      }),
+      description:
+        'Report a bug or something unexpected. `summary` is required: one sentence, 10 to 300 characters, on what went wrong. Calls without it are rejected. Returns a link to submit the report.',
+      inputSchema: BugReportInputSchema,
       outputSchema: ReportBugOutput,
     },
     wrapTool(config, 'report_bug', { auth: 'public' }, () => {

@@ -326,3 +326,26 @@ export const CreateBlogInputSchema = z.object({
     .default('en'),
 })
 export type CreateBlogInput = z.input<typeof CreateBlogInputSchema>
+
+// Input for report_bug (MCP tool and POST /bridge/report_bug). Core only
+// stubs the tool; the host that stores and forwards reports parses with
+// this same schema, so the contract agents read is the one that is
+// enforced. `summary` is required because a report without one is noise:
+// directory scanners call every listed tool with no arguments.
+const BUG_REPORT_SUMMARY_RULE =
+  'summary is required: one sentence (10 to 300 characters) on what went wrong or what you need. Put steps, arguments and error text in details.'
+export const BugReportInputSchema = z.object({
+  summary: z
+    .string({ error: BUG_REPORT_SUMMARY_RULE })
+    .trim()
+    .min(10, BUG_REPORT_SUMMARY_RULE)
+    .max(300, BUG_REPORT_SUMMARY_RULE)
+    .describe('Required. One sentence on what went wrong or what you need, 10 to 300 characters.'),
+  details: z
+    .unknown()
+    .describe(
+      'Anything that helps reproduce it, e.g. the tool you called, its arguments and the error you got.',
+    )
+    .optional(),
+})
+export type BugReportInput = z.infer<typeof BugReportInputSchema>
