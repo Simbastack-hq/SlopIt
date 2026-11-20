@@ -63,7 +63,7 @@ Only what themes actually render. Sizes in px, line-heights unitless, letter-spa
 Three values.
 
 - `0.25rem` — tag pills, inline code
-- `0.5rem` — code blocks, any card a theme introduces
+- `0.5rem` — code blocks, body images, home-page thumbnails, any card a theme introduces
 - `1rem` — cover image (if present), nothing else
 
 `9999px` is not a radius. We don't ship circles.
@@ -72,7 +72,7 @@ Three values.
 
 **`max-width: 720px`** for the post body. `min` ≈ 680px at smaller breakpoints. Non-negotiable. Posts that don't fit in 720px aren't posts, they're tables.
 
-The blog index list uses the same column width — no grids, no cards-in-rows.
+The blog index list uses the same column width — no grids, no cards-in-rows. Only the masthead bar is wider (its row is 1080px).
 
 ## Components
 
@@ -85,7 +85,8 @@ Only what a post page or a blog index actually renders.
 - **Contents rail** — long posts only (3+ `##` sections, ~1,000+ words). A list of the sections in the margin beside the column, on screens 1240px and wider; hidden below that. `text-muted` at 13px on a `border` hairline; the section being read turns `text`, and a 2px `accent` marker glides along the hairline to it. That marker is the one motion on a post page. Spec: `docs/superpowers/specs/2026-10-08-contents-rail-design.md`.
 - **Language switcher** — only on a page in more than one language. Two or three: a row of language names, each in its own language, `text-muted` and underlined, the current one `text`. Four or more: a globe and the current language's code at the masthead's end, a `border` pill that turns `accent`, opening the same names as a list.
 - **"Powered by SlopIt" footer** — one line, `caption` type, `text-muted`, link to `https://slopit.io`. Platform can hide it per plan; core always emits it.
-- **Blog nav** — blog name only, linking to the blog index. `body` type, `text`, left-aligned. No marketing nav. Ever.
+- **Post row (blog index)** — date (`caption`, `text-muted`), title (22px / 700, `text`, turns `accent` when the row is hovered), excerpt (`text-muted`, clamped to three lines). A post with an image gets a 200px 3:2 thumbnail at the row's end (96px square on phones), `0.5rem` radius, `surface` behind it while it loads. The title's link covers the whole row.
+- **Blog nav** — a full-width bar with a `border` hairline under it. The blog name (20px / 700, `text`) or logo at the start links to the blog index. When the blog has a main site, a filled `accent` pill button sits at the end. No marketing nav. Ever.
 
 If a theme wants to vary, it varies the above — nothing new gets introduced.
 

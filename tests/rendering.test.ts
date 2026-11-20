@@ -164,8 +164,10 @@ describe('formatDate', () => {
 })
 
 describe('renderPostList', () => {
+  const ROOT = 'https://b.example/'
+
   it('renders the empty state when given no posts', () => {
-    const out = renderPostList([], 'en-US')
+    const out = renderPostList([], 'en-US', ROOT)
     expect(out).toContain('class="empty-state"')
     expect(out).toContain('waiting for the first post')
     expect(out).toContain('Nothing here yet.')
@@ -179,6 +181,7 @@ describe('renderPostList', () => {
         makePost({ slug: 'second', title: 'Second', publishedAt: '2025-02-01T00:00:00Z' }),
       ],
       'en-US',
+      ROOT,
     )
     expect(out).toContain('<article class="post-item">')
     expect(out).toContain('href="first/"')
@@ -193,7 +196,7 @@ describe('renderPostList', () => {
       title: '<script>alert(1)</script>',
       excerpt: '"onerror=alert(1)"',
     })
-    const out = renderPostList([evil], 'en-US')
+    const out = renderPostList([evil], 'en-US', ROOT)
     expect(out).not.toContain('<script>alert(1)</script>')
     expect(out).toContain('&lt;script&gt;')
     expect(out).toContain('&quot;onerror')
@@ -201,7 +204,7 @@ describe('renderPostList', () => {
 
   it('omits excerpt paragraph when excerpt is absent', () => {
     const p = makePost({ excerpt: undefined })
-    const out = renderPostList([p], 'en-US')
+    const out = renderPostList([p], 'en-US', ROOT)
     expect(out).not.toMatch(/<p[^>]*>undefined<\/p>/)
     const postItems = out.match(/<article class="post-item">[\s\S]*?<\/article>/g)
     expect(postItems).toHaveLength(1)
@@ -210,8 +213,64 @@ describe('renderPostList', () => {
 
   it('renders excerpt paragraph when present', () => {
     const p = makePost({ excerpt: 'A short summary.' })
-    const out = renderPostList([p], 'en-US')
+    const out = renderPostList([p], 'en-US', ROOT)
     expect(out).toContain('<p>A short summary.</p>')
+  })
+
+  describe('thumbnail', () => {
+    const thumbSrc = (post: Post) =>
+      renderPostList([post], 'en-US', ROOT).match(/<img class="post-item-thumb" src="([^"]*)"/)?.[1]
+
+    it('is the cover image, after the text, decorative', () => {
+      const out = renderPostList(
+        [makePost({ coverImage: 'https://cdn.example/cover.jpg', body: '![x](/b.jpg)' })],
+        'en-US',
+        ROOT,
+      )
+      expect(out).toMatch(
+        /<\/div><img class="post-item-thumb" src="https:\/\/cdn\.example\/cover\.jpg" alt="" decoding="async"><\/article>/,
+      )
+    })
+
+    it('without a cover: the first body image, resolved against the post URL', () => {
+      expect(thumbSrc(makePost({ slug: 'trip', body: 'Hi\n\n![River](river.jpg)' }))).toBe(
+        'https://b.example/trip/river.jpg',
+      )
+      expect(thumbSrc(makePost({ body: '![a](https://x.example/a.jpg) ![b](/b.jpg)' }))).toBe(
+        'https://x.example/a.jpg',
+      )
+    })
+
+    it('a video: the thumbnail that always exists (hqdefault), not maxresdefault', () => {
+      expect(thumbSrc(makePost({ body: 'https://youtu.be/3mlRiF-LeMc' }))).toBe(
+        'https://i.ytimg.com/vi/3mlRiF-LeMc/hqdefault.jpg',
+      )
+    })
+
+    it('none for a post with no image', () => {
+      const out = renderPostList([makePost({ body: 'Just words.' })], 'en-US', ROOT)
+      expect(out).not.toContain('<img')
+    })
+
+    it('escapes the src', () => {
+      expect(thumbSrc(makePost({ coverImage: 'https://x.example/a.jpg?q="><script>' }))).toBe(
+        'https://x.example/a.jpg?q=&quot;&gt;&lt;script&gt;',
+      )
+    })
+
+    it('loads the first three at once and the rest lazily', () => {
+      const posts = [1, 2, 3, 4, 5].map((n) =>
+        makePost({ slug: `p${n}`, coverImage: `https://x.example/${n}.jpg` }),
+      )
+      const imgs = renderPostList(posts, 'en-US', ROOT).match(/<img [^>]*>/g)!
+      expect(imgs.map((img) => img.includes('loading="lazy"'))).toEqual([
+        false,
+        false,
+        false,
+        true,
+        true,
+      ])
+    })
   })
 })
 
@@ -1298,7 +1357,7 @@ describe('createRenderer — renderBlog', () => {
 
 describe('renderPostList — null publishedAt branch', () => {
   it('renders an empty datetime attribute when publishedAt is null', () => {
-    const out = renderPostList([makePost({ publishedAt: null })], 'en-US')
+    const out = renderPostList([makePost({ publishedAt: null })], 'en-US', 'https://b.example/')
     expect(out).toContain('datetime=""')
   })
 })

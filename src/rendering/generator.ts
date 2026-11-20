@@ -31,6 +31,7 @@ import {
   resolveDescription,
   resolveLanguage,
   resolvePageTitle,
+  resolveShareImages,
   textDirection,
 } from './seo.js'
 import { escapeHtml, isHttpUrl, loadTheme, render, type ThemeAssets } from './templates.js'
@@ -208,21 +209,42 @@ const EMPTY_STATE_HTML =
 /**
  * Build the home-page post list fragment. Every user-derived field is
  * HTML-escaped at the boundary here so the `{{{postList}}}` raw injection
- * stays safe. `hrefPrefix` is `''` on the root home and `'../../'` on a
- * `lang/<tag>/` home, so post links resolve from either depth.
+ * stays safe. `root` is the blog's absolute root URL, which relative body
+ * images resolve against. `hrefPrefix` is `''` on the root home and
+ * `'../../'` on a `lang/<tag>/` home, so post links resolve from either
+ * depth.
+ *
+ * A post with an image gets a thumbnail beside its text: its share image
+ * (cover → video thumbnail → first body image), so the list shows what a
+ * link preview shows. For a video that's the last URL, hqdefault, which
+ * always exists. The thumbnail is decorative (`alt=""`): the title beside
+ * it is the link and says the same thing. The first three are in view on
+ * load, so only the rest wait for the reader to scroll.
  *
  * @internal
  */
-export function renderPostList(posts: Post[], locale: string, hrefPrefix = ''): string {
+export function renderPostList(
+  posts: Post[],
+  locale: string,
+  root: string,
+  hrefPrefix = '',
+): string {
   if (posts.length === 0) return EMPTY_STATE_HTML
   return posts
-    .map((p) => {
+    .map((p, i) => {
       const excerpt = p.excerpt ? `<p>${escapeHtml(p.excerpt)}</p>` : ''
+      const image = resolveShareImages(p, root + p.slug + '/').at(-1)
+      const thumb = image
+        ? `<img class="post-item-thumb" src="${escapeHtml(image)}" alt=""${i < 3 ? '' : ' loading="lazy"'} decoding="async">`
+        : ''
       return (
         `<article class="post-item">` +
-        `<h2><a href="${escapeHtml(hrefPrefix + p.slug)}/">${escapeHtml(p.title)}</a></h2>` +
+        `<div class="post-item-text">` +
         `<time datetime="${escapeHtml(p.publishedAt ?? '')}">${escapeHtml(formatDate(p.publishedAt, locale))}</time>` +
+        `<h2><a href="${escapeHtml(hrefPrefix + p.slug)}/">${escapeHtml(p.title)}</a></h2>` +
         excerpt +
+        `</div>` +
+        thumb +
         `</article>`
       )
     })
@@ -962,6 +984,7 @@ export function createRenderer(config: RendererConfig): MutationRenderer {
           postList: renderPostList(
             posts.filter((p) => resolveLanguage(p, blog) === lang),
             lang,
+            root,
             prefix,
           ),
           poweredBy: renderPoweredBy(),
