@@ -243,6 +243,10 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
     emailProvided: email !== null,
     emailSent,
     nameAutoAssigned,
+    firstPostCreated: firstPost !== undefined,
+    // Any invite that passed `check` reached `redeem`, which may have
+    // consumed it even if it then threw.
+    inviteUsed: inviteCode !== undefined,
   })
 
   return {
@@ -286,11 +290,9 @@ function createAutoNamedBlog(
     }
   }
 
-  const base = nameCandidates({
-    parentSiteUrl: input.parentSiteUrl,
-    title: input.title,
-    email: input.email,
-  }).find(acceptable)
+  const base = nameCandidates({ parentSiteUrl: input.parentSiteUrl, title: input.title }).find(
+    acceptable,
+  )
   if (base !== undefined) {
     for (let n = 1; n <= MAX_SUFFIX; n++) {
       const name = n === 1 ? base : `${base}-${n}`

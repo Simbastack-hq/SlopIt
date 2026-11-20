@@ -295,7 +295,7 @@ export const BlogNameSchema = z
 
 export const CreateBlogInputSchema = z.object({
   name: BlogNameSchema.describe(
-    'Blog name, e.g. "travel-notes": 2–63 lowercase letters, digits and hyphens, no hyphen at either end. The host may use it in the blog URL. A taken name fails with BLOG_NAME_CONFLICT. Omit it at signup and one is picked from `parentSiteUrl`, `title` or `email` (the response then has `name_auto_assigned: true`). A name cannot be changed after signup.',
+    'Blog name, e.g. "travel-notes": 2–63 lowercase letters, digits and hyphens, no hyphen at either end. The host may use it in the blog URL. A taken name fails with BLOG_NAME_CONFLICT. Omit it at signup and one is picked from `parentSiteUrl` or `title`, else a random one (the response then has `name_auto_assigned: true`). A name cannot be changed after signup.',
   ).optional(),
   title: blogTitle
     .describe(

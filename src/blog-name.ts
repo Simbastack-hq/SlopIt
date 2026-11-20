@@ -26,22 +26,14 @@ const SUBDOMAIN_HOSTS = [
 ] // prettier-ignore
 
 // Hosts where the path names the project: `github.com/owner/repo` → `repo`.
+// GitLab nests groups (`gitlab.com/acme/platform/news-site`), so there the
+// project is the last segment before GitLab's `/-/` subpage marker.
 const REPO_HOSTS = new Set(['github.com', 'gitlab.com', 'bitbucket.org', 'codeberg.org'])
 
 // Hosts whose name says nothing about the owner. Skipped outright.
 const SKIP_HOSTS = new Set([
   'x.com', 'twitter.com', 'linkedin.com', 'youtube.com', 'facebook.com',
   'instagram.com', 'tiktok.com', 'linktr.ee', 'google.com', 'notion.so',
-]) // prettier-ignore
-
-// Email providers anyone can sign up at, matched on the registrable label
-// so regional variants (yahoo.co.uk, outlook.fr) count too. `example` is
-// the reserved documentation domain. One list: keep it here.
-const SHARED_MAIL_LABELS = new Set([
-  'gmail', 'googlemail', 'outlook', 'hotmail', 'live', 'msn', 'yahoo',
-  'ymail', 'icloud', 'me', 'mac', 'aol', 'proton', 'protonmail', 'pm',
-  'qq', '126', '163', 'sina', 'gmx', 'web', 'mail', 'yandex', 'zoho',
-  'fastmail', 'hey', 'tutanota', 'agentmail', 'grokbot', 'example',
 ]) // prettier-ignore
 
 // Below this a derived name is noise (and likely reserved anyway).
@@ -66,8 +58,13 @@ function siteLabel(parentSiteUrl: string): string | undefined {
   const bare = host.replace(/^www\./, '')
   if (SKIP_HOSTS.has(bare)) return undefined
   if (REPO_HOSTS.has(bare)) {
-    const [owner, repo] = url.pathname.split('/').filter((s) => s !== '')
-    return repo?.replace(/\.git$/, '') ?? owner
+    const segments = url.pathname.split('/').filter((s) => s !== '')
+    let project: string | undefined = segments[1] ?? segments[0]
+    if (bare === 'gitlab.com') {
+      const marker = segments.indexOf('-')
+      project = (marker === -1 ? segments : segments.slice(0, marker)).at(-1)
+    }
+    return project?.replace(/\.git$/, '')
   }
   const shared = SUBDOMAIN_HOSTS.find((s) => bare === s || bare.endsWith(`.${s}`))
   if (shared !== undefined) {
@@ -82,11 +79,6 @@ function siteLabel(parentSiteUrl: string): string | undefined {
   return registrableLabel(bare)
 }
 
-function emailLabel(email: string): string | undefined {
-  const label = registrableLabel(email.slice(email.lastIndexOf('@') + 1))
-  return label === undefined || SHARED_MAIL_LABELS.has(label) ? undefined : label
-}
-
 function toCandidate(raw: string | undefined): string | undefined {
   // Punycode labels (`xn--…`) slugify to gibberish.
   if (raw === undefined || raw.startsWith('xn--')) return undefined
@@ -95,19 +87,15 @@ function toCandidate(raw: string | undefined): string | undefined {
 }
 
 /**
- * Names to try, best first: the parent site's label, the slugified title,
- * the email's company domain. Deduplicated; may be empty. Callers still
- * validate each one and fall back to `randomBlogName()`.
+ * Names to try, best first: the parent site's label, then the slugified
+ * title. Deduplicated; may be empty. Callers still validate each one and
+ * fall back to `randomBlogName()`. Never the email: it is the private
+ * recovery channel, and a name is public and permanent.
  */
-export function nameCandidates(input: {
-  parentSiteUrl?: string
-  title?: string
-  email?: string
-}): string[] {
+export function nameCandidates(input: { parentSiteUrl?: string; title?: string }): string[] {
   const raw = [
     input.parentSiteUrl === undefined ? undefined : siteLabel(input.parentSiteUrl),
     input.title,
-    input.email === undefined ? undefined : emailLabel(input.email),
   ]
   const out: string[] = []
   for (const r of raw) {

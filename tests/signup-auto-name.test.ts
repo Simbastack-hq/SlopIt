@@ -55,8 +55,46 @@ describe('signupBlog auto-naming', () => {
   })
 
   it('skips a candidate the host rejects (reserved) for the next one', async () => {
-    const r = await signupBlog(config(policy), { title: 'Admin', email: 'a@acme.io' })
+    const r = await signupBlog(config(policy), {
+      parentSiteUrl: 'https://www.admin.io',
+      title: 'Acme',
+    })
     expect(r.blog.name).toBe('acme')
+  })
+
+  it('never names a blog from the email (private recovery channel)', async () => {
+    const r = await signupBlog(config(), { email: 'alice@private-family.net' })
+    expect(r.blog.name).toMatch(/^blog-[a-z0-9]{5}$/)
+    expect(r.blog.name).not.toContain('private-family')
+  })
+
+  it('suggests a fresh signup only when nothing is attached yet', async () => {
+    const bare = await signupBlog(config(), { title: 'Bare' })
+    expect(bare.onboardingText).toContain('call signup again with `name`')
+
+    const withPost = await signupBlog(config(), {
+      title: 'With Post',
+      post: { title: 'Hello', body: 'First.' },
+    })
+    expect(withPost.firstPost).toBeDefined()
+    expect(withPost.onboardingText).toContain("can't be changed later")
+    expect(withPost.onboardingText).not.toContain('call signup again')
+    expect(withPost.onboardingText).toContain(
+      "a separate blog that won't carry over the first post.",
+    )
+  })
+
+  it('does not suggest a fresh signup once an invite was redeemed', async () => {
+    const r = await signupBlog(
+      {
+        ...config(),
+        invites: { check: () => ({ ok: true }), redeem: () => ({ note: 'Pro for 12 months' }) },
+      },
+      { title: 'Invited', invite: 'ONCE', post: { title: 'Hi', body: 'x' } },
+    )
+    expect(r.invite).toEqual({ applied: true, note: 'Pro for 12 months' })
+    expect(r.onboardingText).not.toContain('call signup again')
+    expect(r.onboardingText).toContain("won't carry over the first post or the invite.")
   })
 
   it('skips a candidate the host rejects (profanity) for the next one', async () => {

@@ -4,14 +4,10 @@ import { nameCandidates, randomBlogName } from '../src/blog-name.js'
 describe('nameCandidates', () => {
   const site = (parentSiteUrl: string) => nameCandidates({ parentSiteUrl })
 
-  it('orders parent site, then title, then company email', () => {
+  it('orders parent site, then title', () => {
     expect(
-      nameCandidates({
-        parentSiteUrl: 'https://www.ailoot.ai/',
-        title: 'Ailoot Notes',
-        email: 'jane@acme-corp.com',
-      }),
-    ).toEqual(['ailoot', 'ailoot-notes', 'acme-corp'])
+      nameCandidates({ parentSiteUrl: 'https://www.ailoot.ai/', title: 'Ailoot Notes' }),
+    ).toEqual(['ailoot', 'ailoot-notes'])
   })
 
   it('takes the registrable label of the parent site host', () => {
@@ -44,6 +40,14 @@ describe('nameCandidates', () => {
     expect(site('https://github.com/')).toEqual([])
   })
 
+  it('uses the last project segment on GitLab, before any /-/ subpage', () => {
+    expect(site('https://gitlab.com/acme/platform/news-site')).toEqual(['news-site'])
+    expect(site('https://gitlab.com/acme/platform/news-site/-/tree/main')).toEqual(['news-site'])
+    expect(site('https://gitlab.com/acme/news-site.git')).toEqual(['news-site'])
+    expect(site('https://gitlab.com/acme')).toEqual(['acme'])
+    expect(site('https://gitlab.com/')).toEqual([])
+  })
+
   it('skips IP and punycode hosts', () => {
     expect(site('http://192.168.1.10:3000/')).toEqual([])
     expect(site('https://пример.рф/')).toEqual([])
@@ -53,36 +57,15 @@ describe('nameCandidates', () => {
     expect(nameCandidates({ title: "Jane's Café Notes" })).toEqual(['jane-s-cafe-notes'])
     expect(nameCandidates({ title: '小さなブログ' })).toEqual([])
     expect(nameCandidates({ title: 'Ж A' })).toEqual([])
-    expect(nameCandidates({ title: '小さなブログ', email: 'a@acme.io' })).toEqual(['acme'])
+    expect(nameCandidates({ parentSiteUrl: 'https://acme.io', title: '小さなブログ' })).toEqual([
+      'acme',
+    ])
   })
 
   it('caps a long title so a -N suffix still fits in 63 chars', () => {
     const [c] = nameCandidates({ title: 'word '.repeat(30) })
     expect(c.length).toBeLessThanOrEqual(60)
     expect(c).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/)
-  })
-
-  it('uses a company email domain minus the TLD', () => {
-    expect(nameCandidates({ email: 'jane@acme.io' })).toEqual(['acme'])
-    expect(nameCandidates({ email: 'jane@mail.acme.co.uk' })).toEqual(['acme'])
-  })
-
-  it('skips free and agent mail providers', () => {
-    for (const email of [
-      'a@gmail.com',
-      'a@outlook.com',
-      'a@hotmail.co.uk',
-      'a@yahoo.co.jp',
-      'a@icloud.com',
-      'a@proton.me',
-      'a@qq.com',
-      'a@163.com',
-      'a@mail.grokbot.com',
-      'a@agentmail.to',
-      'a@example.com',
-    ]) {
-      expect(nameCandidates({ email }), email).toEqual([])
-    }
   })
 
   it('deduplicates', () => {

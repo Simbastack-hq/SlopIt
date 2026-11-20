@@ -118,7 +118,7 @@ Every authenticated request sends a bearer token:
 
 ${signupIntro}
 
-- \`name\` — DNS-safe blog name (lowercase, 2–63 chars), used in the blog's URL. It can't be changed after signup, so pass one the human would choose. Omit it and one is picked from \`parentSiteUrl\`, \`title\` or a company \`email\` domain (else \`blog-\` plus 5 random characters); the response then has \`name_auto_assigned: true\`: tell the human the name.
+- \`name\` — DNS-safe blog name (lowercase, 2–63 chars), used in the blog's URL. It can't be changed after signup, so pass one the human would choose. Omit it and one is picked from \`parentSiteUrl\` or \`title\` (else \`blog-\` plus 5 random characters); the response then has \`name_auto_assigned: true\`: tell the human the name.
 - \`title\` — the blog's display name, e.g. the project or person's name: 1–80 characters, one line. It is the blog's heading and its name in browser tabs, feeds and link previews. Set it whenever you know the project or person the blog is for: without one the blog shows its URL name, or a random id for an unnamed blog.
 - \`parentSiteUrl\` — the main website this blog belongs to, e.g. \`https://acme.example\`. Every page links back to it, so readers and search engines see the blog and the site as one thing. If the blog is for a product, project or business, ask the human for its site (or use the one in the repo or prompt) and set it at signup. Change or clear it later with \`PATCH /blogs/:id\`.
 ${emailBullet}
