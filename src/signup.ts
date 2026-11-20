@@ -7,14 +7,16 @@ import { createPost } from './posts.js'
 import type { PreviewUrlFor } from './preview.js'
 import type { MutationRenderer } from './rendering/generator.js'
 import type { Blog, Post } from './schema/index.js'
-import { CreateBlogInputSchema, PostInputSchema } from './schema/index.js'
+import { BlogNameSchema, CreateBlogInputSchema, PostInputSchema } from './schema/index.js'
+import { nameCandidates, randomBlogName } from './blog-name.js'
 import type { Store } from './db/store.js'
 
 /**
- * What signup accepts: the blog fields plus two signup-only extras. `post`
- * publishes the blog's first post in the same call (one request from a
- * stranger to a live post). `invite` is a host-issued code the host's
- * InvitePolicy checks and redeems; core gives it no meaning.
+ * What signup accepts: the blog fields plus three signup-only extras.
+ * `post` publishes the blog's first post in the same call (one request
+ * from a stranger to a live post). `invite` is a host-issued code the
+ * host's InvitePolicy checks and redeems; core gives it no meaning.
+ * `foundVia` is echoed back for the host to record; core doesn't store it.
  */
 export const SignupInputSchema = CreateBlogInputSchema.extend({
   post: PostInputSchema.optional().describe(
@@ -27,6 +29,22 @@ export const SignupInputSchema = CreateBlogInputSchema.extend({
     .max(64)
     .describe(
       'An invite code the human was given. Pass it exactly as written; a code the host does not recognise fails with INVITE_INVALID before anything is created.',
+    )
+    .optional(),
+  foundVia: z
+    .preprocess((val) => {
+      if (typeof val !== 'string') return val
+      // One line of plain text: control characters become spaces, and
+      // runs of whitespace (\s covers U+2028/2029) collapse to one. Blank means omitted:
+      // this field never blocks a signup.
+      const cleaned = val
+        .replace(/[\x00-\x1F\x7F-\x9F]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      return cleaned === '' ? undefined : cleaned
+    }, z.string().max(200).optional())
+    .describe(
+      'Optional: where you or your human heard about SlopIt (a site, a directory, a post, a person, a search). Plain text, one line, up to 200 characters.',
     )
     .optional(),
 })
@@ -76,9 +94,10 @@ export interface SignupConfig {
    * Optional policy hook for blog names. Runs AFTER core's structural
    * validation (length, regex) but BEFORE persistence. Core treats names
    * as opaque DNS-safe strings; the platform wires this to enforce
-   * reserved-subdomain, length-floor, and profanity rules. Skipped when
-   * `name` is not provided. A rejection becomes a `BLOG_NAME_RESERVED`
-   * error with the validator's `reason` as the message.
+   * reserved-subdomain, length-floor, and profanity rules. A rejection of
+   * a chosen `name` becomes a `BLOG_NAME_RESERVED` error with the
+   * validator's `reason` as the message; a rejected auto-picked name is
+   * skipped for the next candidate.
    */
   nameValidator?: (name: string) => { ok: true } | { ok: false; reason: string }
   /** Invite codes accepted at signup; without it any `invite` fails. */
@@ -101,6 +120,10 @@ export interface SignupResult {
   postError?: { code: string; message: string; details: Record<string, unknown> }
   /** Present when an invite code was given. */
   invite?: { applied: boolean; note?: string }
+  /** True when signup gave no `name` and core picked one. */
+  nameAutoAssigned: boolean
+  /** The caller's `foundVia`, cleaned, for the host to record. Not stored by core. */
+  foundVia?: string
 }
 
 /**
@@ -116,6 +139,7 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
   const {
     post: firstPostInput,
     invite: inviteCode,
+    foundVia,
     ...blogInput
   } = SignupInputSchema.parse(rawInput)
   const input = blogInput
@@ -132,10 +156,10 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
 
   const email = input.email ?? null
 
-  // Policy check (platform-supplied). Runs only when a name was actually
-  // requested — unnamed blogs have nothing to validate. The hook decides
-  // its own rules; core just translates a rejection into a structured
-  // error so REST and MCP envelopes stay consistent.
+  // Policy check (platform-supplied) on a name the caller chose. The hook
+  // decides its own rules; core just translates a rejection into a
+  // structured error so REST and MCP envelopes stay consistent. A picked
+  // name goes through the same hook in createAutoNamedBlog.
   if (input.name !== undefined && config.nameValidator !== undefined) {
     const verdict = config.nameValidator(input.name)
     if (!verdict.ok) {
@@ -155,7 +179,10 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
     }
   }
 
-  const { blog } = createBlog(config.store, input)
+  const nameAutoAssigned = input.name === undefined
+  const { blog } = nameAutoAssigned
+    ? createAutoNamedBlog(config, input)
+    : createBlog(config.store, input)
   const { apiKey } = createApiKey(config.store, blog.id)
   const renderer = config.rendererFor(blog)
 
@@ -215,6 +242,7 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
     bugReportUrl: config.bugReportUrl,
     emailProvided: email !== null,
     emailSent,
+    nameAutoAssigned,
   })
 
   return {
@@ -226,12 +254,64 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
     firstPost,
     postError,
     invite,
+    nameAutoAssigned,
+    foundVia,
   }
+}
+
+// Collision suffixes tried per picked name (`acme-2` … `acme-9`), then
+// random names, before giving up loudly.
+const MAX_SUFFIX = 9
+const RANDOM_ATTEMPTS = 5
+
+/**
+ * Create a blog for a signup that gave no `name`, under the first picked
+ * name that passes the same checks as a chosen one (schema, then the
+ * host's nameValidator). A taken name gets `-2`, `-3` …; the UNIQUE
+ * constraint decides, so two concurrent signups can't both get `acme`.
+ * Past the suffix cap, or with no usable candidate, a random name.
+ */
+function createAutoNamedBlog(
+  config: SignupConfig,
+  input: z.infer<typeof CreateBlogInputSchema>,
+): ReturnType<typeof createBlog> {
+  const acceptable = (name: string) =>
+    BlogNameSchema.safeParse(name).success && (config.nameValidator?.(name).ok ?? true)
+  const tryCreate = (name: string) => {
+    try {
+      return createBlog(config.store, { ...input, name })
+    } catch (err) {
+      if (err instanceof SlopItError && err.code === 'BLOG_NAME_CONFLICT') return undefined
+      throw err
+    }
+  }
+
+  const base = nameCandidates({
+    parentSiteUrl: input.parentSiteUrl,
+    title: input.title,
+    email: input.email,
+  }).find(acceptable)
+  if (base !== undefined) {
+    for (let n = 1; n <= MAX_SUFFIX; n++) {
+      const name = n === 1 ? base : `${base}-${n}`
+      if (!acceptable(name)) continue
+      const created = tryCreate(name)
+      if (created !== undefined) return created
+    }
+  }
+  for (let i = 0; i < RANDOM_ATTEMPTS; i++) {
+    const name = randomBlogName()
+    if (!acceptable(name)) continue
+    const created = tryCreate(name)
+    if (created !== undefined) return created
+  }
+  throw new Error(`Could not pick a free blog name after ${RANDOM_ATTEMPTS} random attempts`)
 }
 
 /**
  * The signup extras as response fields, shared by REST and MCP:
- * `post` + `post_url` (or `preview_url` for a draft), `post_error`, `invite`.
+ * `post` + `post_url` (or `preview_url` for a draft), `post_error`, `invite`,
+ * `name_auto_assigned`, `found_via`.
  */
 export function signupExtraFields(r: SignupResult): Record<string, unknown> {
   return {
@@ -244,5 +324,7 @@ export function signupExtraFields(r: SignupResult): Record<string, unknown> {
       : {}),
     ...(r.postError !== undefined ? { post_error: r.postError } : {}),
     ...(r.invite !== undefined ? { invite: r.invite } : {}),
+    ...(r.nameAutoAssigned ? { name_auto_assigned: true } : {}),
+    ...(r.foundVia !== undefined ? { found_via: r.foundVia } : {}),
   }
 }

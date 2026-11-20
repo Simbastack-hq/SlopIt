@@ -167,11 +167,13 @@ describe('signupBlog orchestration', () => {
       })
     })
 
-    it('skips the validator entirely when name is omitted', async () => {
+    it('runs the validator on the picked name when name is omitted', async () => {
       const validator = vi.fn(() => ({ ok: true as const }))
-      const result = await signupBlog(makeConfig({ nameValidator: validator }), {})
-      expect(validator).not.toHaveBeenCalled()
-      expect(result.blog.name).toBeNull()
+      const result = await signupBlog(makeConfig({ nameValidator: validator }), {
+        title: 'Picked Name',
+      })
+      expect(validator).toHaveBeenCalledWith('picked-name')
+      expect(result.blog.name).toBe('picked-name')
     })
 
     it('proceeds when validator returns ok', async () => {

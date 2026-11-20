@@ -127,6 +127,13 @@ export const SignupOutput = toolOutput({
     .looseObject({ applied: z.boolean(), note: z.string().optional() })
     .optional()
     .describe('Present when an invite code was given; `note` says what it unlocked.'),
+  name_auto_assigned: z
+    .boolean()
+    .optional()
+    .describe(
+      'True when no `name` was given and one was picked (blog.name). Tell the human; it cannot be changed later.',
+    ),
+  found_via: z.string().optional().describe('The `foundVia` you sent, cleaned. Absent if none.'),
 })
 
 const PreviewUrl = z
