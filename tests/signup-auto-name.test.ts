@@ -84,6 +84,35 @@ describe('signupBlog auto-naming', () => {
     )
   })
 
+  it('does not suggest a fresh signup when a draft was saved but its preview link threw', async () => {
+    const r = await signupBlog(
+      {
+        ...config(),
+        previewUrlFor: () => {
+          throw new Error('preview signer down')
+        },
+      },
+      { title: 'Draft First', post: { title: 'Hello', body: 'Draft.', status: 'draft' } },
+    )
+    expect(r.firstPost).toBeUndefined()
+    expect(r.postError?.code).toBe('INTERNAL_ERROR')
+    expect(store.db.prepare('SELECT status FROM posts WHERE blog_id = ?').all(r.blog.id)).toEqual([
+      { status: 'draft' },
+    ])
+    expect(r.onboardingText).not.toContain('call signup again')
+    expect(r.onboardingText).toContain("won't carry over the first post.")
+  })
+
+  it('still suggests a fresh signup when the first post failed and nothing was saved', async () => {
+    const r = await signupBlog(config(), {
+      title: 'Bad Post',
+      post: { title: 'Hello', body: '{{fact:missing}}' },
+    })
+    expect(r.postError).toBeDefined()
+    expect(store.db.prepare('SELECT 1 FROM posts WHERE blog_id = ?').get(r.blog.id)).toBeUndefined()
+    expect(r.onboardingText).toContain('call signup again with `name`')
+  })
+
   it('does not suggest a fresh signup once an invite was redeemed', async () => {
     const r = await signupBlog(
       {

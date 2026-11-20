@@ -24,7 +24,14 @@ describe('nameCandidates', () => {
     expect(site('https://acme.netlify.app')).toEqual(['acme'])
     // Netlify deploy previews / branch deploys: `<prefix>--<site>`.
     expect(site('https://deploy-preview-12--acme-docs.netlify.app')).toEqual(['acme-docs'])
+    expect(site('https://main--acme.netlify.app')).toEqual(['acme'])
     expect(site('https://acme.pages.dev')).toEqual(['acme'])
+  })
+
+  it('keeps `--` whole outside Netlify and checks punycode first', () => {
+    expect(site('https://my--brand.web.app')).toEqual(['my-brand'])
+    expect(site('https://xn--bcher-kva.web.app')).toEqual([])
+    expect(site('https://xn--bcher-kva.netlify.app')).toEqual([])
   })
 
   it('skips a shared host itself', () => {

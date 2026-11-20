@@ -73,8 +73,11 @@ function siteLabel(parentSiteUrl: string): string | undefined {
       .slice(0, -shared.length - 1)
       .split('.')
       .at(-1)!
-    // Netlify/Vercel previews and branch deploys: `deploy-preview-12--acme`.
-    return label.split('--').at(-1)
+    // Punycode before any rewrite: stripping `xn--` would dodge the guard.
+    if (label.startsWith('xn--')) return undefined
+    // Netlify deploy previews and branch deploys: `deploy-preview-12--acme`,
+    // `main--acme`. Elsewhere `--` is just part of the owner's label.
+    return shared === 'netlify.app' ? label.split('--').at(-1) : label
   }
   return registrableLabel(bare)
 }

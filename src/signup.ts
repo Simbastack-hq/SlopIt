@@ -228,6 +228,13 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
       postError = { code: env.code, message: env.message, details: env.details }
     }
   }
+  // Whether the blog now holds a post, read from the table rather than
+  // from `firstPost`: a draft can be saved and a later step (the preview
+  // link) still throw, leaving a post behind a `post_error`.
+  const postSaved =
+    firstPostInput !== undefined &&
+    config.store.db.prepare('SELECT 1 FROM posts WHERE blog_id = ? LIMIT 1').get(blog.id) !==
+      undefined
 
   const onboardingText = generateOnboardingBlock({
     blog,
@@ -243,7 +250,7 @@ export async function signupBlog(config: SignupConfig, rawInput: unknown): Promi
     emailProvided: email !== null,
     emailSent,
     nameAutoAssigned,
-    firstPostCreated: firstPost !== undefined,
+    firstPostCreated: postSaved,
     // Any invite that passed `check` reached `redeem`, which may have
     // consumed it even if it then threw.
     inviteUsed: inviteCode !== undefined,
