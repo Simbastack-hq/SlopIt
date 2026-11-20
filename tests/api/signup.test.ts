@@ -214,4 +214,45 @@ describe('POST /signup', () => {
     const raw2 = await r2.text()
     expect(raw2).not.toContain(b1.api_key)
   })
+
+  describe('auto-naming and foundVia', () => {
+    const post = (app: ReturnType<typeof makeApp>, body: unknown) =>
+      app.request('/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+    it('names a blog signed up without a name and says so', async () => {
+      const res = await post(makeApp(), { parentSiteUrl: 'https://acme.github.io/' })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        blog_id: string
+        blog_url: string
+        name_auto_assigned?: boolean
+        found_via?: string
+      }
+      expect(body.name_auto_assigned).toBe(true)
+      expect(body.blog_url).toBe('https://blog.example/')
+      expect(store.db.prepare('SELECT name FROM blogs WHERE id = ?').get(body.blog_id)).toEqual({
+        name: 'acme',
+      })
+      expect(body).not.toHaveProperty('found_via')
+    })
+
+    it('echoes foundVia as found_via', async () => {
+      const res = await post(makeApp(), { name: 'fv', foundVia: 'a post on r/ClaudeAI' })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.found_via).toBe('a post on r/ClaudeAI')
+      expect(body).not.toHaveProperty('name_auto_assigned')
+    })
+
+    it('rejects an over-long foundVia with ZOD_VALIDATION', async () => {
+      const res = await post(makeApp(), { name: 'fv', foundVia: 'x'.repeat(201) })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as { error: { code: string } }
+      expect(body.error.code).toBe('ZOD_VALIDATION')
+    })
+  })
 })
