@@ -200,4 +200,51 @@ describe('MCP tool: signup', () => {
     // SDK-shaped error has no structuredContent (decision #15)
     expect(result.structuredContent).toBeUndefined()
   })
+
+  describe('auto-naming and foundVia', () => {
+    interface Result {
+      isError?: boolean
+      content: { type: string; text: string }[]
+      structuredContent?: Record<string, unknown> & { blog_id?: string }
+    }
+    const call = async (args: Record<string, unknown>) =>
+      (await client.callTool({ name: 'signup', arguments: args })) as unknown as Result
+
+    it('names a blog signed up without a name and says so', async () => {
+      await boot()
+      const r = await call({ title: 'Acme Field Notes' })
+      expect(r.isError).toBeFalsy()
+      expect(r.structuredContent?.name_auto_assigned).toBe(true)
+      expect(
+        store.db.prepare('SELECT name FROM blogs WHERE id = ?').get(r.structuredContent?.blog_id),
+      ).toEqual({ name: 'acme-field-notes' })
+      expect(r.structuredContent).not.toHaveProperty('found_via')
+    })
+
+    it('echoes foundVia as found_via', async () => {
+      await boot()
+      const r = await call({ name: 'fv', foundVia: 'Smithery' })
+      expect(r.isError).toBeFalsy()
+      expect(r.structuredContent?.found_via).toBe('Smithery')
+      expect(r.structuredContent).not.toHaveProperty('name_auto_assigned')
+    })
+
+    it('rejects an over-long foundVia at schema validation', async () => {
+      await boot()
+      const r = await call({ name: 'fv', foundVia: 'x'.repeat(201) })
+      expect(r.isError).toBe(true)
+      expect(r.content[0].text).toContain('Input validation error')
+    })
+
+    it('describes foundVia and declares the new output fields', async () => {
+      await boot()
+      const { tools } = await client.listTools()
+      const signup = tools.find((t) => t.name === 'signup')!
+      const props = signup.inputSchema.properties as Record<string, { description?: string }>
+      expect(props.foundVia.description).toContain('heard about SlopIt')
+      const out = signup.outputSchema!.properties as Record<string, unknown>
+      expect(out).toHaveProperty('name_auto_assigned')
+      expect(out).toHaveProperty('found_via')
+    })
+  })
 })

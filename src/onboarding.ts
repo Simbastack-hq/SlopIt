@@ -17,6 +17,13 @@ export interface OnboardingInputs {
   // to render (success / failure / nothing).
   emailProvided?: boolean
   emailSent?: boolean
+  // Signup gave no `name` and core picked `blog.name`.
+  nameAutoAssigned?: boolean
+  // What this signup already tied to the blog. Neither moves to another
+  // blog (and an invite may be single-use), so with either one the hint
+  // must not suggest replacing the blog with a fresh signup.
+  firstPostCreated?: boolean
+  inviteUsed?: boolean
 }
 
 /**
@@ -42,6 +49,9 @@ export function generateOnboardingBlock(inputs: OnboardingInputs): string {
     bugReportUrl,
     emailProvided,
     emailSent,
+    nameAutoAssigned,
+    firstPostCreated,
+    inviteUsed,
   } = inputs
 
   const lines: string[] = []
@@ -53,6 +63,20 @@ export function generateOnboardingBlock(inputs: OnboardingInputs): string {
   lines.push(`Your blog:   ${blogUrl}`)
   lines.push(`API key:     ${apiKey}`)
   lines.push(`Blog id:     ${blog.id}`)
+
+  if (nameAutoAssigned === true) {
+    const attached = [
+      ...(firstPostCreated === true ? ['the first post'] : []),
+      ...(inviteUsed === true ? ['the invite'] : []),
+    ]
+    lines.push('')
+    lines.push(
+      `No name was given, so this blog is named "${blog.name}". Tell the user. A name can't be changed later.` +
+        (attached.length === 0
+          ? ' If they want a different one, call signup again with `name` and use that blog instead.'
+          : ` A new signup would be a separate blog that won't carry over ${attached.join(' or ')}.`),
+    )
+  }
 
   // Recovery hint, honest about send outcome. Skipped entirely when no
   // email was provided so the no-email path stays unchanged.
