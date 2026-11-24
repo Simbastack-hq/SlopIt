@@ -25,7 +25,7 @@ After `/blog` starts a new blog, run `/mcp` and reconnect `slopit` (or restart C
 
 ## Pricing
 
-Free forever on `your-name.slopit.io`. Pro ($12/mo, $6 for the first 100 blogs) adds your own domain, your brand and per-post AI readership. The plugin never pays for anything.
+Free forever on `your-name.slopit.io`. Paid plans (Growth $99/mo, Studio $299/mo) are for when you want SlopIt to research, write and publish the posts for you, and include your own domain and branding: see [slopit.io](https://slopit.io/#pricing). The plugin never pays for anything.
 
 ## License
 
