@@ -165,7 +165,7 @@ All routes are absolute URLs against the API base **\`${baseUrl}\`**. Copy them 
 | GET ${baseUrl}/health | Liveness probe. No auth. |
 | POST ${baseUrl}/signup | Create a blog + api key. No auth. |
 | GET ${baseUrl}/schema | Return the PostInput JSONSchema. No auth. |
-| POST ${baseUrl}/bridge/report_bug | Submit a bug report (501 in core; platform overrides). No auth. |
+| POST ${baseUrl}/bridge/report_bug | Submit a bug report (501 in core; platform overrides). No auth. Body: \`{ "summary": "...", "details": ... }\`; \`summary\` is required (one sentence, 10 to 300 characters). |
 | GET ${baseUrl}/blogs/:id | Get blog info. Auth required. |
 | PATCH ${baseUrl}/blogs/:id | Patch blog metadata: \`title\`, \`analytics\`, \`parentSiteUrl\`, \`language\`, and the brand: \`accentColor\`, \`logoUrl\`, \`faviconUrl\`. |
 | POST ${baseUrl}/blogs/:id/posts | Create a post. JSON body, or a \`text/markdown\` body with a required \`?title=\` query parameter (see Schema). |
@@ -338,7 +338,7 @@ Over HTTP (the streamable HTTP transport), every \`POST\` to the MCP endpoint mu
 | get_blog | bearer | — | Get blog metadata and its public URL (\`blog_url\`). |
 | get_post | bearer | — | Get a single post by slug. |
 | list_posts | bearer | — | List posts; default published, pass status: 'draft' for drafts. |
-| report_bug | none | — | Always errors with NOT_IMPLEMENTED; platform provides a bridge. |
+| report_bug | none | — | Takes \`summary\` (required, one sentence, 10 to 300 characters) and optional \`details\`. Always errors with NOT_IMPLEMENTED; platform provides a bridge. |
 | upload_media | bearer | yes | Upload an image; returns a public URL. |
 | list_media | bearer | — | List uploaded images. |
 | delete_media | bearer | yes | Permanently delete an uploaded image. |

@@ -3,6 +3,7 @@ import {
   BlogAnalyticsSchema,
   BlogPatchSchema,
   BlogSchema,
+  BugReportInputSchema,
   PostPatchSchema,
   type PostPatchInput,
 } from '../src/schema/index.js'
@@ -286,5 +287,41 @@ describe('BlogPatchSchema', () => {
 
   it('rejects unknown patch fields (strict)', () => {
     expect(() => BlogPatchSchema.parse({ theme: 'minimal', extra: 1 })).toThrow()
+  })
+})
+
+// The host that stores reports (REST and MCP) parses with this schema.
+describe('BugReportInputSchema', () => {
+  it('accepts a real summary, trimmed, with details passed through', () => {
+    const parsed = BugReportInputSchema.parse({
+      summary: '  create_post returned 500 twice  ',
+      details: { tool: 'create_post', status: 500 },
+    })
+    expect(parsed.summary).toBe('create_post returned 500 twice')
+    expect(parsed.details).toEqual({ tool: 'create_post', status: 500 })
+  })
+
+  it('accepts a summary with no details', () => {
+    expect(BugReportInputSchema.parse({ summary: 'Need a dark theme' }).details).toBeUndefined()
+  })
+
+  it.each([
+    ['empty body', {}],
+    ['details only', { details: 'stack trace' }],
+    ['empty summary', { summary: '' }],
+    ['whitespace summary', { summary: ' \n\t           ' }],
+    ['nine characters after trimming', { summary: '  too short  ' }],
+    ['301 characters', { summary: 'x'.repeat(301) }],
+    ['null summary', { summary: null }],
+  ])('rejects %s with a message that says what to send', (_label, input) => {
+    const result = BugReportInputSchema.safeParse(input)
+    expect(result.success).toBe(false)
+    expect(result.error!.issues[0].path).toEqual(['summary'])
+    expect(result.error!.issues[0].message).toMatch(/^summary is required: one sentence/)
+  })
+
+  it('accepts the length limits exactly', () => {
+    expect(BugReportInputSchema.safeParse({ summary: 'x'.repeat(10) }).success).toBe(true)
+    expect(BugReportInputSchema.safeParse({ summary: 'x'.repeat(300) }).success).toBe(true)
   })
 })
