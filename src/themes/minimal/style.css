@@ -21,27 +21,44 @@ body {
     system-ui,
     -apple-system,
     sans-serif;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 32px 24px;
+  margin: 0;
+  padding-bottom: 32px;
   background: var(--background);
   color: var(--text);
   line-height: 1.6;
   font-size: 16px;
 }
 
+/* The reading column. The theme's own top-level elements sit in it; the
+   masthead spans the page instead. Listed rather than `:not(.masthead)`
+   so anything a host puts in <body> (a draft-preview banner) keeps the
+   full width it was written for. */
+body > :is(main, article, footer, .translations) {
+  max-width: 720px;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+/* A full-width bar with a hairline under it, its contents in a 1080px
+   row: the blog's name or logo at the start, the main-site button at the
+   end. Percentage padding is of the page's width, so the row centres
+   without a wrapper element. */
 .masthead {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 16px;
+  min-height: 72px;
+  padding: 12px max(24px, (100% - 1032px) / 2);
+  border-bottom: 1px solid var(--border);
   margin-bottom: 48px;
 }
 .masthead-name {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1.3;
   color: var(--text);
   text-decoration: none;
 }
@@ -49,12 +66,9 @@ a.masthead-name:hover {
   color: var(--accent);
 }
 /* The blog's logo (logoUrl), in place of the name. Fixed height so any
-   logo sits like the 18px name does; a wide wordmark is the common case.
-   The name may shrink so the logo never pushes the main-site pill off a
-   phone screen; `contain` keeps it in proportion when it does. */
-.masthead:has(.masthead-logo) {
-  align-items: center;
-}
+   logo sits like the name does; a wide wordmark is the common case.
+   The name may shrink so the logo never pushes the main-site button off
+   a phone screen; `contain` keeps it in proportion when it does. */
 .masthead-name:has(.masthead-logo) {
   min-width: 0;
 }
@@ -65,23 +79,25 @@ a.masthead-name:hover {
   max-width: min(240px, 100%);
   object-fit: contain;
 }
+/* The one button on a blog: back to the author's main site. */
 .parent-site {
   flex-shrink: 0;
   font-size: 14px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--background);
+  background-color: var(--accent);
   text-decoration: none;
   white-space: nowrap;
-  border: 1.5px solid var(--accent);
   border-radius: 999px;
-  padding: 6px 14px;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
+  padding: 8px 18px;
+  transition: background-color 0.15s ease;
 }
 .parent-site:hover {
-  background-color: var(--accent);
-  color: var(--background);
+  background-color: var(--accent-dark);
+}
+.parent-site:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Language switcher — one item per language the page exists in, each
@@ -104,8 +120,10 @@ a.masthead-name:hover {
 .translations > * {
   padding-block: 11px;
 }
+/* Under the masthead on a home page: 24px below the bar's hairline, then
+   the posts. */
 .masthead + .translations {
-  margin: -43px 0 37px;
+  margin-block: -35px 13px;
 }
 article header .translations {
   margin-top: -3px;
@@ -646,33 +664,105 @@ article td code {
   overflow: hidden;
 }
 
+/* Home-page rows: date, title and excerpt, with the post's image as a
+   thumbnail at the end when it has one. The title's link is stretched
+   over the whole row, so the image and excerpt open the post too, and
+   hovering anywhere on the row lights the title. */
 main .post-item {
+  position: relative;
+  /* Not the post page's `article` bottom margin. */
+  margin: 0;
   border-bottom: 1px solid var(--border);
   padding: 24px 0;
+}
+/* A flex row only when there is a thumbnail to sit beside. A text-only
+   row needs none, and a home page written before thumbnails existed
+   (renderPost refreshes style.css without rewriting the home page) keeps
+   its title, date and excerpt stacked. */
+main .post-item:has(.post-item-thumb) {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+main .post-item:first-child {
+  padding-top: 0;
 }
 main .post-item:last-child {
   border-bottom: none;
 }
-main .post-item h2 {
-  font-size: 20px;
-  margin: 0 0 8px;
+.post-item-text {
+  flex: 1;
+  min-width: 0;
+}
+main .post-item time {
+  font-size: 14px;
   font-weight: 500;
+  color: var(--text-muted);
+}
+main .post-item h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin: 4px 0 0;
 }
 main .post-item h2 a {
   color: var(--text);
   text-decoration: none;
+  transition: color 0.15s ease;
 }
-main .post-item h2 a:hover {
+main .post-item h2 a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+main .post-item:hover h2 a {
   color: var(--accent);
 }
-main .post-item time {
-  font-size: 14px;
-  color: var(--text-muted);
+main .post-item h2 a:focus-visible {
+  outline: none;
+}
+main .post-item h2 a:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: 8px;
+  border-radius: 8px;
 }
 main .post-item p {
   color: var(--text-muted);
   margin: 8px 0 0;
   font-size: 16px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.post-item-thumb {
+  flex-shrink: 0;
+  width: 200px;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--surface);
+  transition: opacity 0.15s ease;
+}
+main .post-item:hover .post-item-thumb {
+  opacity: 0.88;
+}
+@media (max-width: 560px) {
+  main .post-item:has(.post-item-thumb) {
+    gap: 16px;
+  }
+  main .post-item h2 {
+    font-size: 18px;
+  }
+  main .post-item p {
+    font-size: 15px;
+    -webkit-line-clamp: 2;
+  }
+  .post-item-thumb {
+    width: 96px;
+    aspect-ratio: 1;
+  }
 }
 
 footer {

@@ -49,7 +49,7 @@ Think "a GitHub README rendered as a webpage" — not "a Medium article."
 
 ## Blog-level pages
 
-A blog's index (`/` on the subdomain, or `/b/:id/` on the path-based route) is a simple reverse-chronological list of posts. Title + date + excerpt (if present) + link. Same typography, same constraints.
+A blog's index (`/` on the subdomain, or `/b/:id/` on the path-based route) is a simple reverse-chronological list of posts. Each row has the date, the title (the link) and the excerpt (if present), plus a thumbnail at the row's end when the post has an image. The thumbnail is the post's share image (cover → first YouTube video → first body image, `resolveShareImages`), so the list shows what a link preview shows. The title's link covers the whole row, so the thumbnail and excerpt open the post too: a reader who never hovers can still tell a row is clickable. Same typography, same constraints. No placeholder for a post without an image; its row is text only.
 
 A blog that publishes in more than one language gets one such home page per language: `/` for its root language and `/lang/<tag>/` for every other (`/lang/de/`, `/lang/pt-br/`), each listing only that language's posts in that language's chrome, plus a language row under the masthead (the masthead language menu from four languages on). `/lang/` is a reserved directory (the post slug `lang` is refused) so post URLs and language homes never collide. Spec: `docs/superpowers/specs/2026-09-15-translations-design.md`.
 
@@ -57,8 +57,10 @@ A blog that publishes in more than one language gets one such home page per lang
 
 A user's blog at `ai-thoughts.slopit.io` is **their** place. The nav should not look like slopit.io's marketing nav.
 
-Show at most:
-- The blog name (links to the blog index)
+The masthead is a full-width bar with a hairline under it, its contents in a 1080px row above the 720px column. Show at most:
+- The blog name or logo (links to the blog index)
+- The "Main site" button, when the blog has a `parentSiteUrl`
+- The language menu, on a page in four or more languages
 - Optional: a "Posts" link if the current page isn't the index
 
 Do **not** show: "Philosophy," "How it Works," "Pricing," or any slopit.io-wide links. Those belong only on the slopit.io marketing site (platform repo).
